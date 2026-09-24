@@ -1,0 +1,754 @@
+[
+  {
+    "name": "Cabai 55 cepat mengering",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 85,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 79,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 73,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 67,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 61,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "PERIKSA_SEBELUM_PERGI"
+  },
+  {
+    "name": "Cabai 55 stabil",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "AMATI"
+  },
+  {
+    "name": "Basah menetap",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 3.0,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 3.0,
+    "expected": "PERIKSA_DRAINASE",
+    "watering": {
+      "t_h": 0,
+      "volume_ml": 150
+    }
+  },
+  {
+    "name": "Respons siraman kecil",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 34,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 33,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 32,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 31,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 30,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 31,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "PERIKSA_SIRAMAN",
+    "watering": {
+      "t_h": 2,
+      "volume_ml": 150
+    }
+  },
+  {
+    "name": "Lonjakan tanpa tindakan",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.51,
+        "moisture": 9,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.51,
+    "expected": "PERIKSA_SENSOR"
+  },
+  {
+    "name": "pH rendah berulang",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 4.9,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 4.9,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 4.9,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "UKUR_ULANG_PH"
+  },
+  {
+    "name": "Data terakhir basi",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 3.0,
+    "expected": "PULIHKAN_DATA"
+  },
+  {
+    "name": "Bawang 55 profil berbeda",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Bawang merah",
+      "media": "Media B",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        27,
+        28,
+        29
+      ],
+      "drained": [
+        70,
+        71,
+        72
+      ],
+      "next_visit_h": 1,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 85,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 79,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 73,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 67,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 61,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "AMATI"
+  },
+  {
+    "name": "Kering terkonfirmasi",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 45,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 42,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 38,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 35,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 32,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 30,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "PERIKSA_MEDIA_KERING"
+  },
+  {
+    "name": "Suhu tinggi media masih lembap",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 36,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "PERIKSA_PANAS"
+  }
+]

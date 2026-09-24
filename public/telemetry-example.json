@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "example",
+  "device_id": "AGRO-NODE-01",
+  "sample_id": "contoh-001",
+  "measured_at": "2026-09-24T06:00:00+07:00",
+  "sensors": {
+    "moisture": { "value": 55, "status": "ok" },
+    "soil_temperature": { "value": null, "status": "error", "error": "CRC pembacaan gagal (contoh)" },
+    "soil_ph": { "value": null, "status": "not_measured" }
+  },
+  "drip": {
+    "installed": false,
+    "command": "unknown",
+    "feedback": "unknown",
+    "flow_ml_min": null,
+    "fault": null
+  }
+}

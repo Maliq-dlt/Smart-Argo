@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.tmp/
+.cache/
+.npmrc
+design.md
+vercel.json
+tests/playback-browser.js
+*.log
+.DS_Store
+.env*
