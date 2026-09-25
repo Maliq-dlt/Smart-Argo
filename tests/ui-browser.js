@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 
 // PLAYWRIGHT_MODULE may point to an existing Playwright installation; no browser download.
@@ -39,7 +39,13 @@ try {
     }
   })
   await page.goto(url)
+  assert.equal(await page.getByText('Lanjutkan sesi', { exact: false }).count(), 0)
+  assert.equal(await page.locator('.plant-mood').count(), 1)
+  assert.equal(await page.locator('.plant-mood').getAttribute('data-mood'), 'ready')
   await page.getByRole('button', { name: 'Tanam & mulai', exact: true }).click()
+  await page.locator('.planting-animation').waitFor()
+  assert.equal(await page.locator('.plant-growth').evaluate(e => getComputedStyle(e).animationName), 'sprout-in')
+  assert.equal((await active(page)).simulation.planted, true)
   await choose(page, 'Laju waktu sensor', 'Cepat')
   const before = (await active(page)).data.now_h
   for (const theme of ['dark', 'light']) {
@@ -60,11 +66,36 @@ try {
     const book = JSON.parse(localStorage.getItem('smart-agro.sessions.v1'))
     return book.sessions.find(s => s.id === book.activeId).data.now_h > before
   }, before)
+  const beforeNavigation = (await active(page)).data.now_h
+  for (const [label, heading] of [['Terminal', 'Terminal'], ['Status perangkat', 'Status perangkat'], ['Bandingkan sesi', 'Bandingkan sesi'], ['Dashboard', 'Dashboard'], ['Simulasi', 'Ruang tanam']]) {
+    await page.getByRole('link', { name: label, exact: true }).click()
+    await page.getByRole('heading', { name: heading, exact: true, level: 1 }).waitFor()
+  }
   await page.getByRole('button', { name: 'Jeda', exact: true }).click()
   assert((await active(page)).data.now_h > before, 'Theme animation must not starve simulation time')
+  assert((await active(page)).data.now_h > beforeNavigation, 'Page navigation must keep simulation time running')
+  const beforeWater = await active(page)
+  await page.getByRole('button', { name: 'Siram 150 mL', exact: true }).click()
+  await page.locator('.watering-animation').waitFor()
+  const afterWater = await active(page)
+  assert.deepEqual(afterWater.data.samples, beforeWater.data.samples)
+  assert.equal(afterWater.simulation.growthHours, beforeWater.simulation.growthHours)
+  assert.equal(afterWater.data.now_h, beforeWater.data.now_h)
+  assert(afterWater.simulation.pendingWater > beforeWater.simulation.pendingWater)
+  assert.equal(afterWater.logs.length, beforeWater.logs.length + 1)
+  await page.screenshot({ path: '.tmp/ui-check/watering.png' })
+  await page.getByRole('link', { name: 'Terminal', exact: true }).click()
+  await page.locator('.terminal-panel').waitFor()
+  assert.equal(new URL(page.url()).hash, '#terminal')
+  assert.equal(await page.locator('.analysis-toolbar, .device-panel, .session-comparison').count(), 0)
+  await page.goBack()
+  await page.locator('.plant-canvas').waitFor()
+  assert.equal(await page.locator('.care-animation').count(), 0, 'Navigation must not replay an old care effect')
+
 
   await page.getByRole('button', { name: 'Pengaturan waktu & sampel', exact: true }).click()
   await page.getByRole('dialog', { name: 'Waktu & sampel', exact: true }).waitFor()
+  await page.waitForFunction(() => document.documentElement.classList.contains('lenis-stopped'))
   const scrollBefore = await page.evaluate(() => scrollY)
   await page.mouse.move(300, 400); await page.mouse.wheel(0, 600)
   // Wait for any pending Lenis frame; no arbitrary delay needed.
@@ -74,6 +105,7 @@ try {
   await page.getByRole('button', { name: 'Selesai', exact: true }).click()
   await page.waitForFunction(() => document.activeElement?.textContent === 'Pengaturan waktu & sampel')
   assert.equal((await active(page)).simulation.feedEveryDays, 9)
+  await page.waitForFunction(() => !document.documentElement.classList.contains('lenis-stopped'))
 
   await page.getByRole('button', { name: 'Atur tanaman & skenario', exact: true }).click()
   await choose(page, 'Profil tanaman', 'Bawang merah')
@@ -103,25 +135,44 @@ try {
   await page.getByRole('button', { name: /Tambah sampel/ }).click()
   assert.equal((await active(page)).data.now_h, manualBefore + .5)
 
-  await page.getByRole('button', { name: 'Sesi', exact: true }).click()
-  await page.getByRole('button', { name: /Lanjutkan sesi \(/ }).click()
-  await page.getByRole('dialog', { name: 'Lanjutkan sesi', exact: true }).waitFor()
-  assert(await page.locator('.session-card').count() >= 3)
-  await page.locator('.rename-session').first().click()
-  await page.locator('.session-rename input').fill('Percobaan tersimpan')
-  await page.getByRole('button', { name: 'Simpan', exact: true }).click()
-  await page.screenshot({ path: '.tmp/ui-check/sessions.png' })
-  await page.keyboard.press('Escape')
-  await page.waitForFunction(() => document.activeElement?.classList.contains('session-switcher'))
+  const saved = await active(page)
+  await page.getByRole('button', { name: 'Berkas', exact: true }).click()
+  assert.equal(await page.getByText('Lanjutkan sesi', { exact: false }).count(), 0)
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Ekspor sesi', exact: true }).click()
+  await (await downloadPromise).saveAs('.tmp/ui-check/session.json')
+  await page.getByLabel('Impor kasus JSON', { exact: true }).setInputFiles('.tmp/ui-check/session.json')
+  assert.deepEqual((await active(page)).data, saved.data)
+  await page.waitForFunction(id => JSON.parse(localStorage.getItem('smart-agro.sessions.v1')).activeId !== id, saved.id)
+  const imported = await active(page)
   await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
   await choose(page, 'Parameter statistik', 'Suhu')
   await choose(page, 'Rentang statistik', '24 jam terakhir')
-  await page.getByRole('button', { name: 'Bandingkan sesi', exact: true }).click()
+  assert.equal(await page.locator('.device-panel, .session-comparison, .terminal-panel').count(), 0)
+  await page.getByRole('link', { name: 'Bandingkan sesi', exact: true }).click()
+  assert.equal(new URL(page.url()).hash, '#bandingkan')
   await page.getByRole('button', { name: 'Simpan salinan sesi aktif', exact: true }).click()
   await page.getByRole('combobox', { name: 'Sesi B', exact: true }).click()
   await page.getByRole('option').last().click()
   await page.getByRole('article', { name: 'Ringkasan sesi B' }).waitFor()
-  await page.getByRole('button', { name: 'Terminal', exact: true }).click()
+  assert.equal(await page.locator('.analysis-toolbar, .device-panel, .terminal-panel').count(), 0)
+  await page.getByRole('link', { name: 'Status perangkat', exact: true }).click()
+  await page.getByLabel('Impor paket perangkat', { exact: true }).setInputFiles({ name: 'packet.json', mimeType: 'application/json', buffer: await readFile('public/telemetry-example.json') })
+  await page.locator('.device-statuses').waitFor()
+  assert.deepEqual((await active(page)).data, imported.data, 'Device preview must remain separate from simulation')
+  await page.reload()
+  assert.equal(new URL(page.url()).hash, '#perangkat')
+  await page.locator('.device-statuses').waitFor()
+  await page.getByRole('link', { name: 'Terminal', exact: true }).click()
+  await page.locator('.terminal-panel').waitFor()
+  await page.reload()
+  await page.locator('.terminal-panel').waitFor()
+  await page.getByRole('tab', { name: 'JSON', exact: true }).click()
+  await page.locator('.terminal-panel pre').waitFor()
+  await page.screenshot({ path: '.tmp/ui-check/terminal.png' })
+  await page.goBack()
+  await page.locator('.device-statuses').waitFor()
+  await page.goForward()
   await page.locator('.terminal-panel').waitFor()
   await page.locator('.theme-toggle').click()
   await waitTheme(page, 'dark')
@@ -129,7 +180,8 @@ try {
   await page.screenshot({ path: '.tmp/ui-check/dashboard-dark.png', fullPage: true })
   await page.reload()
   await waitTheme(page, 'dark')
-  assert.equal((await active(page)).name, 'Percobaan tersimpan')
+  assert.equal((await active(page)).id, imported.id)
+  assert.deepEqual((await active(page)).data, imported.data)
 
   // Missing API and interrupted snapshot both keep theme and controls usable.
   await page.evaluate(() => { document.startViewTransition = undefined })
@@ -154,11 +206,21 @@ try {
     await choose(mobile, 'Profil tanaman', 'Bawang merah')
     await mobile.getByRole('button', { name: 'Selesai', exact: true }).click()
     assert(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow at ${width}px`)
+    await mobile.getByRole('button', { name: 'Tanam & mulai', exact: true }).click()
+    await mobile.getByRole('button', { name: 'Jeda', exact: true }).click()
+    assert.equal(await mobile.locator('.care-animation').evaluate(e => getComputedStyle(e).display), 'none')
+    for (const [label, hash] of [['Status perangkat', '#perangkat'], ['Terminal', '#terminal'], ['Bandingkan sesi', '#bandingkan']]) {
+      if (!(await mobile.getByRole('navigation', { name: 'Navigasi utama' }).isVisible())) await mobile.getByRole('button', { name: 'Buka navigasi', exact: true }).click()
+      await mobile.getByRole('link', { name: label, exact: true }).click()
+      await mobile.getByRole('heading', { name: label, exact: true, level: 1 }).waitFor()
+      assert.equal(new URL(mobile.url()).hash, hash)
+      assert(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow on ${hash} at ${width}px`)
+    }
     await mobile.screenshot({ path: `.tmp/ui-check/mobile-${width}.png`, fullPage: true })
     await mobile.close()
   }
   assert.deepEqual(errors, [])
-  console.log('UI OK: theme origin/radius, both directions, icons, persistence, fallback, clock, focus, nested Select, scroll lock, sessions, charts, 320/375/414/768px, reduced motion.')
+  console.log('UI OK: theme origin/radius, both directions, icons, persistence, fallback, clock, focus, nested Select, scroll lock, dedicated routes/back/refresh, care effects, mascot, import/export, charts, 320/375/414/768px, reduced motion.')
 } finally {
   await browser.close()
 }

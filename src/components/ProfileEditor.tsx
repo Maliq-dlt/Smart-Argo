@@ -23,7 +23,7 @@ export default function ProfileEditor({ profile, onApply, onClose }: { profile: 
     <label className="check-label"><input type="checkbox" name="validated" defaultChecked={profile.validated} />Acuan lokal disahkan untuk simulasi</label>
     <label className="check-label"><input type="checkbox" name="ph_validated" defaultChecked={profile.ph_validated} />Pengukuran pH tervalidasi untuk simulasi</label>
     {error && <p className="field-error" role="alert">{error}</p>}
-    <p className="section-hint">Mengganti media memulai sesi baru. Sesi sebelumnya tetap tersedia di Lanjutkan sesi.</p>
+    <p className="section-hint">Mengganti media memulai sesi baru. Sesi sebelumnya tetap tersimpan untuk perbandingan.</p>
     <button type="submit" className="button primary"><Check />Terapkan acuan</button>
   </form>
 }

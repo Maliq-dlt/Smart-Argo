@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Upload, Download, Cpu } from 'lucide-react'
+import { Upload, Download } from 'lucide-react'
 import { parseTelemetry, deviceStatuses, type DeviceSnapshot } from '../lib/telemetry'
 import { clockDate, clockTime, utcLabel, type SessionClock } from '../lib/sessionClock'
 
@@ -17,7 +17,7 @@ export default function DevicePanel({ snapshot, clock, onImport }: { snapshot?: 
     if (file.current) file.current.value = ''
   }
   const packet = snapshot?.packet, stamp = packet ? { ...clock, startedAtMs: Date.parse(packet.measured_at) } : null
-  return <details className="panel device-panel"><summary><Cpu /><span>Perangkat & paket data<small>Belum ada koneksi langsung</small></span><ChevronDown /></summary><div className="device-body">
+  return <section className="panel device-panel" aria-label="Pratinjau paket perangkat"><div className="device-body">
     <p>Buka paket JSON untuk memeriksa format dan status yang dilaporkan. Pratinjau berkas tidak menghubungkan perangkat atau mengendalikan tetesan; data simulasi tetap terpisah.</p>
     <div className="device-actions"><button className="button" onClick={() => file.current?.click()}><Upload />Buka paket JSON</button><a className="button" href="telemetry-example.json" download><Download />Contoh paket</a></div>
     <input className="sr-only" type="file" accept=".json,application/json" aria-label="Impor paket perangkat" ref={file} onChange={e => void load(e.target.files?.[0])} />
@@ -27,5 +27,5 @@ export default function DevicePanel({ snapshot, clock, onImport }: { snapshot?: 
       <ul className="device-statuses">{deviceStatuses(packet, now).map(row => <li key={row.label} data-severity={row.severity}><span>{row.severity === 'ok' ? 'Dilaporkan' : row.severity === 'error' ? 'Gangguan' : 'Periksa'}</span><div><strong>{row.label}</strong><p>{row.message}</p></div></li>)}</ul>
       <p className="section-hint">Status berasal dari satu paket. Koneksi hidup, kalibrasi, serta aliran aktual perlu diverifikasi perangkat. Error paket tercatat di Log sesi sebagai pratinjau.</p>
     </> : <p className="device-empty">Belum ada paket dimuat. Kelembapan, suhu, pH, dan status tetesan akan ditampilkan setelah berkas lolos validasi.</p>}
-  </div></details>
+  </div></section>
 }

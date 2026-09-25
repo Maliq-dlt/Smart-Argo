@@ -6,8 +6,9 @@ import { type SessionClock } from '../lib/sessionClock'
 import SkyScene from './SkyScene'
 import { scenePeriod, worldTime } from '../lib/simulation'
 
-interface Props { clock: SessionClock; running: boolean; rate: number; day: number; developmentDay?: number; elapsed?: number; planted?: boolean; journey?: boolean; onion: boolean; moisture: number; contact: boolean }
-export default function PlantPotVisualizer({ clock, running, rate, day: age, developmentDay: day = age, elapsed = 0, planted = true, journey = false, onion, moisture, contact }: Props) {
+export type CareEffect = { kind: 'plant' | 'water'; id: number }
+interface Props { careEffect?: CareEffect | null; clock: SessionClock; running: boolean; rate: number; day: number; developmentDay?: number; elapsed?: number; planted?: boolean; journey?: boolean; onion: boolean; moisture: number; contact: boolean }
+export default function PlantPotVisualizer({ careEffect, clock, running, rate, day: age, developmentDay: day = age, elapsed = 0, planted = true, journey = false, onion, moisture, contact }: Props) {
   const id = useId().replaceAll(':', '')
   const [showSensors, setShowSensors] = useState(false)
   const period = scenePeriod(elapsed, clock)
@@ -35,7 +36,7 @@ export default function PlantPotVisualizer({ clock, running, rate, day: age, dev
         <motion.path d="M114 316H340L314 435H140Z" fill="var(--soil-wet)" animate={{ opacity: moisture / 100 }} transition={{ duration: .6 }} />
         <path d="M114 316H340L314 435H140Z" fill={`url(#${id}-soil)`} />
         <path d="M119 339Q181 334 231 341T335 337M127 380Q175 386 228 379T326 384" fill="none" stroke="var(--soil-layer)" strokeWidth="1" />
-        <g clipPath={`url(#${id}-clip)`} stroke="var(--root)" fill="none" strokeLinecap="round">
+        <g className="plant-roots" opacity={planted ? 1 : 0} clipPath={`url(#${id}-clip)`} stroke="var(--root)" fill="none" strokeLinecap="round">
           <motion.g animate={{ scaleY: .28 + growth * .72 }} style={{ transformOrigin: '225px 315px' }} transition={{ type: 'spring', stiffness: 70, damping: 20 }}>
             <path d="M226 307Q228 338 215 357T222 415M227 327Q248 344 253 374L270 398M221 335Q189 351 184 379L174 402M222 355Q207 382 204 424" strokeWidth="2.2" />
             <path d="m217 350-21 10-16-2m33 17 15 11 5 20m-31-53-18 6-15 15m76-22 21 8 11 24m-20-13-9 20 4 15m-47-1-19 10-9 14m26-1 9 9m-44-23-16 3m57 10 8 9m-23-2-10 8m65-28 12 5" strokeWidth="1" />
@@ -44,7 +45,7 @@ export default function PlantPotVisualizer({ clock, running, rate, day: age, dev
         <path d="M102 306Q225 295 352 306L350 318Q225 307 104 318Z" fill="var(--pot-light)" />
         <path d="M114 312Q229 306 340 312" stroke="var(--pot-dark)" fill="none" />
         <path d="M125 443Q226 454 328 442L335 449Q227 467 118 451Z" fill="var(--pot-dark)" />
-        <g className={planted ? 'plant-growth' : 'seed-waiting'} stroke="var(--stem)" strokeLinecap="round" fill="none">
+        <g className={planted ? `plant-growth${careEffect?.kind === 'plant' ? ' is-planting' : ''}` : 'seed-waiting'} stroke="var(--stem)" strokeLinecap="round" fill="none">
           {!planted ? <g><ellipse cx="226" cy="308" rx="6" ry="3" fill="var(--root)" /><path d="M224 308h4" stroke="var(--soil-dry)" /></g> : <>
           {onion ? <>
             {Array.from({ length: 9 }, (_, i) => <motion.path key={i} d={`M${218 + (i % 3) * 7} 312Q${190 + i * 7} ${265 - height * .3} ${163 + i * 16} ${308 - height + Math.abs(4 - i) * 16}`} strokeWidth={3 + i % 3} animate={{ pathLength: growth }} transition={{ duration: .6 }} />)}
@@ -76,6 +77,20 @@ export default function PlantPotVisualizer({ clock, running, rate, day: age, dev
           </>}
           </>}
         </g>
+        {careEffect?.kind === 'plant' && <g key={careEffect.id} className="care-animation planting-animation" aria-hidden="true">
+          <ellipse className="planting-seed" cx="226" cy="308" rx="7" ry="4" fill="var(--root)" stroke="var(--soil-dry)" />
+          <ellipse className="soil-ripple" cx="226" cy="312" rx="18" ry="3" fill="none" stroke="var(--pot-dark)" />
+        </g>}
+        {careEffect?.kind === 'water' && <g key={careEffect.id} className="care-animation watering-animation" aria-hidden="true">
+          <g className="watering-can" fill="var(--water-soft)" stroke="var(--water)" strokeWidth="2.5" strokeLinejoin="round">
+            <path d="M353 206L320 186L313 194L354 225Z" /><path d="M389 194Q418 190 413 214Q409 229 392 221" fill="none" />
+            <path d="M350 189H395L392 229Q374 238 354 229Z" /><ellipse cx="373" cy="189" rx="22" ry="5" />
+          </g>
+          {Array.from({ length: 8 }, (_, i) => <g key={i} transform={`translate(${314 - i % 3 * 5} ${204 + i % 2 * 4})`}>
+            <path className="water-drop" style={{ animationDelay: `${i * .08}s` }} d="M0-5C-2-1-4 1-4 3A4 4 0 0 0 4 3C4 1 2-1 0-5Z" fill="var(--water)" />
+          </g>)}
+          <ellipse className="soil-ripple" cx="268" cy="312" rx="25" ry="4" fill="none" stroke="var(--water)" />
+        </g>}
         {showSensors && <g className="plant-sensors"><motion.g animate={{ y: contact ? 0 : -60 }} transition={{ type: 'spring', stiffness: 90, damping: 16 }}>
           <path d="M287 291V263Q286 250 306 250H370" fill="none" stroke="var(--wire)" strokeWidth="2" />
           <rect x="279" y="282" width="16" height="29" rx="3" fill="var(--sensor-green)" />
