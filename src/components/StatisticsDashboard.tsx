@@ -1,4 +1,5 @@
 import { SelectField } from './ui/select'
+import SegmentedControl from './ui/segmented-control'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Activity, Clock3, MoveVertical, ShieldCheck } from 'lucide-react'
 import type { Decision, PotCase } from '../lib/agronomyEngine'
@@ -24,7 +25,7 @@ export default function StatisticsDashboard({ clock, data, decision, care, readi
   return <>
     <div className="analysis-toolbar"><div><h2>Ikhtisar statistik</h2><p>{rows.length} sampel · {windowHours ? `${windowHours} jam terakhir` : 'seluruh sesi'} · filter untuk statistik</p></div>
       <div className="analysis-filters"><label><span>Parameter</span><SelectField label="Parameter statistik" value={metric} onValueChange={value => { setMetric(value as Metric); setBin(null) }} options={Object.entries(METRICS).map(([value, item]) => ({ value, label: item.label }))} /></label>
-      <label><span>Rentang</span><SelectField label="Rentang statistik" value={windowHours} onValueChange={value => setWindowHours(Number(value))} options={[{ value: 0, label: 'Seluruh sesi' }, { value: 24, label: '24 jam terakhir' }, { value: 72, label: '72 jam terakhir' }]} /></label></div>
+      <div className="range-filter"><span>Rentang statistik</span><SegmentedControl label="Rentang statistik" value={String(windowHours)} onValueChange={value => setWindowHours(Number(value))} options={[{ value: '0', label: 'Semua' }, { value: '24', label: '24 jam' }, { value: '72', label: '72 jam' }]} /></div></div>
     </div>
     <div className="analytics-metrics">
       <div className="metric-featured"><div className="stat-card-heading"><span>Rata-rata {spec.label.toLowerCase()}</span><Activity /></div><strong>{format(stats.mean)} <small>{spec.unit}</small></strong><p>Dari {stats.count} pengukuran valid</p></div>

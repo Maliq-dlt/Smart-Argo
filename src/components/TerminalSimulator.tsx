@@ -1,11 +1,13 @@
 import * as Tabs from '@radix-ui/react-tabs'
 import { Check, Copy, Terminal, CircleCheck, CornerDownRight } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { RULES, type Decision, type PotCase } from '../lib/agronomyEngine'
 import { clockTime, clockDate, logClock, utcLabel, instantAt, type SessionClock } from '../lib/sessionClock'
 import type { LogEntry } from '../lib/sessionStore'
 
 export default function TerminalSimulator({ clock, data, decision, logs }: { clock: SessionClock; data: PotCase; decision: Decision; logs: LogEntry[] }) {
+  const [tab, setTab] = useState('serial'), tabId = useId(), reduced = useReducedMotion()
   const [copied, setCopied] = useState(false), [copyError, setCopyError] = useState('')
   const logEnd = useRef<HTMLDivElement>(null)
   useEffect(() => { const pane = logEnd.current?.parentElement; if (pane) pane.scrollTop = pane.scrollHeight }, [logs])
@@ -18,9 +20,11 @@ export default function TerminalSimulator({ clock, data, decision, logs }: { clo
   }
   return <section className="terminal-panel" aria-labelledby="terminal-heading">
     <div className="terminal-heading"><h2 id="terminal-heading"><Terminal />Konsol simulasi</h2><span>ESP32</span></div>
-    <Tabs.Root defaultValue="serial" className="terminal-tabs">
+    <Tabs.Root value={tab} onValueChange={setTab} className="terminal-tabs">
       <Tabs.List className="tab-list" aria-label="Tampilan konsol">
-        <Tabs.Trigger value="serial">Log sesi</Tabs.Trigger><Tabs.Trigger value="json">JSON</Tabs.Trigger><Tabs.Trigger value="trace">Jejak aturan</Tabs.Trigger>
+        {[['serial', 'Log sesi'], ['json', 'JSON'], ['trace', 'Jejak aturan']].map(([value, label]) => <Tabs.Trigger key={value} value={value}>
+          {tab === value && <motion.span className="segment-selection" layoutId={`${tabId}-tab`} initial={false} transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 40 }} aria-hidden="true" />}<span className="segment-label">{label}</span>
+        </Tabs.Trigger>)}
       </Tabs.List>
       <Tabs.Content value="serial" className="terminal-content">
         <div className="terminal-meta"><span>AGRO-NODE-01 / P1</span><span>{clockDate(clock, data.now_h)} {clockTime(clock, data.now_h)} · {utcLabel(clock, data.now_h)}</span></div>

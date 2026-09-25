@@ -5,6 +5,7 @@ import { Activity, ArrowDownToLine, ArrowUpFromLine, ArrowUpRight, BookOpen, Che
 import { addSample, evaluate, parseCase, phaseAt, recordWatering, type PotCase, type Profile } from './lib/agronomyEngine'
 import scenarios from './lib/scenarios.json'
 import ThemeToggle from './components/ThemeToggle'
+import SegmentedControl from './components/ui/segmented-control'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from './components/ui/dialog'
 import { Popover, PopoverTrigger, PopoverContent, PopoverClose } from './components/ui/popover'
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription, SheetClose } from './components/ui/sheet'
@@ -308,7 +309,7 @@ export default function App() {
       <div className="saved-session-bar"><span className="active-session-name"><Leaf />{data.profile.crop} · {journey ? 'Perjalanan tanam' : 'Eksperimen'}</span><span className={`save-status ${saveState.error ? 'save-failed' : ''}`} role="status"><Save />{saveState.error ? 'Belum tersimpan' : saveState.book === book ? 'Tersimpan di perangkat' : 'Menyimpan…'}</span></div>
       {saveState.error && <div className="storage-error" role="alert"><p>{saveState.error}</p><div><button className="button" onClick={exportSession}>Ekspor sesi aktif</button>{!boot.error && <button className="button" onClick={persist}>Coba simpan lagi</button>}</div></div>}
       {page === 'simulation' && <div className="studio-setup">
-      <section className="mode-bar" aria-label="Mode simulator"><div className="mode-options"><button aria-pressed={journey} onClick={() => changeMode('journey')}><Sprout /><span>Perjalanan tanam</span></button><button aria-pressed={!journey} onClick={() => changeMode('experiment')}><FlaskConical /><span>Eksperimen</span></button></div></section>
+      <div className="mode-bar"><SegmentedControl label="Mode simulator" value={sim.mode} onValueChange={value => changeMode(value as SimulationState['mode'])} options={[{ value: 'journey', label: <><Sprout />Perjalanan tanam</> }, { value: 'experiment', label: <><FlaskConical />Eksperimen</> }]} /></div>
       <Sheet open={setupOpen} onOpenChange={setSetupOpen}><SheetTrigger asChild><button id="plant-settings" className="button setup-trigger"><Settings2 />Atur tanaman & skenario</button></SheetTrigger><SheetContent onCloseAutoFocus={event => {
         if (pendingProfile.current) { event.preventDefault(); pendingProfile.current = false; openModal('profile', document.getElementById('plant-settings')) }
       }}><header className="sheet-heading"><SheetTitle>Tanaman & skenario</SheetTitle><SheetDescription>Sesuaikan ruang tanam dengan eksplorasimu.</SheetDescription></header>

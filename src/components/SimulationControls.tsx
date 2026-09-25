@@ -37,7 +37,7 @@ export default function SimulationControls({ session, running, pauseNote, recomm
         <p>{sim.feedEveryDays ? `Pengingat berikutnya: HST ${Math.floor(sim.lastFedAt / 24) + sim.feedEveryDays}.` : '0 = nonaktif. Atur sesuai rencana perawatanmu.'}</p>
         <button className="button" onClick={onFeed} disabled={complete || !sim.planted}>Catat pupuk</button><small>Pengingat kalender. Sensor tidak menentukan kebutuhan atau dosis pupuk.</small>
       </div></section>}<SheetClose asChild><button className="button primary sheet-done">Selesai</button></SheetClose></SheetContent></Sheet>
-      {journey && events.length > 0 && <details className="control-details"><summary>Jurnal terbaru<ChevronDown /></summary><div className="journey-journal"><ol>{events.map(e => <li key={e.id}><time>{logClock(session.clock, e.time)}</time><p>{e.message}</p></li>)}</ol><a href="#statistik" className="text-button">Lihat seluruh log</a></div></details>}
+      {journey && events.length > 0 && <details className="control-details"><summary>Jurnal terbaru<ChevronDown /></summary><div className="journey-journal"><ol>{events.map(e => <li key={e.id}><time>{logClock(session.clock, e.time)}</time><p>{e.message}</p></li>)}</ol><a href="#terminal" className="text-button">Lihat seluruh log</a></div></details>}
     </div>
   </section>
 }
