@@ -1,3 +1,4 @@
+import { DialogTitle, DialogDescription } from './ui/dialog'
 import type { Profile } from '../lib/agronomyEngine'
 import { useState } from 'react'
 import { Check, X } from 'lucide-react'
@@ -13,7 +14,7 @@ export default function ProfileEditor({ profile, onApply, onClose }: { profile: 
       ph_range: [Number(form.get('ph_min')), Number(form.get('ph_max'))], validated: form.has('validated'), ph_validated: form.has('ph_validated') }) }
     catch (err) { setError(err instanceof Error ? err.message : 'Profil tidak valid') }
   }}>
-    <div className="dialog-heading"><div><h2 id="profile-title">Acuan lokal pot P1</h2><p>Angka demonstrasi. Validasi lapangan tetap diperlukan.</p></div><button type="button" className="icon-button" aria-label="Tutup acuan lokal" onClick={onClose}><X /></button></div>
+    <div className="dialog-heading"><div><DialogTitle>Acuan lokal pot P1</DialogTitle><DialogDescription>Angka demonstrasi. Validasi lapangan tetap diperlukan.</DialogDescription></div><button type="button" className="icon-button" aria-label="Tutup acuan lokal" onClick={onClose}><X /></button></div>
     <label>Nama media<input name="media" defaultValue={profile.media} maxLength={120} required /></label>
     <label>Observasi saat perlu air<input name="needs_water" defaultValue={profile.needs_water.join(', ')} required /><small>Minimal 3 observasi 0–100, pisahkan dengan koma.</small></label>
     <label>Observasi setelah drainase<input name="drained" defaultValue={profile.drained.join(', ')} required /><small>Median drainase minimal 10 poin di atas median perlu air.</small></label>

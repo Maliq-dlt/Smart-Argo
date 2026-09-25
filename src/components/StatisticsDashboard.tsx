@@ -1,3 +1,4 @@
+import { SelectField } from './ui/select'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Activity, Clock3, MoveVertical, ShieldCheck } from 'lucide-react'
 import type { Decision, PotCase } from '../lib/agronomyEngine'
@@ -22,8 +23,8 @@ export default function StatisticsDashboard({ clock, data, decision, care, readi
   let offset = 0
   return <>
     <div className="analysis-toolbar"><div><h2>Ikhtisar statistik</h2><p>{rows.length} sampel · {windowHours ? `${windowHours} jam terakhir` : 'seluruh sesi'} · filter untuk statistik</p></div>
-      <div className="analysis-filters"><label><span>Parameter</span><select aria-label="Parameter statistik" value={metric} onChange={e => { setMetric(e.target.value as Metric); setBin(null) }}>{Object.entries(METRICS).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-      <label><span>Rentang</span><select aria-label="Rentang statistik" value={windowHours} onChange={e => setWindowHours(Number(e.target.value))}><option value="0">Seluruh sesi</option><option value="24">24 jam terakhir</option><option value="72">72 jam terakhir</option></select></label></div>
+      <div className="analysis-filters"><label><span>Parameter</span><SelectField label="Parameter statistik" value={metric} onValueChange={value => { setMetric(value as Metric); setBin(null) }} options={Object.entries(METRICS).map(([value, item]) => ({ value, label: item.label }))} /></label>
+      <label><span>Rentang</span><SelectField label="Rentang statistik" value={windowHours} onValueChange={value => setWindowHours(Number(value))} options={[{ value: 0, label: 'Seluruh sesi' }, { value: 24, label: '24 jam terakhir' }, { value: 72, label: '72 jam terakhir' }]} /></label></div>
     </div>
     <div className="analytics-metrics">
       <div className="metric-featured"><div className="stat-card-heading"><span>Rata-rata {spec.label.toLowerCase()}</span><Activity /></div><strong>{format(stats.mean)} <small>{spec.unit}</small></strong><p>Dari {stats.count} pengukuran valid</p></div>

@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import Lenis from 'lenis'
-import { Activity, ArrowDownToLine, ArrowUpFromLine, ArrowUpRight, BookOpen, Check, ChevronRight, Clock3, Droplets, FlaskConical, Leaf, Pause, Play, RotateCcw, Settings2, Save, History, ShieldCheck, Sprout, Thermometer, TriangleAlert, Sun, Moon, X, LayoutDashboard, GitCompareArrows, Terminal, Radio, Menu } from 'lucide-react'
+import { Activity, ArrowDownToLine, ArrowUpFromLine, ArrowUpRight, BookOpen, Check, ChevronRight, Clock3, Droplets, FlaskConical, Leaf, Pause, Play, RotateCcw, Settings2, Save, History, ShieldCheck, Sprout, Thermometer, TriangleAlert, X, LayoutDashboard, GitCompareArrows, Terminal, Radio, Menu } from 'lucide-react'
 import { addSample, evaluate, parseCase, phaseAt, recordWatering, type PotCase, type Profile } from './lib/agronomyEngine'
 import scenarios from './lib/scenarios.json'
+import ThemeToggle from './components/ThemeToggle'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from './components/ui/dialog'
+import { Popover, PopoverTrigger, PopoverContent, PopoverClose } from './components/ui/popover'
+import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription, SheetClose } from './components/ui/sheet'
+import { SelectField } from './components/ui/select'
 import PlantPotVisualizer from './components/PlantPotVisualizer'
 import SensorControls from './components/SensorControls'
 import StatisticsDashboard from './components/StatisticsDashboard'
@@ -61,20 +66,29 @@ export default function App() {
     else window.scrollTo({ top: typeof target === 'number' ? target : scrollY + target.getBoundingClientRect().top - 20 })
   }, [])
   useEffect(() => {
+    if (reducedMotion) return
     const lenis = new Lenis({ autoRaf: true, autoToggle: true, duration: .8, anchors: false,
-      prevent: node => Boolean(node.closest('dialog, .terminal-content, .log-lines')) })
+      prevent: node => Boolean(node.closest('[data-lenis-prevent], .terminal-content, .log-lines')) })
     smooth.current = lenis
     return () => { lenis.destroy(); smooth.current = null }
-  }, [])
-  const [theme, setTheme] = useState(() => {
-    try { const saved = localStorage.getItem('smart-agro.theme'); if (saved === 'light' || saved === 'dark') return saved } catch { /* Theme still works when storage is unavailable. */ }
-    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-  })
+  }, [reducedMotion])
   const sim = simulationOf(session), journey = sim.mode === 'journey'
   const developmentDay = journey ? Math.floor(sim.growthHours / 24) : session.day
   const [notice, setNotice] = useState(boot.restored ? 'Sesi terakhir dipulihkan. Ilustrasi dijeda; jam sensor tetap tersimpan.' : '')
   const [error, setError] = useState(''), [profileVersion, setProfileVersion] = useState(0)
-  const profileDialog = useRef<HTMLDialogElement>(null), guideDialog = useRef<HTMLDialogElement>(null), sessionsDialog = useRef<HTMLDialogElement>(null), importFile = useRef<HTMLInputElement>(null)
+  const [modal, setModal] = useState<'profile' | 'sessions' | 'guide' | null>(null)
+  const [setupOpen, setSetupOpen] = useState(false)
+  const pendingProfile = useRef(false), modalTrigger = useRef<HTMLElement | null>(null)
+  const importFile = useRef<HTMLInputElement>(null)
+  function openModal(name: NonNullable<typeof modal>, trigger = document.activeElement) {
+    modalTrigger.current = trigger instanceof HTMLElement ? trigger : null
+    setModal(name)
+  }
+  function restoreModalFocus(event: Event) {
+    event.preventDefault()
+    const target = modalTrigger.current?.isConnected ? modalTrigger.current : document.querySelector<HTMLElement>('.session-switcher')
+    target?.focus({ preventScroll: true })
+  }
   const result = evaluate(data), last = data.samples.at(-1)!
   const onion = data.profile.crop.toLowerCase().includes('bawang'), maxDay = onion ? 65 : 90
   const phase = phaseAt(day, onion), phRow = [...data.samples].reverse().find(r => r.valid && r.ph !== null)
@@ -115,10 +129,6 @@ export default function App() {
   function openStatisticsPanel(panel: string) {
     location.hash = 'statistik'; setPage('statistics'); setPanelToOpen(panel); setMenuOpen(false)
   }
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme
-    try { localStorage.setItem('smart-agro.theme', theme) } catch { /* Keep theme usable for this visit. */ }
-  }, [theme])
   useEffect(() => {
     const pause = () => { if (document.hidden) { setRunning(false); setPlaying(false); setPauseNote('Dijeda saat tab tidak aktif. Tekan Lanjutkan waktu.') } }
     document.addEventListener('visibilitychange', pause)
@@ -198,7 +208,7 @@ export default function App() {
     const selected = book.sessions.find(s => s.id === id)
     if (!selected) return
     const stopped = simulationStopReason(selected)
-    setBook(old => ({ ...old, activeId: id })); setPlaying(false); setRunning(!stopped); setPauseNote(stopped); setError(''); sessionsDialog.current?.close()
+    setBook(old => ({ ...old, activeId: id })); setPlaying(false); setRunning(!stopped); setPauseNote(stopped); setError(''); setModal(null)
     setNotice(stopped || 'Sesi dilanjutkan. Waktu otomatis berjalan.')
   }
   function changeMode(mode: SimulationState['mode']) {
@@ -234,7 +244,7 @@ export default function App() {
     const next = parseCase(mediaChanged ? { profile, now_h: 0, samples: [{ ...reading, t_h: 0, ph: null, valid: true }] } : { ...data, profile, media_changed: false })
     if (mediaChanged) openNew(journey ? createJourney(next) : createSession(next, `${profile.crop} · ${profile.media}`))
     else commit(next, 'Profil acuan diperbarui.')
-    profileDialog.current?.close(); setNotice(mediaChanged ? 'Sesi media baru dibuka. Riwayat sebelumnya tetap tersedia.' : 'Acuan lokal diterapkan.')
+    setModal(null); setNotice(mediaChanged ? 'Sesi media baru dibuka. Riwayat sebelumnya tetap tersedia.' : 'Acuan lokal diterapkan.')
   }
   function exportSession() {
     downloadJson(encodeSession(session), `agro-P1-${Date.now()}.json`)
@@ -272,14 +282,14 @@ export default function App() {
       <button className="icon-button mobile-menu" aria-label={menuOpen ? 'Tutup navigasi' : 'Buka navigasi'} aria-expanded={menuOpen} aria-controls="sidebar-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       <div id="sidebar-navigation" className={`sidebar-content ${menuOpen ? 'is-open' : ''}`} onKeyDown={e => { if (e.key === 'Escape') { setMenuOpen(false); document.querySelector<HTMLButtonElement>('.mobile-menu')?.focus() } }}>
         <nav className="sidebar-nav" aria-label="Navigasi utama"><p className="nav-caption">Ruang kerja</p>
-          <a href="#statistik" className={page === 'statistics' ? 'nav-active' : ''} aria-current={page === 'statistics' ? 'page' : undefined} onClick={() => { setMenuOpen(false); if (page === 'statistics') scrollTo(0) }}><LayoutDashboard />Dashboard</a>
-          <a href="#simulasi" className={page === 'simulation' ? 'nav-active' : ''} aria-current={page === 'simulation' ? 'page' : undefined} onClick={() => { setMenuOpen(false); if (page === 'simulation') scrollTo(0) }}><Sprout />Simulasi</a>
-          <button onClick={() => { sessionsDialog.current?.showModal(); setMenuOpen(false) }}><History />Riwayat sesi<span className="nav-count">{book.sessions.length}</span></button>
+          <a href="#statistik" className={page === 'statistics' ? 'nav-active' : ''} aria-current={page === 'statistics' ? 'page' : undefined} onClick={() => { setMenuOpen(false); if (page === 'statistics') scrollTo(0) }}>{page === 'statistics' && <motion.span className="nav-selection" layoutId="active-page" transition={{ duration: reducedMotion ? 0 : .24 }} aria-hidden="true" />}<LayoutDashboard />Dashboard</a>
+          <a href="#simulasi" className={page === 'simulation' ? 'nav-active' : ''} aria-current={page === 'simulation' ? 'page' : undefined} onClick={() => { setMenuOpen(false); if (page === 'simulation') scrollTo(0) }}>{page === 'simulation' && <motion.span className="nav-selection" layoutId="active-page" transition={{ duration: reducedMotion ? 0 : .24 }} aria-hidden="true" />}<Sprout />Simulasi</a>
+          <button onClick={() => { openModal('sessions'); setMenuOpen(false) }}><History />Riwayat sesi<span className="nav-count">{book.sessions.length}</span></button>
           <button onClick={() => openStatisticsPanel('session-comparison')}><GitCompareArrows />Bandingkan sesi</button>
           <p className="nav-caption">Perangkat & model</p>
           <button onClick={() => openStatisticsPanel('device-panel')}><Radio />Status perangkat</button>
           <button onClick={() => openStatisticsPanel('terminal-page')}><Terminal />Terminal</button>
-          <button onClick={() => { guideDialog.current?.showModal(); setMenuOpen(false) }}><BookOpen />Panduan</button>
+          <button onClick={() => { openModal('guide'); setMenuOpen(false) }}><BookOpen />Panduan</button>
         </nav>
         <div className="sidebar-garden"><Leaf aria-hidden="true" /><span>Satu pot.<br />Banyak cerita tumbuh.</span><p>Amati perubahan, pahami kebutuhan tanaman.</p><a href="#simulasi" onClick={() => setMenuOpen(false)}>Ke ruang tanam<ArrowUpRight /></a></div>
         <p className="sidebar-footnote"><span className="status-dot" />Simulasi lokal</p>
@@ -287,19 +297,28 @@ export default function App() {
     </aside>
     <div className="app-content">
     <header className="app-topbar">
-      <button className="session-switcher" onClick={() => sessionsDialog.current?.showModal()}><span className="session-avatar"><Leaf /></span><span><small>Sesi aktif</small><strong>{session.name}</strong></span><ChevronRight /></button>
-      <div className="topbar-tools"><ClockSettings clock={session.clock} hour={data.now_h} onChange={clock => { setRunning(false); setPauseNote('Zona waktu diubah. Tekan Lanjutkan waktu.'); edit({ clock }) }} /><button className="icon-button theme-toggle" aria-label={theme === 'dark' ? 'Gunakan tema terang' : 'Gunakan tema gelap'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun /> : <Moon />}</button></div>
+      <button className="session-switcher" onClick={() => openModal('sessions')}><span className="session-avatar"><Leaf /></span><span><small>Sesi aktif</small><strong>{session.name}</strong></span><ChevronRight /></button>
+      <div className="topbar-tools"><ClockSettings clock={session.clock} hour={data.now_h} onChange={clock => { setRunning(false); setPauseNote('Zona waktu diubah. Tekan Lanjutkan waktu.'); edit({ clock }) }} /><ThemeToggle /></div>
     </header>
     <motion.main key={page} initial={{ opacity: reducedMotion ? 1 : 0, y: reducedMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .22, ease: "easeOut" }} id="main" tabIndex={-1} className={page === 'statistics' ? 'page-statistics' : 'page-simulation'}>
       <div className="page-heading"><div><h1>{page === 'statistics' ? 'Dashboard' : 'Ruang tanam'}</h1><p>{page === 'statistics' ? 'Kenali pola, rawat tanaman dengan tepat.' : 'Mulai dari bibit, rawat seiring waktu.'}</p></div><div className="page-actions">
         {page === 'statistics' && <a className="button primary" href="#simulasi"><Sprout />Ruang tanam</a>}
-        <details className="session-menu"><summary className="button"><History />Sesi<ChevronRight /></summary><div className="session-menu-body"><strong>{session.name}</strong><button className="button" onClick={() => sessionsDialog.current?.showModal()}><History />Lanjutkan sesi ({book.sessions.length})</button><button className="button" onClick={() => importFile.current?.click()}><ArrowUpFromLine />Impor</button><button className="button" onClick={exportSession}><ArrowDownToLine />Ekspor sesi</button></div></details></div></div>
+        <Popover><PopoverTrigger asChild><button className="button"><History />Sesi<ChevronRight /></button></PopoverTrigger><PopoverContent className="session-actions-popover" align="end" aria-label="Menu sesi" onCloseAutoFocus={event => { if (modal) event.preventDefault() }}><strong>{session.name}</strong><PopoverClose asChild><button className="button" onClick={() => openModal('sessions', document.querySelector('.session-switcher'))}><History />Lanjutkan sesi ({book.sessions.length})</button></PopoverClose><PopoverClose asChild><button className="button" onClick={() => importFile.current?.click()}><ArrowUpFromLine />Impor</button></PopoverClose><PopoverClose asChild><button className="button" onClick={exportSession}><ArrowDownToLine />Ekspor sesi</button></PopoverClose></PopoverContent></Popover></div></div>
       <input ref={importFile} type="file" accept=".json,application/json" className="sr-only" aria-label="Impor kasus JSON" onChange={e => void importSession(e.target.files?.[0])} />
       <div className="saved-session-bar"><span className="active-session-name"><Leaf />{data.profile.crop} · {journey ? 'Perjalanan tanam' : 'Eksperimen'}</span><span className={`save-status ${saveState.error ? 'save-failed' : ''}`} role="status"><Save />{saveState.error ? 'Belum tersimpan' : saveState.book === book ? 'Tersimpan di perangkat' : 'Menyimpan…'}</span></div>
       {saveState.error && <div className="storage-error" role="alert"><p>{saveState.error}</p><div><button className="button" onClick={exportSession}>Ekspor sesi aktif</button>{!boot.error && <button className="button" onClick={persist}>Coba simpan lagi</button>}</div></div>}
       {page === 'simulation' && <div className="studio-setup">
       <section className="mode-bar" aria-label="Mode simulator"><div className="mode-options"><button aria-pressed={journey} onClick={() => changeMode('journey')}><Sprout /><span>Perjalanan tanam</span></button><button aria-pressed={!journey} onClick={() => changeMode('experiment')}><FlaskConical /><span>Eksperimen</span></button></div></section>
-      <details className="setup-disclosure"><summary><Settings2 />Atur tanaman & skenario<ChevronRight /></summary><div className="session-bar"><button className="button" onClick={() => openNew(journey ? createJourney(loadScenario(onion ? 7 : 0).data) : loadScenario(onion ? 7 : 0))}>{journey ? 'Pot baru' : 'Eksperimen baru'}</button><label><Leaf /><select aria-label="Profil tanaman" value={onion ? 'bawang' : 'cabai'} onChange={e => { const i = e.target.value === 'bawang' ? 7 : 0; if (journey) openNew(createJourney(loadScenario(i).data)); else reset(i) }}><option value="cabai">Cabai</option><option value="bawang">Bawang merah</option></select></label><span className="session-media">{data.profile.media}<span className="mini-dot" />Pot 3–5 L</span><button className="text-button" onClick={() => { setProfileVersion(v => v + 1); profileDialog.current?.showModal() }}><Settings2 />Acuan lokal<ArrowUpRight /></button>{!journey && <label className="scenario-select"><span>Skenario</span><select aria-label="Skenario simulasi" value={scenario} onChange={e => reset(Number(e.target.value))}>{scenario === 'custom' && <option value="custom">Eksplorasi manual</option>}{scenarios.map((s, i) => <option key={s.name} value={i}>{String(i + 1).padStart(2, '0')} · {s.name}</option>)}</select></label>}</div></details>
+      <Sheet open={setupOpen} onOpenChange={setSetupOpen}><SheetTrigger asChild><button id="plant-settings" className="button setup-trigger"><Settings2 />Atur tanaman & skenario</button></SheetTrigger><SheetContent onCloseAutoFocus={event => {
+        if (pendingProfile.current) { event.preventDefault(); pendingProfile.current = false; openModal('profile', document.getElementById('plant-settings')) }
+      }}><header className="sheet-heading"><SheetTitle>Tanaman & skenario</SheetTitle><SheetDescription>Sesuaikan ruang tanam dengan eksplorasimu.</SheetDescription></header>
+        <section className="settings-section"><label className="settings-field">Tanaman<SelectField label="Profil tanaman" value={onion ? 'bawang' : 'cabai'} onValueChange={value => { const i = value === 'bawang' ? 7 : 0; if (journey) openNew(createJourney(loadScenario(i).data)); else reset(i) }} options={[{ value: 'cabai', label: 'Cabai' }, { value: 'bawang', label: 'Bawang merah' }]} /></label>
+        <p className="section-hint">{data.profile.media} · Pot 3–5 L</p>
+        {!journey && <label className="settings-field">Skenario<SelectField label="Skenario simulasi" value={scenario} onValueChange={value => { if (value !== 'custom') reset(Number(value)) }} options={[...(scenario === 'custom' ? [{ value: 'custom', label: 'Eksplorasi manual' }] : []), ...scenarios.map((s, i) => ({ value: String(i), label: `${String(i + 1).padStart(2, '0')} · ${s.name}` }))]} /></label>}
+        <button className="settings-row" onClick={() => { setProfileVersion(v => v + 1); pendingProfile.current = true; setSetupOpen(false) }}><Settings2 /><span>Acuan lokal</span><ArrowUpRight /></button></section>
+        <section className="settings-section"><h3>Mulai lagi</h3><p className="section-hint">Sesi sebelumnya tetap tersedia di Lanjutkan sesi.</p><SheetClose asChild><button className="button" onClick={() => openNew(journey ? createJourney(loadScenario(onion ? 7 : 0).data) : loadScenario(onion ? 7 : 0))}><Sprout />{journey ? 'Pot baru' : 'Eksperimen baru'}</button></SheetClose></section>
+        <SheetClose asChild><button className="button primary sheet-done">Selesai</button></SheetClose>
+      </SheetContent></Sheet>
       </div>}
       {error && <div className="error-banner" role="alert"><TriangleAlert />{error}<button className="icon-button" onClick={() => setError('')} aria-label="Tutup kesalahan"><X /></button></div>}
       {page === 'simulation' && <>
@@ -309,7 +328,7 @@ export default function App() {
 {!journey && <section className="timeline" aria-label="Ilustrasi fase tanaman"><div className="timeline-label"><span>Ilustrasi fase tanaman</span><strong>Hari <b>{String(day).padStart(2, '0')}</b><small> / {maxDay} HST</small></strong></div>
         <div className="timeline-controls"><button className={`icon-button play-button ${playing ? 'playing' : ''}`} aria-label={playing ? 'Jeda timelapse' : 'Putar timelapse'} onClick={() => { if (day >= maxDay) setDay(0); setPlaying(!playing) }}>{playing ? <Pause /> : <Play />}</button><button className="icon-button" aria-label="Reset timelapse" onClick={() => { setDay(0); setPlaying(false) }}><RotateCcw /></button></div>
         <div className="timeline-track"><input aria-label="Hari setelah tanam" type="range" min="0" max={maxDay} step="1" value={day} onChange={e => { setDay(Number(e.target.value)); setPlaying(false) }} /><div className="timeline-phases"><span>Awal tanam</span><span>Vegetatif</span><span>{onion ? 'Pembentukan umbi' : 'Berbunga'}</span><span>{onion ? 'Pematangan' : 'Berbuah'}</span></div></div>
-        <label className="speed-label"><span className="sr-only">Kecepatan timelapse</span><select value={speed} onChange={e => setSpeed(Number(e.target.value))}><option value="1">1×</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option></select></label><span className="tag illustration-tag">ILUSTRASI</span><p className="timeline-explanation">HST mengubah gambar saja. Waktu sensor maju saat menambah sampel.</p>
+        <label className="speed-label"><span className="sr-only">Kecepatan timelapse</span><SelectField label="Kecepatan timelapse" value={speed} onValueChange={value => setSpeed(Number(value))} options={[1, 2, 5, 10].map(value => ({ value, label: `${value}×` }))} /></label><span className="tag illustration-tag">ILUSTRASI</span><p className="timeline-explanation">HST mengubah gambar saja. Waktu sensor maju saat menambah sampel.</p>
       </section>}
       {journey && <div className="journey-progress"><span>{sim.planted ? `HST ${day} / ${maxDay}` : 'Bibit siap ditanam'}</span><progress aria-label="Perjalanan tanam" max={maxDay} value={day} /><span>{phaseAt(developmentDay, onion)}</span></div>}
         </div>
@@ -342,13 +361,13 @@ export default function App() {
     </motion.main>
     </div></div>
     <div className={`toast ${notice ? 'visible' : ''}`} role="status">{notice && <><Check />{notice}</>}</div>
-    <dialog ref={profileDialog} aria-labelledby="profile-title" className="modal"><ProfileEditor key={profileVersion} profile={data.profile} onApply={applyProfile} onClose={() => profileDialog.current?.close()} /></dialog>
-    <dialog ref={sessionsDialog} aria-labelledby="sessions-title" className="modal sessions-modal"><SessionLibrary sessions={book.sessions} activeId={book.activeId} running={running} onResume={resume} onClose={() => sessionsDialog.current?.close()} onRename={(id, name) => setBook(old => ({ ...old, sessions: old.sessions.map(s => s.id === id ? { ...s, name, updatedAt: Date.now() } : s) }))} /></dialog>
-    <dialog ref={guideDialog} aria-labelledby="guide-title" className="modal guide-modal"><div className="dialog-heading"><div><h2 id="guide-title">Tentang simulator</h2><p>Asisten perawatan tanaman dalam pot berbasis riwayat sensor.</p></div><button className="icon-button" aria-label="Tutup panduan" onClick={() => guideDialog.current?.close()}><X /></button></div>
+    <Dialog open={modal === 'profile'} onOpenChange={open => { if (!open) setModal(null) }}><DialogContent showCloseButton={false} onCloseAutoFocus={restoreModalFocus}><ProfileEditor key={profileVersion} profile={data.profile} onApply={applyProfile} onClose={() => setModal(null)} /></DialogContent></Dialog>
+    <Dialog open={modal === 'sessions'} onOpenChange={open => { if (!open) setModal(null) }}><DialogContent className="sessions-modal" showCloseButton={false} onCloseAutoFocus={restoreModalFocus}><SessionLibrary sessions={book.sessions} activeId={book.activeId} running={running} onResume={resume} onClose={() => setModal(null)} onRename={(id, name) => setBook(old => ({ ...old, sessions: old.sessions.map(s => s.id === id ? { ...s, name, updatedAt: Date.now() } : s) }))} /></DialogContent></Dialog>
+    <Dialog open={modal === 'guide'} onOpenChange={open => { if (!open) setModal(null) }}><DialogContent className="guide-modal" showCloseButton={false} onCloseAutoFocus={restoreModalFocus}><div className="dialog-heading"><div><DialogTitle>Tentang simulator</DialogTitle><DialogDescription>Asisten perawatan tanaman dalam pot berbasis riwayat sensor.</DialogDescription></div><button className="icon-button" aria-label="Tutup panduan" onClick={() => setModal(null)}><X /></button></div>
       <h3>Alur eksplorasi</h3><ol><li>Pilih salah satu dari 10 skenario makalah.</li><li>Pilih Perjalanan tanam atau Eksperimen. Dashboard memuat grafik, perbandingan, JSON, dan Jejak aturan.</li><li>Atur masukan, lalu tambah sampel setiap 30 menit simulasi.</li><li>Catat siraman; masukkan pembacaan baru untuk mengevaluasi respons.</li><li>Ekspor sesi untuk menyimpan input, keputusan, dan log.</li></ol>
       <h3>Tiga parameter, acuan lokal</h3><p>Kelembapan adalah indeks 0–100 hasil acuan media, bukan kadar air volumetrik. Suhu memakai DS18B20. pH berasal dari sesi ukur baru; sampel tanpa pengukuran pH disimpan sebagai null.</p>
       <h3>Mode perjalanan dan sampel</h3><p>Perjalanan dimulai dengan Tanam & mulai. Sesi baru berjalan terus sampai dijeda. Jeda saat perhatian bersifat opsional; saat dilanjutkan, peringatan yang sama tidak langsung menjeda lagi. Waktu sensor, grafik, dan terminal memakai satu timestamp UTC. Zona awal mengikuti perangkat dan bisa diganti manual; HST tetap durasi sejak tanam. Waktu sensor dan HST bergerak bersama; siklus pagi–malam memengaruhi suhu dan pengeringan sintetis. Model perkembangan melambat ketika kondisi media kurang mendukung. Semua dinamika ini untuk latihan, belum divalidasi sebagai model pertumbuhan tanaman. Mode acak menambah variasi, sedangkan manual tersedia di Eksperimen.</p><p>Pupuk memakai jadwal pribadi (0 = nonaktif) dan catatan tindakan. Sensor tidak menentukan kebutuhan/dosis pupuk; catatan tidak mengubah pH, nutrisi, atau pertumbuhan.</p><h3>Batas model</h3><p>Timelapse 0–90 HST untuk cabai dan 0–65 HST untuk bawang hanya menggambarkan fase. Tidak mengubah ambang, memprediksi hasil panen, mengukur EC/NPK, mendiagnosis penyakit, atau menentukan dosis pupuk dan dolomit.</p><p>Proyeksi kering memakai regresi linear lokal, minimal 6 sampel selama 2,5 jam, R² ≥0,8, dan horizon maksimal 12 jam. Bukan waktu siram pasti.</p><p>Sesi disimpan otomatis di browser ini. Refresh memulihkan sesi aktif dalam keadaan dijeda. Ganti skenario membuat sesi baru; gunakan Lanjutkan sesi untuk membuka eksplorasi sebelumnya. Ekspor versi baru memulihkan draf, log, serta posisi ilustrasi saat diimpor. Kasus Python tetap didukung. Simpanan tidak tersinkron antarperangkat atau alamat hosting; gunakan ekspor JSON untuk memindahkannya.</p>
       <p className="source-note">Sumber: Makalah_Asisten_Perawatan_Tanaman_Satu_Pot.docx, Bab V, dan simulasi_pot.py. Semua skenario sintetis; belum divalidasi pada tanaman atau perangkat aktual.</p>
-    </dialog>
+    </DialogContent></Dialog>
   </>
 }

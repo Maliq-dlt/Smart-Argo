@@ -14,7 +14,7 @@ npm ci
 npm run dev
 ```
 
-Buka http://127.0.0.1:5173. `.npmrc` menempatkan cache npm di `../.cache/npm`. Dependensi frontend mengikuti brief: React 18, Vite, TypeScript, Tailwind CSS, Framer Motion, Lenis, Lucide, dan primitive Tabs Radix yang juga mendasari Shadcn. Slider, checkbox, select, dan dialog memakai elemen HTML native. Tidak ada backend atau credential.
+Buka http://127.0.0.1:5173. `.npmrc` menempatkan cache npm di `../.cache/npm`. Dependensi frontend mengikuti brief: React 18, Vite, TypeScript, Tailwind CSS, Framer Motion, Lenis, Lucide, dan shadcn/ui berbasis Radix (Tabs, Select, Dialog, Popover, Sheet). Komponen di `src/components/ui/` memakai token desain aplikasi; slider dan checkbox tetap HTML native. Tidak ada backend atau credential.
 
 ## Alur penggunaan
 
@@ -26,9 +26,9 @@ Kartu ringkasan dan grafik mengikuti parameter/rentang pilihan. **Kondisi pot sa
 
 ### Tampilan dan gerak
 
-Ruang tanam memakai panel transparan di atas latar abu lembut dengan aksen sage. Tombol **Sensor** menampilkan/menyembunyikan probe pada ilustrasi; nilai sensor tetap tersedia di panel kiri. Framer Motion menggerakkan tanaman, langit, serta transisi halaman 220 ms. Lenis menghaluskan gulir roda mouse dan perpindahan ke panel (650 ms); gulir sentuh tetap native. Link sidebar halaman yang sedang aktif kembali ke atas. Fokus keyboard berpindah ke panel tanpa loncatan gulir.
+Ruang tanam memakai panel solid di atas latar abu lembut dengan aksen sage; kaca transparan dibatasi pada navigasi dan toolbar. Tombol **Sensor** menampilkan/menyembunyikan probe pada ilustrasi; nilai sensor tetap tersedia di panel kiri. Framer Motion menggerakkan tanaman, langit, serta transisi halaman 220 ms. Lenis menghaluskan gulir roda mouse dan perpindahan ke panel (650 ms); gulir sentuh tetap native. Link sidebar halaman yang sedang aktif kembali ke atas. Fokus keyboard berpindah ke panel tanpa loncatan gulir.
 
-Log terminal dan dialog bergulir secara native. Saat dialog terbuka, gulir halaman berhenti. `prefers-reduced-motion` meniadakan tween gulir/transform; `prefers-reduced-transparency` atau kontras tinggi mengganti kaca dengan permukaan solid. Tidak ada font Apple atau aset berlisensi yang diunduh; stack font sistem tetap dipakai. Acuan materi: [Apple Design Resources](https://developer.apple.com/design/resources/) dan [HIG Materials](https://developer.apple.com/design/human-interface-guidelines/materials). HeroUI tidak ditambahkan karena kontrol native/Radix yang sudah terpasang mencukupi.
+Log terminal dan dialog bergulir secara native. Saat dialog terbuka, gulir halaman berhenti. `prefers-reduced-motion` meniadakan tween gulir/transform; `prefers-reduced-transparency` atau kontras tinggi mengganti kaca dengan permukaan solid. Tidak ada font Apple atau aset berlisensi yang diunduh; stack font sistem tetap dipakai. Acuan materi: [Apple Design Resources](https://developer.apple.com/design/resources/) dan [HIG Materials](https://developer.apple.com/design/human-interface-guidelines/materials). Kontrol shadcn/Radix mengelola fokus, Escape, navigasi keyboard, dan posisi menu. Pengaturan tanaman serta waktu/sampel berada dalam Sheet; pemilih zona waktu dan aksi sesi memakai Popover. Library animasi dibundel terpisah agar dapat dicache sendiri; konten statistik tetap langsung tersedia saat navigasi panel.
 
 Penyebab waktu dijeda tampil dekat kontrol: jeda pengguna, pemulihan sesi, tab tidak aktif, pergantian zona/sumber, mode manual, perhatian baru, atau batas sesi. Mode manual menyediakan **Gunakan waktu otomatis**. Tab yang kembali aktif dan sesi yang baru dipulihkan tetap menunggu tombol lanjut, sehingga simulasi tidak berjalan tanpa terlihat. Jeda otomatis juga ditulis pada log.
 
@@ -49,7 +49,7 @@ HST di **Ilustrasi fase tanaman** tetap terpisah dari jam sensor dalam mode eksp
 
 Halaman **Dashboard** menyediakan pilihan kelembapan, suhu, pH, serta rentang seluruh sesi / 24 jam / 72 jam. Ringkasan menampilkan rata-rata, minimum–maksimum, persentase pengukuran valid, dan durasi teramati. Selain riwayat garis, tersedia histogram, diagram donat mutu data, dan rentang minimum/rata-rata/maksimum per 24 jam (maksimal 7 kelompok berisi data). Semua dihitung dari sampel nyata dalam sesi; sampel gagal dan pH kosong dikecualikan dari statistik numerik. Persentase valid merujuk status sampel, bukan kalibrasi. **Detail teknis & terminal** memuat log, JSON, dan jejak aturan. Ketuk titik, gunakan Enter/Spasi, atau pilih sampel untuk membaca waktu, nilai, dan status. Silang menandai gagal; wajik menandai tidak diukur. Garis terputus pada keduanya dan pada jeda lebih dari satu jam. **Bandingkan sesi** menerima dua sesi pilihan pengguna dan salinan sebelum/sesudah tindakan.
 
-Tombol matahari/bulan memilih tema terang/gelap; pilihan disimpan lokal dan awalnya mengikuti sistem. Tema antarmuka terpisah dari waktu dunia simulasi. Matahari bergerak dari timur ke barat, disusul bulan dan langit malam; awan melayang pelan. Animasi langit menginterpolasi dua waktu yang telah tercatat, tidak membuat pembacaan tambahan. Preferensi pengurangan gerak menghentikan interpolasi dan animasi dekoratif.
+Tombol tema menampilkan kondisi aktif: matahari untuk terang, bulan sabit untuk gelap. Pilihan disimpan lokal dan awalnya mengikuti sistem. View Transition native membuka tema baru melalui lingkaran dari pusat tombol (480 ms), disertai pergantian ikon; klik cepat tidak menumpuk transisi. Fokus keyboard dipertahankan. Browser tanpa API tersebut memakai perubahan langsung dan gerak ikon; reduced motion meniadakan animasi tema. Tema antarmuka terpisah dari waktu dunia simulasi. Matahari bergerak dari timur ke barat, disusul bulan dan langit malam; awan melayang pelan. Animasi langit menginterpolasi dua waktu yang telah tercatat, tidak membuat pembacaan tambahan. Preferensi pengurangan gerak menghentikan interpolasi dan animasi dekoratif.
 
 ## Penyimpanan dan cadangan
 
@@ -120,7 +120,7 @@ python ../simulasi_pot.py --self-test
 
 Tampilan mengikuti susunan dashboard referensi pengguna: sidebar, toolbar sesi, kartu ringkasan, grid grafik dan perawatan, serta jam sesi hijau. Palet botani, disclosure native, dan ilustrasi SVG dipertahankan. Panduan visual ada di `design.md`. Belum ada pengujian perangkat atau tanaman nyata. Folder induk bukan repositori Git; pemeriksaan perubahan menggunakan snapshot sebelum revisi. Dokumen dan program Python asli tidak diedit.
 
-Paket versi 1.7: `.tmp/release/smart-agro-v1.7.0.zip`. ZIP hanya memuat isi `dist/`; ekstrak langsung di direktori hosting tujuan. Situs belum dipublikasikan.
+Paket versi 1.7: `.tmp/release/smart-agro-v1.7.0.zip`. ZIP hanya memuat isi `dist/`; ekstrak langsung di direktori hosting tujuan. Situs belum dipublikasikan saat verifikasi versi 1.7.
 
 Verifikasi versi 1.3: `npm test` lulus 28/28, termasuk kesetaraan 110 kasus Python, perjalanan 90 HST, statistik valid/kosong/gagal, batas histogram, serta orbit siang–malam. Lint, type-check, dan build lulus. Chrome menguji 48 kombinasi mode/tema/viewport (320/375/414/768/1024/1440 px), autoplay/jeda, interpolasi langit, malam, tindakan, 10 keputusan makalah, sumber sampel, grafik, keyboard, perbandingan, ekspor/impor, dan pemulihan. Hasil ada di `.tmp/apple-browser-report.json`. Build statis lulus di `/` dan `/simulator/` beserta aset dan favicon HTTP 200; hasil ada di `.tmp/hosting-smoke-report.json`. Browser uji: Chrome lokal; belum perangkat fisik atau Safari/Firefox.
 
@@ -151,4 +151,12 @@ node tests/playback-browser.js
 ```
 
 
-Verifikasi versi 1.7: 36/36 tes Node lulus (termasuk 110 kasus kesetaraan Python), self-test Python lulus, lint dan type-check/build lulus. Regresi browser baru memeriksa lima kombinasi laju sensor/ilustrasi, pause/resume, rename, siram, riwayat tetap utuh, dan refresh. Chrome memeriksa 36 kombinasi tampilan/tema/lebar untuk kartu sesi, pemilih native, disclosure, serta reduced motion, ditambah 24 kombinasi regresi navigasi, Lenis, jurnal, dan jam kontinu. Tidak ada error browser. Root/subfolder dan aset HTTP 200 lulus. Laporan: `.tmp/refinement-ui-report.json`, `.tmp/refinement-legacy-browser-report.json`, `.tmp/refinement-legacy-hosting-report.json`, `.tmp/refinement-diff-report.json`, `.tmp/refinement-scope-review.md`. Safari/Firefox dan perangkat fisik belum diuji. Situs belum dipublikasikan.
+Verifikasi versi 1.7: 36/36 tes Node lulus (termasuk 110 kasus kesetaraan Python), self-test Python lulus, lint dan type-check/build lulus. Regresi browser baru memeriksa lima kombinasi laju sensor/ilustrasi, pause/resume, rename, siram, riwayat tetap utuh, dan refresh. Chrome memeriksa 36 kombinasi tampilan/tema/lebar untuk kartu sesi, pemilih native, disclosure, serta reduced motion, ditambah 24 kombinasi regresi navigasi, Lenis, jurnal, dan jam kontinu. Tidak ada error browser. Root/subfolder dan aset HTTP 200 lulus. Laporan: `.tmp/refinement-ui-report.json`, `.tmp/refinement-legacy-browser-report.json`, `.tmp/refinement-legacy-hosting-report.json`, `.tmp/refinement-diff-report.json`, `.tmp/refinement-scope-review.md`. Safari/Firefox dan perangkat fisik belum diuji. Situs belum dipublikasikan saat verifikasi versi 1.7.
+
+## Verifikasi antarmuka
+
+`npm test` memeriksa model, sesi, statistik, dan kontrak perangkat; `npm run lint`, `npm run typecheck`, dan `npm run build` memeriksa source/build.
+
+Dengan Chrome dan Playwright yang tersedia di lingkungan pengembangan, jalankan preview hasil build lalu `node tests/ui-browser.js`. Jika Playwright berada di lokasi lain, isi `PLAYWRIGHT_MODULE` dengan path modul tersebut. `TEST_URL` dapat mengganti alamat bawaan `http://127.0.0.1:4173/`.
+
+Pemeriksaan browser mencakup lingkaran tema, ikon, klik cepat, reduced motion/fallback, jam tetap maju, penyimpanan, fokus antar-panel, Select di dalam Sheet, gulir modal, perbandingan sesi, grafik, serta lebar 320/375/414/768 px. Tangkapan layar tersimpan di `.tmp/ui-check/` dan tidak diunggah.

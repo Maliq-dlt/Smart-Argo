@@ -1,3 +1,5 @@
+import { DialogTitle, DialogDescription } from './ui/dialog'
+import { SelectField } from './ui/select'
 import { useState } from 'react'
 import { Copy, GitCompareArrows, ChevronDown, X, Sprout, FlaskConical, Pencil, ArrowUpRight, Check } from 'lucide-react'
 import { evaluate } from '../lib/agronomyEngine'
@@ -11,7 +13,7 @@ export function SessionLibrary({ sessions, activeId, running, onResume, onRename
   const [editing, setEditing] = useState<string | null>(null)
   const finishRename = (id: string) => { setEditing(null); document.getElementById(`rename-${id}`)?.focus({ preventScroll: true }) }
   return <>
-    <div className="dialog-heading"><div><span className="library-eyebrow">Ruang tersimpan · {sessions.length} sesi</span><h2 id="sessions-title">Lanjutkan sesi</h2><p>Kembali ke tanaman dan eksplorasi terakhir.</p></div><button className="icon-button" onClick={onClose} aria-label="Tutup daftar sesi"><X /></button></div>
+    <div className="dialog-heading"><div><span className="library-eyebrow">Ruang tersimpan · {sessions.length} sesi</span><DialogTitle>Lanjutkan sesi</DialogTitle><DialogDescription>Kembali ke tanaman dan eksplorasi terakhir.</DialogDescription></div><button className="icon-button" onClick={onClose} aria-label="Tutup daftar sesi"><X /></button></div>
     <ul className="session-list">{[...sessions].sort((a, b) => Number(b.id === activeId) - Number(a.id === activeId) || b.updatedAt - a.updatedAt).map(s => {
       const active = s.id === activeId, journey = simulationOf(s).mode === 'journey'
       return <li key={s.id} className="session-card" data-active={active}>
@@ -43,7 +45,7 @@ export default function SessionComparison({ sessions, activeId, onSnapshot }: {
     <div className="comparison-body">
       <p>Bandingkan nilai terakhir, tren, dan alasan tindakan. Simpan salinan sebelum mengubah masukan untuk membandingkan keadaan sebelum dan sesudah.</p>
       <button className="button" onClick={() => { const id = onSnapshot(); setLeftId(activeId); setRightId(id) }}><Copy />Simpan salinan sesi aktif</button>
-      <div className="comparison-selectors">{selectors.map(({ value, set, label }) => <label key={label}>{label}<select aria-label={label} value={value} onChange={e => set(e.target.value)}><option value="">Pilih sesi</option>{sessions.map(s => <option key={s.id} value={s.id}>{s.name} · {s.data.samples.length} sampel{s.id === activeId ? ' (aktif)' : ''}</option>)}</select></label>)}</div>
+      <div className="comparison-selectors">{selectors.map(({ value, set, label }) => <label key={label}>{label}<SelectField label={label} value={value} onValueChange={set} placeholder="Pilih sesi" options={sessions.map(s => ({ value: s.id, label: `${s.name} · ${s.data.samples.length} sampel${s.id === activeId ? ' (aktif)' : ''}` }))} /></label>)}</div>
       {left && right && left.id !== right.id ? <>
         <div className="session-comparison-grid">{[left, right].map((s, i) => {
           const { evidence, action, reason } = evaluate(s.data), last = s.data.samples.at(-1)!
