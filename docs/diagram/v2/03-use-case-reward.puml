@@ -1,0 +1,39 @@
+@startuml
+left to right direction
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 15
+skinparam roundcorner 10
+skinparam linetype ortho
+skinparam nodesep 32
+skinparam ranksep 75
+skinparam ArrowColor #52665D
+skinparam actorBorderColor #243E32
+skinparam actorFontColor #243E32
+skinparam usecaseBackgroundColor #F3F8F4
+skinparam usecaseBorderColor #527C63
+skinparam rectangleBorderColor #A8BAAF
+skinparam rectangleFontColor #243E32
+title Hadiah dan penukaran
+
+actor "Pemilik" as Owner
+actor "Operator program" as Operator
+rectangle "SMART AGRO | REWARD - RENCANA" {
+  usecase "RW-01\nLihat saldo, riwayat\ndan aturan hadiah" as R1
+  usecase "RW-02\nAjukan klaim aktivitas\ndan energi terverifikasi" as R2
+  usecase "RW-03\nTukar saldo dengan\nproduk yang tersedia" as R3
+  usecase "RW-04\nTinjau klaim mencurigakan\ndan keberatan" as R4
+  usecase "RW-05\nKelola katalog, stok\ndan pemenuhan pesanan" as R5
+}
+Owner -- R1
+Owner -- R2
+Owner -- R3
+R4 -- Operator
+R5 -- Operator
+
+legend bottom
+  Stickman = peran eksternal, bukan anggota tim pengembang.
+  Garis tanpa panah = interaksi; urutan ada pada flowchart.
+endlegend
+@enduml

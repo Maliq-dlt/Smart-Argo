@@ -1,0 +1,32 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart TB
+    Start(["RANCANGAN PRODUK SMART AGRO"]) --> Buy["Periksa produk dan aktifkan kepemilikan<br/>QR publik + kode tersegel + bukti perangkat"]
+    Buy --> Mode{"Varian produk?"}
+    Mode -->|Satu pot| Pot["Satu unit pengamatan<br/>kolektor dan pemula"]
+    Mode -->|Satu kebun| Garden["Beberapa zona dan titik sensor<br/>kebun kecil dan petani menengah"]
+    Pot --> Monitor["Pantau tanaman dan energi surya-baterai"]
+    Garden --> Monitor
+    Monitor --> Care["Lihat saran dan maskot AI<br/>catat tindakan perawatan"]
+    Care --> Choice{"Ikut program hadiah?"}
+    Choice -->|Tidak| Continue(["Lanjutkan perawatan dan pemantauan"])
+    Choice -->|Ya| Reward["Klaim hadiah atas bukti yang layak<br/>sesuai kebijakan dan batas program"]
+    Reward --> Redeem(["Tukar saldo dengan produk tersedia"])

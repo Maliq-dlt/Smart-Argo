@@ -1,0 +1,45 @@
+flowchart TD
+    %% TARGET DEMO: seluruh integrasi AI dan blockchain di sini masih rencana.
+    Start(["RENCANA DEMO: pengguna meminta penjelasan AI"]) --> Snapshot["Bekukan snapshot sesi sintetis<br/>beri ID snapshot dan waktu"]
+    Snapshot --> Send["Kirim snapshot ke backend AI"]
+    Send --> Input{"Input, ukuran, origin<br/>dan batas permintaan valid?"}
+    Input -->|Tidak| Reject["Tolak permintaan<br/>sesi asli tetap tersimpan"]
+    Input -->|Ya| Rule["Backend menghitung ulang aturan<br/>atas snapshot yang sama"]
+    Rule --> Model["Kirim tindakan dan bukti terpilih<br/>ke satu layanan model AI<br/>API key hanya di backend"]
+    Model --> AIok{"Respons diterima dan<br/>lolos pemeriksaan format serta batas isi?"}
+    AIok -->|Timeout / kuota / tidak sesuai| AIfail["Tampilkan AI gagal / tidak tersedia<br/>pertahankan penjelasan aturan<br/>jangan labeli fallback sebagai hasil AI"]
+    AIok -->|Ya| Explain["Tampilkan penjelasan terkait ID snapshot<br/>catat model, versi prompt dan waktu<br/>tindakan utama aturan tetap utuh"]
+    Explain --> Record{"Pengguna memilih<br/>catat bukti blockchain?"}
+    Record -->|Tidak| Done(["Selesai; sesi tetap dapat digunakan"])
+    Record -->|Ya| Freeze["Finalkan berkas JSON UTF-8<br/>source simulation, snapshot, aturan,<br/>hasil AI dan metadata<br/>simpan byte aslinya;<br/>metadata transaksi di berkas terpisah"]
+    Freeze --> Hash["Hitung SHA-256 atas byte berkas"]
+    Hash --> Network{"Wallet tersedia<br/>dan chain ID sesuai jaringan uji?"}
+    Network -->|Tidak| WrongNet["Minta sambungkan wallet / ganti jaringan<br/>jangan kirim transaksi"]
+    WrongNet --> Network
+    WrongNet -->|Batal| Cancel
+    Network -->|Ya| Consent{"Pengguna menyetujui transaksi<br/>bernilai nol, ke alamat sendiri,<br/>dengan hash pada data?"}
+    Consent -->|Tidak| Cancel["Batalkan pencatatan<br/>berkas lokal tetap tersedia"]
+    Consent -->|Ya| Broadcast["Wallet menandatangani dan mengirim<br/>private key tidak masuk aplikasi"]
+    Broadcast --> Tx{"Hash transaksi diterima?"}
+    Tx -->|Tidak| SendError["Tampilkan galat pengiriman<br/>jangan klaim tercatat;<br/>periksa status sebelum mengirim ulang"]
+    Tx -->|Ya| Pending["Simpan chain ID dan hash transaksi<br/>di bukti terpisah; status menunggu"]
+    Pending --> Receipt{"Receipt tersedia<br/>pada chain yang dipilih?"}
+    Receipt -->|Belum / RPC tidak tersedia| Wait["Tetap pending / belum terverifikasi<br/>periksa ulang transaksi yang sama"]
+    Wait --> Receipt
+    Wait -->|Tutup dan periksa nanti| Done
+    Receipt -->|Ya| Success{"Receipt sukses?"}
+    Success -->|Tidak| Failed["Status transaksi gagal<br/>berkas dan metadata tetap tersedia"]
+    Success -->|Ya| Compare["Hitung ulang hash byte berkas asli<br/>ambil data transaksi dari chain yang sama"]
+    Compare --> Match{"Hash cocok dengan data transaksi?"}
+    Match -->|Tidak| Mismatch["Integritas TIDAK cocok<br/>jangan klaim catatan terverifikasi"]
+    Match -->|Ya| Verified["Status tercatat dan hash cocok<br/>simpan nomor blok dan receipt<br/>di bukti terpisah<br/>bukan bukti kebenaran sensor / AI"]
+    Verified --> Done
+    Reject --> Done
+    AIfail --> Done
+    Cancel --> Done
+    SendError --> Done
+    Failed --> Done
+    Mismatch --> Done
+
+    VerifyLater(["Verifikasi ulang bukti yang sudah ada"]) --> Existing["Buka berkas asli dan metadata bukti<br/>pilih chain ID dan hash transaksi"]
+    Existing --> Receipt

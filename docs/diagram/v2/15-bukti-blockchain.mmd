@@ -1,0 +1,30 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart TB
+    S(["RENCANA: peristiwa yang perlu bukti"]) --> Prepare["Siapkan manifest produk atau komitmen catatan<br/>tanpa data pribadi dan kode aktivasi"]
+    Prepare --> Local["Simpan artefak tetap dan pekerjaan outbox<br/>dalam transaksi DB yang sama"]
+    Local --> Sign["Penanda tangan berwenang mengirim transaksi<br/>penerbit resmi untuk identitas produk"]
+    Sign --> Receipt{"Receipt tersedia dan sukses<br/>pada jaringan yang ditetapkan?"}
+    Receipt -->|Belum / koneksi gagal| Pending(["Pending; retry pekerjaan yang sama<br/>periksa transaksi sebelum mengirim ulang"])
+    Receipt -->|Gagal| Failed(["Catat kegagalan<br/>data lokal tidak diklaim terverifikasi"])
+    Receipt -->|Ya| Match{"Penerbit, tujuan / kontrak,<br/>event atau data, serta hash cocok?"}
+    Match -->|Tidak| Invalid(["Bukti tidak cocok<br/>tahan status terverifikasi"])
+    Match -->|Ya| Confirm(["Tandai bukti terkonfirmasi<br/>simpan chain ID, transaksi dan blok terpisah"])

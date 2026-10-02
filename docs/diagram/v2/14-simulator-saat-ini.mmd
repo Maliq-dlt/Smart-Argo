@@ -1,0 +1,27 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart LR
+    Start(["SAAT INI<br/>aplikasi browser"]) --> Session["Buka / buat sesi<br/>atau impor JSON tervalidasi"]
+    Session --> Input["Jalankan data sintetis<br/>dan catat perawatan"]
+    Input --> Engine["Evaluasi aturan lokal<br/>satu keputusan prioritas"]
+    Engine --> UI["Grafik, statistik,<br/>alasan dan terminal"]
+    UI --> Store["Simpan localStorage<br/>atau ekspor JSON"]
+    Packet["Impor JSON perangkat"] --> Preview(["Pratinjau telemetri terpisah<br/>belum memberi masukan ke aturan"])

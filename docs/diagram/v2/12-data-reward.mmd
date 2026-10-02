@@ -1,0 +1,67 @@
+---
+title: "RANCANGAN: data reward"
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+erDiagram
+    direction LR
+    ENERGY_WINDOW |o--o{ REWARD_EVENT : mendukung
+    REWARD_EVENT |o--o{ LEDGER_ENTRY : menghasilkan
+    REDEMPTION |o--o{ LEDGER_ENTRY : penyelesaian
+    CATALOG_ITEM ||--o{ REDEMPTION : dipilih
+    ENERGY_WINDOW {
+        uuid id PK
+        uuid device_id FK
+        datetime start_at
+        datetime end_at
+        float solar_harvest_wh
+        float load_wh
+        string evidence_quality
+    }
+    REWARD_EVENT {
+        uuid id PK
+        uuid account_id FK
+        uuid energy_window_id FK
+        string source_event_key UK
+        string policy_version
+        string verification_status
+    }
+    LEDGER_ENTRY {
+        uuid id PK
+        uuid account_id FK
+        uuid reward_event_id FK
+        uuid redemption_id FK
+        int signed_points
+        string idempotency_key UK
+    }
+    REDEMPTION {
+        uuid id PK
+        uuid account_id FK
+        uuid catalog_item_id FK
+        int reserved_points
+        string status
+        string idempotency_key UK
+    }
+    CATALOG_ITEM {
+        uuid id PK
+        int point_cost
+        int stock_total
+        int stock_reserved
+        string availability
+    }

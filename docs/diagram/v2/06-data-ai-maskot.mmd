@@ -1,0 +1,33 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart TB
+    S(["RENCANA: siklus data dan maskot"]) --> Source["Terima telemetri atau sesi simulasi<br/>asal data selalu ditandai"]
+    Source --> Check{"Identitas, schema, urutan<br/>dan waktu paket sah sesuai sumber?"}
+    Check -->|Tidak| Unknown(["Tolak / karantina paket; tampilkan galat<br/>pertahankan data lama dan tandai jika usang<br/>tanpa reward dari paket ini"])
+    Check -->|Ya| Save["Simpan UTC, lokasi dan status per sensor<br/>pilih versi profil yang telah ditinjau"]
+    Save --> Rules["Nilai kecukupan data per aturan agronomi<br/>sensor null / gagal tidak menjadi nol<br/>sertakan bukti dan kalibrasi"]
+    Rules --> State["Petakan status maskot secara konsisten<br/>normal / perlu perhatian / data tidak cukup"]
+    State --> Request{"Penjelasan atau interaksi AI diminta?"}
+    Request -->|Tidak| Basic(["Tampilkan maskot dan alasan aturan"])
+    Request -->|Ya| AI["Backend mengirim konteks terbatas ke AI<br/>ID snapshot dan versi profil tetap"]
+    AI --> Valid{"Respons aman dan sesuai format<br/>serta tidak bertentangan dengan bukti?"}
+    Valid -->|Tidak / timeout| Fallback(["AI tidak tersedia; gunakan alasan aturan<br/>status maskot tidak diacak"])
+    Valid -->|Ya| Explain(["Tampilkan penjelasan terkait snapshot<br/>AI tidak mengubah data, saldo atau aktuator"])

@@ -1,0 +1,54 @@
+---
+title: "RANCANGAN: data pengetahuan"
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+erDiagram
+    direction LR
+    PLANT_PROFILE ||--o{ PROFILE_VERSION : memiliki_versi
+    CONTRIBUTION ||--o{ REVIEW : ditinjau
+    CONTRIBUTION ||--o{ PROFILE_VERSION : menjadi_sumber
+    PLANT_PROFILE {
+        uuid id PK
+        string species_variety
+        string context_scope
+    }
+    CONTRIBUTION {
+        uuid id PK
+        uuid author_account_id FK
+        string source_method_license
+        string evidence_ref
+        string status
+    }
+    REVIEW {
+        uuid id PK
+        uuid contribution_id FK
+        uuid reviewer_account_id FK
+        string decision_reason
+        datetime reviewed_at
+    }
+    PROFILE_VERSION {
+        uuid id PK
+        uuid profile_id FK
+        uuid contribution_id FK
+        int version
+        string parameters_and_scope
+        string evidence_level
+        datetime published_at
+    }

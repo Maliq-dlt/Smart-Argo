@@ -1,0 +1,43 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart TB
+    subgraph Clients["ANTARMUKA: RENCANA"]
+        Web["Web dan maskot 2D<br/>dashboard pot / kebun"]
+        IoT["Perangkat asli<br/>sensor + pengelola daya"]
+    end
+    subgraph Core["BACKEND: RENCANA"]
+        API["API terautentikasi<br/>otorisasi per pemilik dan perangkat"]
+        DB[("DB privat<br/>kepemilikan, pengukuran,<br/>profil versi dan ledger")]
+        Rules["Aturan, agregasi dan status maskot"]
+        AI["Layanan AI via backend<br/>konteks minimum"]
+        Outbox["Pekerjaan blockchain<br/>outbox dan retry idempoten"]
+    end
+    subgraph External["BUKTI: RENCANA"]
+        Chain["Blockchain<br/>identitas penerbit / produk<br/>dan komitmen hash"]
+    end
+    Web --> API
+    IoT -->|telemetri bertanda tangan| API
+    API --> DB
+    API --> Rules
+    Rules --> AI
+    DB --> Outbox
+    Outbox --> Chain
+    Sim["SAAT INI<br/>Simulator React + aturan lokal<br/>localStorage dan pratinjau JSON"] -.->|fondasi dan sumber demo berlabel| Web

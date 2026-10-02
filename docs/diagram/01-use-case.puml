@@ -1,0 +1,90 @@
+@startuml
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Arial
+skinparam usecaseBackgroundColor #FFFFFF
+skinparam usecaseBorderColor #334155
+skinparam ArrowColor #475569
+skinparam actorBorderColor #334155
+skinparam noteBackgroundColor #FFF7ED
+skinparam noteBorderColor #C2410C
+
+title Smart Agro - Use Case\nImplementasi saat ini dan target demo tiga minggu
+
+actor "Pengguna\nPemula / berpengalaman" as User
+actor "Layanan AI\nEksternal - rencana" as AI
+actor "Wallet pengguna\nEksternal - rencana" as Wallet
+actor "Jaringan blockchain uji\nEksternal - rencana" as Chain
+
+rectangle "Smart Agro\nAplikasi web; backend AI masih direncanakan" {
+  package "SAAT INI - simulator dan pratinjau berkas" {
+    usecase "UC-01\nMembuat sesi dan\nmemilih profil tanaman" as UC01
+    usecase "UC-02\nMengatur acuan lokal\ndan zona waktu sesi" as UC02
+    usecase "UC-03\nMenjalankan simulasi\natau eksperimen manual" as UC03
+    usecase "UC-04\nMelihat sensor,\ngrafik dan statistik" as UC04
+    usecase "UC-05\nMembandingkan sesi" as UC05
+    usecase "UC-06\nMencatat tindakan\nperawatan" as UC06
+    usecase "UC-07\nMelihat saran pemeriksaan\ndan alasan keputusan" as UC07
+    usecase "UC-08\nMengekspor sesi" as UC08
+    usecase "UC-09\nMengimpor sesi" as UC09
+    usecase "UC-10\nMemeriksa pratinjau\npaket perangkat JSON" as UC10
+    usecase "UC-14\nMemvalidasi sesi" as UC14
+    usecase "UC-15\nMemvalidasi paket\ntelemetri" as UC15
+    usecase "UC-16\nMengevaluasi\naturan agronomi" as UC16
+  }
+  package "TARGET DEMO - belum diimplementasikan" {
+    usecase "UC-11\nMeminta penjelasan AI\nuntuk snapshot sesi" as UC11
+    usecase "UC-12\nMencatat hash catatan\npada blockchain uji" as UC12
+    usecase "UC-13\nMemverifikasi\nintegritas catatan" as UC13
+    usecase "UC-17\nMenghitung hash SHA-256\natas byte berkas" as UC17
+  }
+}
+
+User -- UC01
+User -- UC02
+User -- UC03
+User -- UC04
+User -- UC05
+User -- UC06
+User -- UC07
+User -- UC08
+User -- UC09
+User -- UC10
+User -- UC11
+User -- UC12
+User -- UC13
+
+UC09 ..> UC14 : <<include>>
+UC10 ..> UC15 : <<include>>
+UC07 ..> UC16 : <<include>>
+UC11 ..> UC16 : <<include>>
+UC11 ..> UC07 : <<extend>>\n[penjelasan diminta]
+UC12 ..> UC17 : <<include>>
+UC13 ..> UC17 : <<include>>
+
+AI -- UC11
+Wallet -- UC12
+Chain -- UC12
+Chain -- UC13
+
+note bottom of UC10
+  Paket tetap berupa pratinjau berkas.
+  Tidak masuk riwayat keputusan simulasi.
+end note
+note bottom of UC06
+  Tindakan dicatat pengguna.
+  Tidak mengirim perintah ke pompa.
+end note
+note bottom of UC13
+  Hash membuktikan kecocokan berkas,
+  bukan kebenaran sensor atau keluaran AI.
+end note
+
+legend bottom
+  Asosiasi aktor: garis tanpa arah.
+  include: perilaku wajib, menunjuk use case yang disertakan.
+  extend: perilaku opsional, menunjuk use case dasar.
+  Sensor ESP32, cuaca, pompa dan diagnosis foto bukan scope demo ini.
+endlegend
+@enduml

@@ -1,0 +1,36 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart TB
+    subgraph Earn["RENCANA: HADIAH"]
+        E(["Aktivitas dan jendela energi"]) --> V{"Bukti asli, pemilik berhak,<br/>policy cocok, belum pernah dikreditkan?"}
+        V -->|Tidak / data simulasi| No(["Tidak mendapat kredit<br/>kasus meragukan ditinjau"])
+        V -->|Ya| Credit["Catat event unik dan kredit ledger<br/>dalam satu transaksi DB"]
+        Credit --> Balance(["Saldo tersedia<br/>nilai sesuai versi kebijakan"])
+    end
+    subgraph Spend["RENCANA: PENUKARAN"]
+        R(["Pemilik memilih produk"]) --> Reserve{"Reservasi saldo dan stok<br/>secara atomik berhasil?"}
+        Reserve -->|Tidak| Unavailable(["Tolak; saldo dan stok tidak berubah"])
+        Reserve -->|Ya| Process["Buat pesanan unik<br/>operator meninjau pemenuhan"]
+        Process --> Fulfill{"Pesanan dipenuhi?"}
+        Fulfill -->|Batal sebelum dipenuhi| Release(["Lepaskan reservasi saldo dan stok<br/>simpan catatan pembatalan"])
+        Fulfill -->|Ya| Settle(["Selesaikan debit dan pemakaian stok<br/>catat bukti pemenuhan"])
+    end
+    Balance -.->|dipakai saat ada permintaan| R

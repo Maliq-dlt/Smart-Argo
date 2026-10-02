@@ -1,0 +1,36 @@
+flowchart TD
+    %% SAAT INI: urutan keputusan mengikuti evaluate di agronomyEngine.ts.
+    %% Setiap simpul tindakan adalah akhir: kembalikan satu keputusan, alasan dan bukti.
+    Start(["SAAT INI: evaluasi kasus pot"]) --> Parse{"Struktur, tipe, rentang,<br/>profil dan waktu lolos parseCase?"}
+    Parse -->|Tidak| Invalid(["Tolak input dengan galat<br/>tidak menghasilkan keputusan baru"])
+    Parse -->|Ya| Bounds["low = median needs_water<br/>wet = min 100, median drained + 10<br/>siapkan sampel terakhir dan bukti"]
+    Bounds --> Q0{"Profil belum disahkan<br/>atau media berubah?"}
+    Q0 -->|Ya| R0(["KALIBRASI_LOKAL<br/>Tetapkan kembali acuan pot"])
+    Q0 -->|Tidak| Q1{"Sampel terakhir invalid<br/>atau umur lebih dari 5 menit?"}
+    Q1 -->|Ya| R1(["PULIHKAN_DATA<br/>Periksa sensor dan sambungan"])
+    Q1 -->|Tidak| Q2{"Dua sampel terakhir berbeda lebih dari 20 poin<br/>dalam paling lama 2 menit,<br/>tanpa catatan siram di antara dua sampel?"}
+    Q2 -->|Ya| R2(["PERIKSA_SENSOR<br/>Periksa probe dan ulangi pembacaan"])
+    Q2 -->|Tidak| Evidence["Hitung status pH mutakhir tervalidasi<br/>dan respons lokal setelah siram<br/>bila sampel pembanding tersedia"]
+    Evidence --> Q3{"Pada menit 30-60 setelah siram,<br/>kenaikan indeks kurang dari 5 poin<br/>dan kelembapan terakhir di bawah low?"}
+    Q3 -->|Ya| R3(["PERIKSA_SIRAMAN<br/>Periksa aliran dan kontak probe"])
+    Q3 -->|Tidak| Q4{"Sedikitnya 4 sampel pada jendela 3,01 jam,<br/>rentang waktu sedikitnya 3 jam,<br/>semua valid, indeks minimal wet,<br/>dan jeda maksimal 1 jam?"}
+    Q4 -->|Ya| R4(["PERIKSA_DRAINASE<br/>Periksa media dan genangan"])
+    Q4 -->|Tidak| Q5{"Tiga sampel terakhir valid,<br/>berumur maksimal 1 jam,<br/>semuanya di bawah low?"}
+    Q5 -->|Ya| R5(["PERIKSA_MEDIA_KERING<br/>Konfirmasi media; siram bertahap bila sesuai"])
+    Q5 -->|Tidak| Q6{"Suhu terakhir mencapai<br/>atau melebihi hot_c profil?"}
+    Q6 -->|Ya| R6(["PERIKSA_PANAS<br/>Periksa paparan panas"])
+    Q6 -->|Tidak| Q7{"pH tervalidasi dan tiga bacaan valid terakhir<br/>dalam 24 jam berada di sisi yang sama<br/>di luar rentang pH profil?"}
+    Q7 -->|Ya| R7(["UKUR_ULANG_PH<br/>Ukur ulang dengan metode acuan"])
+    Q7 -->|Tidak| Trend["Ambil riwayat 6 jam terakhir;<br/>jika ada catatan siram, pakai hanya<br/>sampel setelah siram terakhir"]
+    Trend --> Eligible{"Sedikitnya 6 sampel, semuanya valid,<br/>durasi minimal 2,5 jam,<br/>jeda maksimal 1 jam?"}
+    Eligible -->|Tidak| R9(["AMATI<br/>Lanjutkan pengamatan"])
+    Eligible -->|Ya| Regression["Hitung slope dan R kuadrat<br/>simpan keduanya sebagai bukti"]
+    Regression --> Fit{"Slope kurang dari -1 poin per jam,<br/>R kuadrat minimal 0,8,<br/>indeks terakhir di atas low?"}
+    Fit -->|Tidak| R9
+    Fit -->|Ya| ETA["ETA = selisih indeks terakhir terhadap low<br/>dibagi besar slope negatif"]
+    ETA --> Horizon{"ETA maksimal 12 jam?"}
+    Horizon -->|Tidak| R9
+    Horizon -->|Ya| SaveETA["Simpan ETA dalam bukti"]
+    SaveETA --> Visit{"ETA tidak lebih dari<br/>next_visit_h profil?"}
+    Visit -->|Ya| R8(["PERIKSA_SEBELUM_PERGI<br/>Jadwalkan pemeriksaan sebelum kunjungan"])
+    Visit -->|Tidak| R9

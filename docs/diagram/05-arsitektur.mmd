@@ -1,0 +1,61 @@
+flowchart LR
+    %% Status ditulis pada kelompok; garis putus-putus merupakan integrasi rencana.
+    User["Pengguna"]
+    AI["Layanan model AI eksternal<br/>RENCANA DEMO"]
+    Wallet["Wallet milik pengguna<br/>RENCANA DEMO"]
+    Chain["Blockchain testnet / devnet<br/>RENCANA DEMO"]
+    ESP["ESP32 dan sensor fisik<br/>kelembapan, suhu, pH<br/>TAHAP BERIKUTNYA"]
+
+    subgraph SmartAgro["Batas aplikasi Smart Agro"]
+        subgraph Current["SAAT INI"]
+            UI["React: dashboard, simulasi,<br/>perbandingan, perangkat, terminal"]
+            Sim["Generator data sintetis<br/>dan masukan manual"]
+            Sessions["Sesi, profil, waktu UTC<br/>dan catatan tindakan"]
+            Rules["Mesin aturan TypeScript<br/>dan regresi linear lokal"]
+            Store[("localStorage")]
+            Files["Ekspor / impor JSON sesi"]
+            Preview["Validator paket JSON<br/>dan pratinjau perangkat<br/>terpisah dari sampel simulasi"]
+        end
+        subgraph Demo["RENCANA DEMO"]
+            API["Backend AI<br/>validasi, hitung ulang aturan,<br/>timeout dan batas permintaan"]
+            Evidence["Catatan tetap UTF-8 dan bukti terpisah<br/>catatan: snapshot, aturan, hasil AI<br/>bukti: hash dan metadata transaksi"]
+            Verify["Pemeriksaan chain ID, receipt<br/>dan kecocokan hash berkas"]
+        end
+        subgraph Future["IOT BERIKUTNYA"]
+            Ingest["Penerima telemetri<br/>autentikasi, validasi, waktu terima<br/>deduplikasi dan urutan paket"]
+            History[("Riwayat pengukuran nyata<br/>asal data dan status per sensor")]
+            Adapter["Adaptasi model data dan aturan<br/>null / error per parameter<br/>acuan lokal tervalidasi"]
+        end
+    end
+
+    User --- UI
+    UI --> Sim
+    Sim --> Sessions
+    UI --> Sessions
+    Sessions --> Rules
+    Rules --> UI
+    Sessions <--> Store
+    Sessions <--> Files
+    UI --> Preview
+    Preview -->|snapshot paket terakhir dan log saja| Store
+    Preview -->|status berkas, bukan koneksi hidup| UI
+    Sessions -.->|snapshot tetap| API
+    API -.->|keputusan dan bukti terpilih| AI
+    AI -.->|penjelasan| API
+    API -.->|hasil terkait snapshot| UI
+    UI -.->|finalkan catatan| Evidence
+    Evidence -.->|hash pada data transaksi| Wallet
+    User -.->|persetujuan transaksi| Wallet
+    Wallet -.->|transaksi bernilai nol| Chain
+    Chain -.->|data transaksi dan receipt| Verify
+    Evidence -.->|byte berkas dan metadata| Verify
+    Verify -.->|pending / gagal / hash cocok| UI
+    ESP -.->|transport ditetapkan setelah spesifikasi siap| Ingest
+    Ingest -.-> History
+    History -.-> Adapter
+    Adapter -.->|jalur keputusan nyata yang telah diadaptasi| UI
+
+    classDef planned fill:#fff7ed,stroke:#c2410c,color:#111827;
+    classDef future fill:#f1f5f9,stroke:#64748b,color:#111827;
+    class API,Evidence,Verify,AI,Wallet,Chain planned;
+    class ESP,Ingest,History,Adapter future;

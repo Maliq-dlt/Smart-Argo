@@ -1,0 +1,60 @@
+flowchart LR
+    %% Representasi use case; Mermaid flowchart bukan notasi UML use case native.
+    User["AKTOR: Pengguna<br/>Pemula / berpengalaman"]
+    AI["AKTOR EKSTERNAL: Layanan AI<br/>Rencana demo"]
+    Wallet["AKTOR EKSTERNAL: Wallet pengguna<br/>Rencana demo"]
+    Chain["AKTOR EKSTERNAL: Blockchain uji<br/>Rencana demo"]
+
+    subgraph System["SMART AGRO"]
+        subgraph Current["SAAT INI"]
+            UC01(["UC-01 Membuat sesi dan<br/>memilih profil tanaman"])
+            UC02(["UC-02 Mengatur acuan lokal<br/>dan zona waktu sesi"])
+            UC03(["UC-03 Menjalankan simulasi<br/>atau eksperimen manual"])
+            UC04(["UC-04 Melihat sensor,<br/>grafik dan statistik"])
+            UC05(["UC-05 Membandingkan sesi"])
+            UC06(["UC-06 Mencatat tindakan perawatan"])
+            UC07(["UC-07 Melihat saran pemeriksaan<br/>dan alasan keputusan"])
+            UC08(["UC-08 Mengekspor sesi"])
+            UC09(["UC-09 Mengimpor sesi"])
+            UC10(["UC-10 Memeriksa pratinjau<br/>paket perangkat JSON"])
+            UC14(["UC-14 Memvalidasi sesi"])
+            UC15(["UC-15 Memvalidasi paket telemetri"])
+            UC16(["UC-16 Mengevaluasi aturan agronomi"])
+        end
+        subgraph Planned["RENCANA DEMO"]
+            UC11(["UC-11 Meminta penjelasan AI<br/>untuk snapshot sesi"])
+            UC12(["UC-12 Mencatat hash catatan<br/>pada blockchain uji"])
+            UC13(["UC-13 Memverifikasi integritas catatan"])
+            UC17(["UC-17 Menghitung SHA-256<br/>atas byte berkas"])
+        end
+    end
+
+    User --- UC01
+    User --- UC02
+    User --- UC03
+    User --- UC04
+    User --- UC05
+    User --- UC06
+    User --- UC07
+    User --- UC08
+    User --- UC09
+    User --- UC10
+    User --- UC11
+    User --- UC12
+    User --- UC13
+    UC09 -.->|include| UC14
+    UC10 -.->|include| UC15
+    UC07 -.->|include| UC16
+    UC11 -.->|include| UC16
+    UC11 -.->|extend: penjelasan diminta| UC07
+    UC12 -.->|include| UC17
+    UC13 -.->|include| UC17
+    AI --- UC11
+    Wallet --- UC12
+    Chain --- UC12
+    Chain --- UC13
+
+    classDef planned fill:#fff7ed,stroke:#c2410c,color:#111827;
+    classDef actor fill:#eff6ff,stroke:#1d4ed8,color:#111827;
+    class UC11,UC12,UC13,UC17 planned;
+    class User,AI,Wallet,Chain actor;

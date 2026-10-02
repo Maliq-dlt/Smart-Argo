@@ -1,0 +1,59 @@
+flowchart TD
+    %% SAAT INI: diagram alur utama, bukan setiap event UI atau timer.
+    Start(["SAAT INI: buka Smart Agro"]) --> Load["Baca buku sesi dari localStorage"]
+    Load --> Saved{"Simpanan tersedia<br/>dan valid?"}
+    Saved -->|Ya| Restore["Pulihkan sesi aktif<br/>dalam keadaan dijeda"]
+    Saved -->|Tidak ada| New["Buat sesi sintetis awal"]
+    Saved -->|Rusak / tidak bisa dibaca| Recover["Buat sesi sementara<br/>pertahankan simpanan lama<br/>tampilkan galat dan opsi ekspor"]
+    Restore --> View
+    New --> View
+    Recover --> View
+    View["Tampilkan sesi, sensor, grafik,<br/>saran aturan dan terminal"] --> Choice{"Aksi pengguna"}
+
+    Choice -->|Sesi / acuan| Profile["Buat atau pilih sesi;<br/>ubah profil, acuan atau zona waktu"]
+    Profile --> ProfileCheck{"Masukan profil valid?"}
+    ProfileCheck -->|Tidak| Error["Tampilkan galat<br/>pertahankan data sebelumnya"]
+    ProfileCheck -->|Ya| Media{"Media diganti?"}
+    Media -->|Ya| NewMedia["Mulai sesi media baru<br/>sesi lama tetap tersimpan"]
+    Media -->|Tidak| Update["Perbarui sesi aktif"]
+    NewMedia --> Evaluate
+    Update --> Evaluate
+
+    Choice -->|Simulasi / sampel| Mode["Perjalanan: tanam bibit lalu jalankan<br/>Eksperimen: otomatis, acak atau manual"]
+    Mode --> Tick["Tambahkan sampel sintetis<br/>secara eksplisit atau melalui timer"]
+    Tick --> InputCheck{"Sampel, waktu dan batas<br/>sesi valid?"}
+    InputCheck -->|Tidak| Error
+    InputCheck -->|Ya| Append["Tambahkan ke riwayat<br/>tanpa menulis ulang sampel lama"]
+    Append --> Evaluate
+
+    Choice -->|Catat perawatan| Care["Catat waktu dan volume siram<br/>atau catat pemupukan"]
+    Care --> CareCheck{"Tindakan valid untuk sesi?"}
+    CareCheck -->|Tidak| Error
+    CareCheck -->|Ya| ActionLog["Simpan catatan tindakan<br/>sensor lama tidak berubah<br/>model siram bereaksi pada sampel berikutnya"]
+    ActionLog --> Evaluate
+
+    Choice -->|Impor sesi| Import["Baca JSON sesi maksimum 2.000.000 byte<br/>validasi format, versi dan metadata"]
+    Import --> SessionOK{"Sesi valid?"}
+    SessionOK -->|Tidak| Error
+    SessionOK -->|Ya| ImportNew["Tambahkan sesi baru<br/>pertahankan sesi yang sudah ada"]
+    ImportNew --> Evaluate
+
+    Choice -->|Pratinjau paket| Packet["Baca JSON telemetri maksimum 65.536 byte<br/>validasi timestamp, sensor dan drip"]
+    Packet --> PacketOK{"Paket valid?"}
+    PacketOK -->|Tidak| PacketError["Tampilkan galat<br/>paket sebelumnya tetap tersimpan"]
+    PacketOK -->|Ya| Preview["Simpan paket terakhir dan log diagnostik<br/>tampilkan sebagai pratinjau berkas<br/>TIDAK masuk riwayat keputusan simulasi"]
+    Preview --> Save
+    PacketError --> View
+
+    Choice -->|Ekspor sesi| Export["Unduh JSON sesi berlabel sintetis"]
+    Export --> View
+    Choice -->|Grafik / perbandingan / terminal| Read["Baca sesi tersimpan<br/>filter grafik tidak mengubah keputusan"]
+    Read --> View
+    Choice -->|Jeda / selesai| Pause(["Jeda atau tinggalkan aplikasi"])
+
+    Evaluate["Jalankan mesin aturan<br/>hasilkan tindakan, alasan dan bukti"] --> Save["Coba autosave buku sesi"]
+    Save --> SaveOK{"Penyimpanan berhasil?"}
+    SaveOK -->|Ya| View
+    SaveOK -->|Konflik / kuota / tidak tersedia| SaveError["Tampilkan galat penyimpanan<br/>pertahankan data lama<br/>ekspor sebelum pemulihan"]
+    SaveError --> View
+    Error --> View

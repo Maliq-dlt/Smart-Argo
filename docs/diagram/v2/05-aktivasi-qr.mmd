@@ -1,0 +1,34 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart TB
+    S(["RENCANA: periksa atau aktifkan produk"]) --> Scan["Pindai QR publik<br/>ID produk dan manifest bertanda tangan"]
+    Scan --> Registry{"Tanda tangan penerbit sah<br/>dan produk berstatus aktif?"}
+    Registry -->|Tidak / belum dapat diperiksa| Invalid(["Tolak aktivasi atau tampilkan belum terverifikasi<br/>jangan menyatakan produk asli"])
+    Registry -->|Ya| Status["Tampilkan identitas terdaftar<br/>salinan QR belum membuktikan barang fisik asli"]
+    Status --> Activate{"Ingin mengaktifkan?"}
+    Activate -->|Tidak| Public(["Pemeriksaan publik selesai"])
+    Activate -->|Ya| Account["Masuk akun; buka kode aktivasi tersegel<br/>buktikan penguasaan perangkat dengan nonce"]
+    Account --> Verify{"Kode, nonce terikat akun-produk,<br/>tanda tangan perangkat dan batas percobaan sah?"}
+    Verify -->|Tidak| Reject(["Tolak; kode belum dikonsumsi<br/>catat percobaan dan batasi pengulangan"])
+    Verify -->|Ya| Atomic["Satu transaksi DB:<br/>konsumsi kode dan nonce jika unused,<br/>ikat pemilik aktif dan tulis outbox"]
+    Atomic --> Won{"Transaksi berhasil<br/>tanpa konflik kepemilikan?"}
+    Won -->|Tidak| Used(["Sudah diklaim / konflik<br/>pemulihan lewat proses dukungan"])
+    Won -->|Ya| Bound(["Kepemilikan tersimpan<br/>bukti blockchain diproses asinkron;<br/>login berikutnya memakai akun"])

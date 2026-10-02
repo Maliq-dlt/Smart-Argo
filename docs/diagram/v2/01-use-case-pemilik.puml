@@ -1,0 +1,44 @@
+@startuml
+left to right direction
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 15
+skinparam roundcorner 10
+skinparam linetype ortho
+skinparam nodesep 32
+skinparam ranksep 75
+skinparam ArrowColor #52665D
+skinparam actorBorderColor #243E32
+skinparam actorFontColor #243E32
+skinparam usecaseBackgroundColor #F3F8F4
+skinparam usecaseBorderColor #527C63
+skinparam rectangleBorderColor #A8BAAF
+skinparam rectangleFontColor #243E32
+title Pemilik dan perawatan
+
+actor "Pemilik" as Owner
+actor "Perangkat IoT\n<<sistem eksternal>>" as Device
+actor "Layanan AI\n<<sistem eksternal>>" as AI
+rectangle "SMART AGRO | RANCANGAN PRODUK" {
+  usecase "APP-01\nMasuk dan pulihkan akun" as A1
+  usecase "APP-02\nKelola pot atau zona kebun" as A2
+  usecase "APP-03\nPantau tanaman dan energi" as A3
+  usecase "APP-04\nCatat tindakan perawatan" as A4
+  usecase "APP-05\nBerinteraksi dengan maskot\ndan penjelasan AI" as A5
+  usecase "APP-06\nBandingkan dan ekspor riwayat" as A6
+}
+Owner -- A1
+Owner -- A2
+Owner -- A3
+Owner -- A4
+Owner -- A5
+Owner -- A6
+A3 -- Device
+A5 -- AI
+
+legend bottom
+  Stickman = peran eksternal, bukan anggota tim pengembang.
+  Garis tanpa panah = interaksi; urutan ada pada flowchart.
+endlegend
+@enduml

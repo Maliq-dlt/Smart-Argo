@@ -1,0 +1,35 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart LR
+    subgraph Power["DAYA: RENCANA"]
+        PV["Panel surya"] --> Controller["Pengendali pengisian<br/>sesuai panel dan kimia baterai"]
+        Controller --> Bus["Manajemen jalur daya<br/>dan regulator beban"]
+        Controller -->|isi daya| Battery["Baterai + proteksi BMS<br/>penyimpan energi"]
+        Battery -->|suplai saat perlu| Bus
+        Bus --> Load["Sensor, kontroler<br/>dan komunikasi"]
+    end
+    subgraph Policy["KEBIJAKAN DAYA"]
+        Meter["Ukur energi panen, energi beban<br/>dan status baterai secara terpisah"] --> State{"Daya mencukupi?"}
+        State -->|Ya| Normal["Interval pengukuran normal<br/>kirim data secara berkala"]
+        State -->|Rendah| Save["Kurangi komunikasi; buffer lokal<br/>pertahankan fungsi inti yang aman"]
+        State -->|Kritis / fault| Safe["Lakukan penghentian aman<br/>ikuti proteksi perangkat keras"]
+    end
+    Load -.->|telemetri daya terukur| Meter

@@ -1,0 +1,38 @@
+@startuml
+left to right direction
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 15
+skinparam roundcorner 10
+skinparam linetype ortho
+skinparam nodesep 32
+skinparam ranksep 75
+skinparam ArrowColor #52665D
+skinparam actorBorderColor #243E32
+skinparam actorFontColor #243E32
+skinparam usecaseBackgroundColor #F3F8F4
+skinparam usecaseBorderColor #527C63
+skinparam rectangleBorderColor #A8BAAF
+skinparam rectangleFontColor #243E32
+title Pengetahuan terbuka
+
+actor "Pengguna" as User
+actor "Kontributor ahli" as Expert
+actor "Kurator agronomi" as Curator
+rectangle "SMART AGRO | KOMUNITAS - RENCANA" {
+  usecase "KB-01\nBaca profil tanaman\ndan sumber rujukan" as K1
+  usecase "KB-02\nAjukan data, bukti\ndan lisensi kontribusi" as K2
+  usecase "KB-03\nPerbaiki kontribusi\nberdasarkan tinjauan" as K3
+  usecase "KB-04\nTinjau dan terbitkan\nversi profil tanaman" as K4
+}
+User -- K1
+Expert -- K2
+Expert -- K3
+K4 -- Curator
+
+legend bottom
+  Stickman = peran eksternal, bukan anggota tim pengembang.
+  Garis tanpa panah = interaksi; urutan ada pada flowchart.
+endlegend
+@enduml

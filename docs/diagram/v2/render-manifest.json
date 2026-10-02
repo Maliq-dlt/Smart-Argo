@@ -1,0 +1,178 @@
+[
+  {
+    "file": "00-alur-produk.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 487.40625,
+    "height": 1228.90625,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "75382ec02fcd48e3d5205af2ceb5c5775f67dd9d924c8b9db6e064564c9cd7fc",
+    "svg_sha256": "3c1edb5d6d34b2061d46be122c7dbfa54f52227023aa094c7699313e73ea87cb",
+    "png_sha256": "59b33d96030e70b0cfe98591c695a1f632c3c1a148999c82b6c907df440b9a91"
+  },
+  {
+    "file": "05-aktivasi-qr.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 855.84375,
+    "height": 1928.890625,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "9ce60d822e7af79cb57afa219184d1e2837c666ec772c432c95d9159cee46a6b",
+    "svg_sha256": "abb105dc2297b49521685a984610e10d1d6031a60c8dc5d6565fdfbc5bed215a",
+    "png_sha256": "9c8b2a42c378b0e39e99181581a30446497e68c5e01580b0078df20b35563b11"
+  },
+  {
+    "file": "06-data-ai-maskot.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 740.046875,
+    "height": 1840.953125,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "865a9ec231fc7204a3de7f11a5ce8a791d3d9925bb99653641fdfe39d44b6a6a",
+    "svg_sha256": "5858628e63afa2654b0402de50bc0e08d89ebbf4b713d299b1b8ebabcf985587",
+    "png_sha256": "2dc3cdb4ff85a15f8d1235fb626c94cf13bd646bf486a8616db1389a383a9dbe"
+  },
+  {
+    "file": "07-energi-surya-baterai.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 2380.765625,
+    "height": 331.5,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "061ea9bc347c035349c4fe2a47d859262ad85214f56f8ec04de6b5e87a23ebcb",
+    "svg_sha256": "bd90d9a0899e4785fcb405748051ea2f3068fa64b35cf0f4d60b823ad9e0527e",
+    "png_sha256": "07da1a8ff642f89c79885b090d20617e0f055f07fae360ece156deffcb904ae0"
+  },
+  {
+    "file": "08-reward-dan-penukaran.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 745.125,
+    "height": 1506.34375,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "4ef2422662b7fffe60af5d5178d620b0327e7fcb58de311ebbc1afa0ab4bc8c3",
+    "svg_sha256": "41747c028a0ac5724fb57b314358a18ddbcdfbda09d5b8f10bb42ed64a6a6317",
+    "png_sha256": "cc2a8b1aaeb1337d4029b3bc6d869c449b07d11e5240ecb25b9555672464bd04"
+  },
+  {
+    "file": "09-kontribusi-pengetahuan.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 641.59375,
+    "height": 1263.203125,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "811e4c7e39cce67a5cc7460527c27bed2341ea68dbfe3f78aeec3363cd9d2e2b",
+    "svg_sha256": "d8ea4c62253afa21ff853c59c46a1c5308d9b2c7df39e8de806a98c25b880777",
+    "png_sha256": "a75a45e9addd51f08825b07e19d5962c33c55cbabab2d5fa95177ceac3461ece"
+  },
+  {
+    "file": "10-arsitektur.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 558.78125,
+    "height": 904.328125,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "ce7ea14b4b928e4f63a8a655f1167e876576de230d65dbfd38b8c204f4296dec",
+    "svg_sha256": "bf547d4969d4743db98d717e795e1171a7f56545eda00c5e2b45a108bb4b2464",
+    "png_sha256": "a1bb90f3d481a51daadb867b39eebfc8af73cc208b1ae1a335a4a6f1e03f60e1"
+  },
+  {
+    "file": "11-data-operasional.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 1187.515625,
+    "height": 1415.109375,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "666fc6043978139dfb1d84d40133ba787b2253cfe647eb8a267f273344f1ca3e",
+    "svg_sha256": "4bce9fa0cdaf44ed998c6ba29eba9d3da615d993c8a8ac766e714a6601ed3061",
+    "png_sha256": "1f2a2587fb4f82e9a65f8a8f309689b39e6a262870ea32a8b6f5305c622c1413"
+  },
+  {
+    "file": "12-data-reward.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 1147.734375,
+    "height": 721.359375,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "62392aec239f6ca30a88ca9138232092a02269d1a4d8c1a76d6d6e315eb6344f",
+    "svg_sha256": "992934c787c6c7d016b02a619fafcba7234f0b3d728722bfa895b100591ebae1",
+    "png_sha256": "a8b30672c349ea169826a66f9fd53dceba627ce3d64dde9289b3b40ca32c3de7"
+  },
+  {
+    "file": "13-data-pengetahuan.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 828.625,
+    "height": 703.484375,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "94d600190647c6d46bef6b94d62eb7feea02f0aaaf9a7a153e636ae31c8a2b4e",
+    "svg_sha256": "d3f6993dbcac15b26d3c94e01f7d48f3b6d44f001a0b6a5aa517d9cd3ca6dd40",
+    "png_sha256": "d61716600eac6ab715a4f9b6746cc3bea0e2d32c89267234e647437afe6a1dd7"
+  },
+  {
+    "file": "14-simulator-saat-ini.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 1491.578125,
+    "height": 168.5,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "cd1c626fa9cacf06832e882c2b9cdcd4ccb044020961beec81681b30cfc07205",
+    "svg_sha256": "ca97bf4b4f092c38b28a413fd284450a3005fa33dae8c85d499ede6d1c9962d8",
+    "png_sha256": "b6a841a55a5be6ee091220528b03577a51c1ddc17737abec502fae1fcdd32180"
+  },
+  {
+    "file": "15-bukti-blockchain.mmd",
+    "parsed": true,
+    "svg": true,
+    "width": 800.671875,
+    "height": 1231.78125,
+    "engine": "Mermaid 11.12.2",
+    "source_sha256": "c51bd556053035ddcadefbf7c435ebbe99b7ed5e447ebb66c4fdab00bf2ae17f",
+    "svg_sha256": "2aef4ec8dfb7462d11363857500ee622b7f5f097b02d4271f913b747720e5a21",
+    "png_sha256": "8f40bc0eceb0bbe1fea9acdfaad1b9e2f9ccb047ac03565c2cd5d0c8a0efb273"
+  },
+  {
+    "file": "01-use-case-pemilik.puml",
+    "plantuml": true,
+    "svg": true,
+    "width": 602,
+    "height": 656,
+    "engine": "PlantUML 1.2025.4",
+    "source_sha256": "3aec968d1457c6aa022e7c8590e25b58ef51997ee6be685cd1dbe1530e140bc3",
+    "svg_sha256": "bff73c794c3994736e57aab08b86cc35d5f20f6823362b0e33075c43b445d6de",
+    "png_sha256": "916e0c5063ec6f6ccc5cdb9adfaba6c40fb7ac326f066430fcceabb21bba784c"
+  },
+  {
+    "file": "02-use-case-produk.puml",
+    "plantuml": true,
+    "svg": true,
+    "width": 743,
+    "height": 623,
+    "engine": "PlantUML 1.2025.4",
+    "source_sha256": "f1d1b4bb161a6ad07417dd850821f36d800586a9338bd4f93226e9912df1c80a",
+    "svg_sha256": "cb2bcc444e9abcaaeb7961b6a317ad593f10d62224c786ab010daa3e85194c2e",
+    "png_sha256": "7c4c5c4a47e585dc8efdc28049f80bf22e024219fe7ec5031b4c2d712361292d"
+  },
+  {
+    "file": "03-use-case-reward.puml",
+    "plantuml": true,
+    "svg": true,
+    "width": 584,
+    "height": 651,
+    "engine": "PlantUML 1.2025.4",
+    "source_sha256": "4b46467aee8cbf940028cf344a22964af2d70c500c97f4be2294f109e802186f",
+    "svg_sha256": "60a9f508ee8ea876f01116aefd6f87fa6708f4642d76316fdd031ee51b33e273",
+    "png_sha256": "e268c2654e453b3cb5ba1c4482d4e4c082b8d0f5fe78c6330343c824a177ef07"
+  },
+  {
+    "file": "04-use-case-komunitas.puml",
+    "plantuml": true,
+    "svg": true,
+    "width": 657,
+    "height": 556,
+    "engine": "PlantUML 1.2025.4",
+    "source_sha256": "2d19eedc9fbfdd9b7fe14f6c059ee664cfc3b5360145f7292f0fbce405b243e7",
+    "svg_sha256": "89a55f90aac350bfcf25c95169cd09598a7b95ad1341a155a0c23984aba0f7ce",
+    "png_sha256": "b94c21d45922e74beccac2c6c99eaf9e7121f9c08abba61c37ed3194fa7aa3a9"
+  }
+]

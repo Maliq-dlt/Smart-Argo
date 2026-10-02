@@ -1,0 +1,30 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+flowchart TB
+    S(["RENCANA: kontributor mengajukan data"]) --> Submit["Sertakan tanaman, media, fase, lokasi konteks,<br/>metode, bukti, sumber dan lisensi"]
+    Submit --> Check{"Struktur, izin berbagi, atribusi<br/>dan privasi data memadai?"}
+    Check -->|Tidak| Fix(["Kembalikan untuk diperbaiki<br/>belum menjadi acuan rekomendasi"])
+    Check -->|Ya| Queue["Simpan sebagai kontribusi pending<br/>pisahkan dari profil produksi"]
+    Queue --> Review["Kurator agronomi menilai bukti,<br/>kecocokan konteks dan hasil pengujian"]
+    Review --> Accepted{"Layak diterbitkan?"}
+    Accepted -->|Tidak| Revise(["Minta revisi atau tolak dengan alasan"])
+    Accepted -->|Ya| Version["Terbitkan versi profil beserta sumber,<br/>cakupan berlaku, status bukti dan reviewer"]
+    Version --> Apply(["Gunakan pada evaluasi baru yang sesuai<br/>riwayat lama tetap merujuk versi asal"])

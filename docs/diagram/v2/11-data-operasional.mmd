@@ -1,0 +1,86 @@
+---
+title: "RANCANGAN: data operasional"
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    fontFamily: Arial
+    fontSize: 15px
+    primaryColor: "#F3F8F4"
+    primaryTextColor: "#111827"
+    primaryBorderColor: "#527C63"
+    lineColor: "#52665D"
+    secondaryColor: "#eff6ff"
+    tertiaryColor: "#ffffff"
+  themeCSS: '.edgeLabel .label rect.background { fill: #ffffff; } .edgeLabel .label text { fill: #111827; }'
+  flowchart:
+    htmlLabels: false
+    curve: stepAfter
+    nodeSpacing: 24
+    rankSpacing: 40
+---
+erDiagram
+    direction LR
+    ACCOUNT ||--o{ OWNERSHIP : memiliki
+    PRODUCT ||--o{ OWNERSHIP : riwayat_pemilik
+    PRODUCT ||--o| ACTIVATION : kode_tersegel
+    PRODUCT ||--|{ DEVICE : berisi
+    PRODUCT ||--o{ UNIT : memantau
+    DEVICE ||--o{ MEASUREMENT : mengirim
+    UNIT ||--o{ MEASUREMENT : lokasi
+    UNIT ||--o{ AI_SNAPSHOT : dianalisis
+    ACCOUNT {
+        uuid id PK
+        string auth_subject UK
+        string access_roles
+    }
+    PRODUCT {
+        uuid id PK
+        string serial_public UK
+        string variant
+        string registry_status
+    }
+    ACTIVATION {
+        uuid product_id PK, FK
+        string secret_hash
+        uuid consumed_by FK
+        datetime consumed_at
+    }
+    OWNERSHIP {
+        uuid id PK
+        uuid product_id FK
+        uuid account_id FK
+        datetime start_at
+        datetime end_at
+    }
+    DEVICE {
+        uuid id PK
+        uuid product_id FK
+        string public_key
+        string status
+    }
+    UNIT {
+        uuid id PK
+        uuid product_id FK
+        uuid profile_version_id FK
+        string location_label
+    }
+    MEASUREMENT {
+        uuid id PK
+        uuid device_id FK
+        uuid unit_id FK
+        string device_boot_seq_sensor UK
+        string source
+        string quality_status
+        float value_nullable
+        datetime measured_at
+        datetime received_at
+    }
+    AI_SNAPSHOT {
+        uuid id PK
+        uuid unit_id FK
+        uuid profile_version_id FK
+        string evidence_ref
+        string decision_and_state
+        string model_prompt_version
+    }

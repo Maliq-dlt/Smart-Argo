@@ -1,0 +1,44 @@
+@startuml
+left to right direction
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 15
+skinparam roundcorner 10
+skinparam linetype ortho
+skinparam nodesep 32
+skinparam ranksep 75
+skinparam ArrowColor #52665D
+skinparam actorBorderColor #243E32
+skinparam actorFontColor #243E32
+skinparam usecaseBackgroundColor #F3F8F4
+skinparam usecaseBorderColor #527C63
+skinparam rectangleBorderColor #A8BAAF
+skinparam rectangleFontColor #243E32
+title Keaslian dan kepemilikan
+
+actor "Pembeli / pemilik" as Buyer
+actor "Operator produk" as Operator
+actor "Jaringan blockchain\n<<sistem eksternal>>" as Chain
+rectangle "SMART AGRO | IDENTITAS PRODUK - RENCANA" {
+  usecase "ID-01\nPeriksa identitas dan\nstatus keaslian produk" as I1
+  usecase "ID-02\nAktifkan produk satu kali" as I2
+  usecase "ID-03\nPindahkan atau pulihkan\nkepemilikan" as I3
+  usecase "ID-04\nDaftarkan produk resmi\ndan kunci publik perangkat" as I4
+  usecase "ID-05\nCabut identitas produk\nyang bermasalah" as I5
+}
+Buyer -- I1
+Buyer -- I2
+Buyer -- I3
+I3 -- Operator
+I4 -- Operator
+I5 -- Operator
+I1 -- Chain
+I4 -- Chain
+I5 -- Chain
+
+legend bottom
+  Stickman = peran eksternal, bukan anggota tim pengembang.
+  Garis tanpa panah = interaksi; urutan ada pada flowchart.
+endlegend
+@enduml
