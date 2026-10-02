@@ -9,7 +9,7 @@ export default function SensorControls({ clock, reading, setReading, onSample, o
   now: number; freshPh: boolean; setFreshPh: (value: boolean) => void; volume: string; setVolume: (value: string) => void
 }) {
   const [error, setError] = useState('')
-  return <section className="panel controls-panel" aria-labelledby="controls-heading">
+  return <section className="panel controls-panel" tabIndex={-1} aria-labelledby="controls-heading">
     <div className="panel-heading"><h2 id="controls-heading"><SlidersHorizontal />Masukan sampel</h2><span className="tag subtle">SINTETIS</span></div>
     <div className="controls-body">
       <p className="section-hint">Atur pembacaan berikutnya, lalu tambahkan ke riwayat.</p>

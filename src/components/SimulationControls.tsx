@@ -13,7 +13,7 @@ export default function SimulationControls({ session, running, pauseNote, recomm
   const sim = simulationOf(session), journey = sim.mode === 'journey'
   const complete = journey && session.day >= (session.data.profile.crop.toLowerCase().includes('bawang') ? 65 : 90)
   const events = session.logs.filter(l => l.kind !== 'data').slice(-3).reverse()
-  return <section className="panel simulation-controls" aria-labelledby="simulation-control-heading">
+  return <section className="panel simulation-controls" tabIndex={-1} aria-labelledby="simulation-control-heading">
     <div className="panel-heading"><h2 id="simulation-control-heading">Waktu & perawatan</h2><span className="playback-state"><i className={running ? 'running-dot' : ''} />{running ? 'Berjalan' : sim.planted ? 'Dijeda' : 'Siap'}</span></div>
     <div className="simulation-control-body">
       <div className="world-clock"><span>{scenePeriod(session.data.now_h, session.clock)}<strong>{worldTime(session.data.now_h, session.clock)}</strong></span><span className="clock-context">{journey ? `HST ${session.day}` : `Jam sensor ${session.data.now_h.toFixed(1)}`}<small>{clockDate(session.clock, session.data.now_h)}<br />{utcLabel(session.clock, session.data.now_h)}</small></span></div>

@@ -12,6 +12,7 @@ import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription, SheetC
 import { SelectField } from './components/ui/select'
 import PlantPotVisualizer, { type CareEffect } from './components/PlantPotVisualizer'
 import PlantMood from './components/PlantMood'
+import AgroMark from './components/AgroMark'
 import SensorControls from './components/SensorControls'
 import StatisticsDashboard from './components/StatisticsDashboard'
 import TerminalSimulator from './components/TerminalSimulator'
@@ -27,7 +28,7 @@ import SimulationOverview from './components/SimulationOverview'
 import { createJourney, simulationOf, advanceSimulation, plantSeed, waterSimulation, recordFertilizer, feedingDue, shouldPause, simulationStopped, simulationStopReason, sampleIntervalMs, logEvent, type SimulationState } from './lib/simulation'
 
 const pages = [
-  { id: 'statistics', hash: '#statistik', label: 'Dashboard', title: 'Dashboard', description: 'Kenali pola, rawat tanaman dengan tepat.', icon: LayoutDashboard },
+  { id: 'statistics', hash: '#statistik', label: 'Dashboard', title: 'Dashboard', description: 'Kondisi dan langkah berikutnya.', icon: LayoutDashboard },
   { id: 'simulation', hash: '#simulasi', label: 'Simulasi', title: 'Ruang tanam', description: 'Mulai dari bibit, rawat seiring waktu.', icon: Sprout },
   { id: 'comparison', hash: '#bandingkan', label: 'Bandingkan sesi', title: 'Bandingkan sesi', description: 'Dua riwayat, sudut pandang baru.', icon: GitCompareArrows },
   { id: 'devices', hash: '#perangkat', label: 'Status perangkat', title: 'Status perangkat', description: 'Periksa laporan sensor dan tetesan dari berkas.', icon: Radio },
@@ -56,6 +57,7 @@ const downloadJson = (value: unknown, filename: string) => {
 }
 
 export default function App() {
+  useLayoutEffect(() => { document.getElementById('main')?.focus({ preventScroll: true }); window.scrollTo(0, 0) }, [])
   const [boot] = useState(restoreSessions)
   const [book, setBook] = useState<SessionBook>(boot.book)
   const session = book.sessions.find(s => s.id === book.activeId)!
@@ -78,7 +80,7 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [careEffect])
   const reducedMotion = useReducedMotion()
-  const smooth = useRef<Lenis | null>(null), previousPage = useRef(page)
+  const smooth = useRef<Lenis | null>(null), previousPage = useRef<typeof page | null>(null), pendingCare = useRef(false)
   const scrollTo = useCallback((top: number) => {
     if (smooth.current) { smooth.current.resize(); smooth.current.scrollTo(top, { duration: .65 }) }
     else window.scrollTo({ top })
@@ -129,9 +131,17 @@ export default function App() {
     return () => window.removeEventListener('hashchange', navigate)
   }, [])
   useEffect(() => {
-    const changed = previousPage.current !== page
+    const initial = previousPage.current === null, changed = previousPage.current !== page
     previousPage.current = page
-    if (changed) { document.getElementById('main')?.focus({ preventScroll: true }); scrollTo(0) }
+    if (changed) {
+      const target = pendingCare.current && page === 'simulation' ? document.querySelector<HTMLElement>('.controls-panel') ?? document.querySelector<HTMLElement>('.simulation-controls') : document.getElementById('main')
+      const care = pendingCare.current
+      pendingCare.current = false
+      target?.focus({ preventScroll: true })
+      if (care && target) scrollTo(Math.max(0, target.getBoundingClientRect().top + window.scrollY - 24))
+      else if (initial) { smooth.current?.scrollTo(0, { immediate: true }); window.scrollTo({ top: 0, behavior: 'instant' }) }
+      else scrollTo(0)
+    }
   }, [page, scrollTo])
   useEffect(() => {
     const pause = () => { if (document.hidden) { setRunning(false); setPlaying(false); setPauseNote('Dijeda saat tab tidak aktif. Tekan Lanjutkan waktu.') } }
@@ -282,7 +292,7 @@ export default function App() {
     <a className="skip-link" href="#main" onClick={e => { e.preventDefault(); document.getElementById('main')?.focus() }}>Lewati ke konten</a>
     <div className="app-shell">
     <aside className="app-sidebar">
-      <a className="brand" href="#statistik" aria-label="Smart Agro · Dashboard"><span className="brand-mark"><Sprout /></span><span>smart<span className="brand-light">agro</span></span></a>
+      <a className="brand" href="#" aria-label="Smart Agro · Beranda"><span className="brand-mark"><AgroMark /></span><span>smart<span className="brand-light">agro</span></span></a>
       <button className="icon-button mobile-menu" aria-label={menuOpen ? 'Tutup navigasi' : 'Buka navigasi'} aria-expanded={menuOpen} aria-controls="sidebar-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       <div id="sidebar-navigation" className={`sidebar-content ${menuOpen ? 'is-open' : ''}`} onKeyDown={e => { if (e.key === 'Escape') { setMenuOpen(false); document.querySelector<HTMLButtonElement>('.mobile-menu')?.focus() } }}>
         <nav className="sidebar-nav" aria-label="Navigasi utama"><p className="nav-caption">Ruang kerja</p>
@@ -301,7 +311,7 @@ export default function App() {
       <div className="session-context"><span className="session-avatar"><Leaf /></span><span><small>Sesi aktif</small><strong>{session.name}</strong></span></div>
       <div className="topbar-tools"><ClockSettings clock={session.clock} hour={data.now_h} onChange={clock => { setRunning(false); setPauseNote('Zona waktu diubah. Tekan Lanjutkan waktu.'); edit({ clock }) }} /><ThemeToggle /></div>
     </header>
-    <motion.main key={page} initial={{ opacity: reducedMotion ? 1 : 0, y: reducedMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .22, ease: "easeOut" }} id="main" tabIndex={-1} className={`page-${page}`}>
+    <motion.main key={page} initial={previousPage.current === null ? false : { opacity: reducedMotion ? 1 : 0, y: reducedMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .22, ease: "easeOut" }} id="main" tabIndex={-1} className={`page-${page}`}>
       <div className="page-heading"><div><h1>{currentPage.title}</h1><p>{currentPage.description}</p></div><div className="page-actions">
         {page === 'statistics' && <a className="button primary" href="#simulasi"><Sprout />Ruang tanam</a>}
         <Popover><PopoverTrigger asChild><button className="button"><ArrowDownToLine />Berkas<ChevronRight /></button></PopoverTrigger><PopoverContent className="session-actions-popover" align="end" aria-label="Menu sesi"><strong>{session.name}</strong><PopoverClose asChild><button className="button" onClick={() => importFile.current?.click()}><ArrowUpFromLine />Impor</button></PopoverClose><PopoverClose asChild><button className="button" onClick={exportSession}><ArrowDownToLine />Ekspor sesi</button></PopoverClose></PopoverContent></Popover></div></div>
@@ -343,8 +353,8 @@ export default function App() {
       </div></div><a href="#statistik" className="button statistics-link"><Activity />Lihat statistik sesi<ArrowUpRight /></a></div>
       </>}
       {page === 'statistics' && <div className="statistics-page">
-        <StatisticsDashboard clock={session.clock} key={session.id} data={data} decision={result}
-          care={<div className="panel dashboard-care">{recommendation}<a className="button primary" href="#simulasi">{journey && !sim.planted ? 'Mulai menanam' : 'Buka perawatan'}<ArrowUpRight /></a></div>}
+        <StatisticsDashboard clock={session.clock} key={session.id} data={data} decision={result} logs={session.logs}
+          care={<div className="panel dashboard-care">{recommendation}<a className="button primary" href="#simulasi" onClick={event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) pendingCare.current = true }}>{journey && !sim.planted ? 'Mulai menanam' : 'Buka perawatan'}<ArrowUpRight /></a></div>}
           readings={<section className="panel dashboard-readings" aria-labelledby="readings-title"><header><h3 id="readings-title">Kondisi pot saat ini</h3><span className="crop-tag"><Sprout />{data.profile.crop}</span></header><dl>
             <div><dt><Droplets />Kelembapan</dt><dd>{last.valid ? last.moisture : 'Gagal'}<small>{last.valid ? '/ 100' : ''}</small></dd></div>
             <div><dt><Thermometer />Suhu tanah</dt><dd>{last.valid ? last.temp_c.toFixed(1) : 'Gagal'}<small>{last.valid ? '°C' : ''}</small></dd></div>

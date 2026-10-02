@@ -1,0 +1,104 @@
+import { useId } from 'react'
+import { motion, type MotionValue } from 'framer-motion'
+import type { CareEffect } from './PlantPotVisualizer'
+
+interface Props { day: number; age?: number; onion: boolean; moisture: number; contact: boolean; planted?: boolean; showSensors?: boolean; careEffect?: CareEffect | null; shellOpacity?: number | MotionValue<number>; sensorOpacity?: number | MotionValue<number>; viewBox?: string }
+export default function PlantIllustration({ day, age = day, onion, moisture, contact, planted = true, showSensors = false, careEffect, shellOpacity = 0, sensorOpacity = 1, viewBox = '0 0 460 485' }: Props) {
+  const id = useId().replaceAll(':', '')
+  const growth = Math.min(1, .12 + day / (onion ? 48 : 62))
+  const height = 214 * growth
+  const leafCount = Math.min(7, 2 + Math.floor(day / 8))
+  return (
+<svg viewBox={viewBox} role="img" aria-labelledby={`${id}-title ${id}-desc`}>
+  <title id={`${id}-title`}>{onion ? 'Bawang merah' : 'Cabai'} pada {age} hari setelah tanam</title>
+  <desc id={`${id}-desc`}>Ilustrasi fase tumbuh, akar, pot dan tiga sensor lokal. Bukan model pertumbuhan atau diagnosis tanaman.</desc>
+  <defs>
+    <pattern id={`${id}-soil`} width="22" height="17" patternUnits="userSpaceOnUse"><circle cx="4" cy="5" r="1" fill="var(--soil-grain)" /><path d="m13 10 3 1m-11 4 2-1" stroke="var(--soil-grain)" strokeWidth="1" /></pattern>
+    <linearGradient id={`${id}-pot`} x1="0" x2="1"><stop offset="0" stopColor="var(--pot-dark)" /><stop offset=".4" stopColor="var(--pot)" /><stop offset="1" stopColor="var(--pot-light)" /></linearGradient>
+    <clipPath id={`${id}-clip`}><path d="M114 316H340L314 435H140Z" /></clipPath>
+  </defs>
+  <ellipse cx="228" cy="451" rx="145" ry="12" fill="var(--plant-shadow)" />
+  <path d="M104 313H350L321 444Q226 459 133 444Z" fill={`url(#${id}-pot)`} />
+  <path d="M114 316H340L314 435H140Z" fill="var(--soil-dry)" />
+  <motion.path d="M114 316H340L314 435H140Z" fill="var(--soil-wet)" animate={{ opacity: moisture / 100 }} transition={{ duration: .6 }} />
+  <path d="M114 316H340L314 435H140Z" fill={`url(#${id}-soil)`} />
+  <path d="M119 339Q181 334 231 341T335 337M127 380Q175 386 228 379T326 384" fill="none" stroke="var(--soil-layer)" strokeWidth="1" />
+  <g className="plant-roots" opacity={planted ? 1 : 0} clipPath={`url(#${id}-clip)`} stroke="var(--root)" fill="none" strokeLinecap="round">
+    <motion.g animate={{ scaleY: .28 + growth * .72 }} style={{ transformOrigin: '225px 315px' }} transition={{ type: 'spring', stiffness: 70, damping: 20 }}>
+      <path d="M226 307Q228 338 215 357T222 415M227 327Q248 344 253 374L270 398M221 335Q189 351 184 379L174 402M222 355Q207 382 204 424" strokeWidth="2.2" />
+      <path d="m217 350-21 10-16-2m33 17 15 11 5 20m-31-53-18 6-15 15m76-22 21 8 11 24m-20-13-9 20 4 15m-47-1-19 10-9 14m26-1 9 9m-44-23-16 3m57 10 8 9m-23-2-10 8m65-28 12 5" strokeWidth="1" />
+    </motion.g>
+  </g>
+  <path d="M102 306Q225 295 352 306L350 318Q225 307 104 318Z" fill="var(--pot-light)" />
+  <path d="M114 312Q229 306 340 312" stroke="var(--pot-dark)" fill="none" />
+  <path d="M125 443Q226 454 328 442L335 449Q227 467 118 451Z" fill="var(--pot-dark)" />
+  <g className={planted ? `plant-growth${careEffect?.kind === 'plant' ? ' is-planting' : ''}` : 'seed-waiting'} stroke="var(--stem)" strokeLinecap="round" fill="none">
+    {!planted ? <g><ellipse cx="226" cy="308" rx="6" ry="3" fill="var(--root)" /><path d="M224 308h4" stroke="var(--soil-dry)" /></g> : <>
+    {onion ? <>
+      {Array.from({ length: 9 }, (_, i) => <motion.path key={i} d={`M${218 + (i % 3) * 7} 312Q${190 + i * 7} ${265 - height * .3} ${163 + i * 16} ${308 - height + Math.abs(4 - i) * 16}`} strokeWidth={3 + i % 3} animate={{ pathLength: growth }} transition={{ duration: .6 }} />)}
+      {day >= 26 && [0, 1, 2].map(i => <motion.ellipse key={i} cx={209 + i * 18} cy="314" rx="13" ry="20" fill="var(--onion)" stroke="var(--onion-dark)" strokeWidth="1.2" initial={{ scale: .2 }} animate={{ scale: Math.min(1, (day - 20) / 30) }} />)}
+    </> : <>
+      <motion.path d={`M227 311Q217 ${315 - height / 2} 226 ${310 - height}`} strokeWidth="4" initial={false} animate={{ d: `M227 311Q217 ${315 - height / 2} 226 ${310 - height}` }} transition={{ type: 'spring', stiffness: 65, damping: 18 }} />
+      {Array.from({ length: leafCount * 2 }, (_, i) => {
+        const tier = Math.floor(i / 2), side = i % 2 ? 1 : -1
+        const y = 292 - (tier + 1) * height / (leafCount + 1)
+        const width = (31 + (leafCount - tier) * 4) * Math.min(1, growth + .4)
+        const tipX = 225 + side * width
+        const tipY = y - 20 - (i % 3) * 4
+        return <motion.g key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: .5 }}>
+          <path d={`M225 ${y + 13}Q${225 + side * 18} ${y + 8} ${tipX} ${tipY}`} strokeWidth="1.8" />
+          <path d={`M${225 + side * 12} ${y + 5}Q${225 + side * 22} ${y - 31} ${tipX + side * 20} ${tipY - 9}Q${tipX + side * 12} ${y + 21} ${225 + side * 12} ${y + 5}`} fill={i % 3 ? 'var(--leaf)' : 'var(--leaf-light)'} stroke="var(--leaf-edge)" strokeWidth=".8" />
+          <path d={`M${225 + side * 12} ${y + 5}L${tipX + side * 17} ${tipY - 7}`} stroke="var(--leaf-vein)" strokeWidth=".8" />
+          {day >= 31 && day <= 55 && tier > 1 && i % 3 === 0 && <g transform={`translate(${tipX},${tipY + 22})`}>
+            <path d="M0-18V-3" strokeWidth="1" />
+            {[0, 72, 144, 216, 288].map(r => <ellipse key={r} cy="-4" rx="3.5" ry="6" transform={`rotate(${r})`} fill="var(--flower)" stroke="var(--flower-edge)" strokeWidth=".6" />)}
+            <circle r="2.3" fill="var(--flower-center)" stroke="none" />
+          </g>}
+          {day >= 56 && tier > 1 && i % 3 === 0 && <g transform={`translate(${tipX},${tipY + 8}) rotate(${side * 14})`}>
+            <path d="M0-6V2" strokeWidth="2" />
+            <path d="M-4 0C-14 11-5 29 8 34C-1 17 9 9 4 0Z" fill={day > 73 ? 'var(--chili-ripe)' : 'var(--leaf)'} stroke="none" />
+          </g>}
+        </motion.g>
+      })}
+      <path d={`M226 ${310 - height}q-14-20-7-25q15 10 7 25`} fill="var(--leaf-light)" strokeWidth=".6" />
+    </>}
+    </>}
+  </g>
+  {careEffect?.kind === 'plant' && <g key={careEffect.id} className="care-animation planting-animation" aria-hidden="true">
+    <ellipse className="planting-seed" cx="226" cy="308" rx="7" ry="4" fill="var(--root)" stroke="var(--soil-dry)" />
+    <ellipse className="soil-ripple" cx="226" cy="312" rx="18" ry="3" fill="none" stroke="var(--pot-dark)" />
+  </g>}
+  {careEffect?.kind === 'water' && <g key={careEffect.id} className="care-animation watering-animation" aria-hidden="true">
+    <g className="watering-can" fill="var(--water-soft)" stroke="var(--water)" strokeWidth="2.5" strokeLinejoin="round">
+      <path d="M353 206L320 186L313 194L354 225Z" /><path d="M389 194Q418 190 413 214Q409 229 392 221" fill="none" />
+      <path d="M350 189H395L392 229Q374 238 354 229Z" /><ellipse cx="373" cy="189" rx="22" ry="5" />
+    </g>
+    {Array.from({ length: 8 }, (_, i) => <g key={i} transform={`translate(${314 - i % 3 * 5} ${204 + i % 2 * 4})`}>
+      <path className="water-drop" style={{ animationDelay: `${i * .08}s` }} d="M0-5C-2-1-4 1-4 3A4 4 0 0 0 4 3C4 1 2-1 0-5Z" fill="var(--water)" />
+    </g>)}
+    <ellipse className="soil-ripple" cx="268" cy="312" rx="25" ry="4" fill="none" stroke="var(--water)" />
+  </g>}
+  {showSensors && <motion.g className="plant-sensors" style={{ opacity: sensorOpacity }}><motion.g animate={{ y: contact ? 0 : -60 }} transition={{ type: 'spring', stiffness: 90, damping: 16 }}>
+    <path d="M287 291V263Q286 250 306 250H370" fill="none" stroke="var(--wire)" strokeWidth="2" />
+    <rect x="279" y="282" width="16" height="29" rx="3" fill="var(--sensor-green)" />
+    <path d="M282 311H292V359L287 367L282 359Z" fill="var(--sensor-green)" stroke="var(--sensor-edge)" strokeWidth="1" />
+    <path d="M285 318V354M289 318V354" stroke="var(--sensor-mark)" strokeWidth="1" />
+    <circle cx="287" cy="290" r="2" fill="var(--sensor-mark)" />
+  </motion.g>
+  <path d="M164 330V290Q165 275 143 275H83" fill="none" stroke="var(--wire)" strokeWidth="2" />
+  <rect x="160" y="305" width="8" height="51" rx="4" fill="var(--steel)" stroke="var(--wire)" strokeWidth=".8" />
+  <path d="M312 359V285Q312 269 326 269H373" fill="none" stroke="var(--wire)" strokeWidth="2" />
+  <rect x="308" y="310" width="8" height="72" rx="3" fill="var(--steel)" />
+  <rect x="306" y="292" width="12" height="23" rx="3" fill="var(--sensor-head)" />
+  <g className="svg-labels">
+    <path d="M96 275H66M370 250H384M373 269H388" stroke="var(--label-rule)" fill="none" />
+    <text x="42" y="261">DS18B20</text><text x="42" y="275" className="svg-muted">suhu media</text>
+    <text x="322" y="230">Kapasitif V1.2</text><text x="337" y="286">pH + DMS</text>
+    <path d="M117 379H65V362" stroke="var(--label-rule)" fill="none" />
+    <text x="31" y="349">Zona akar</text><text x="31" y="363" className="svg-muted">kontak lokal</text>
+  </g>
+  </motion.g>}
+  <motion.path className="plant-shell" d="M114 316H340L314 435Q226 450 140 435Z" fill={`url(#${id}-pot)`} style={{ opacity: shellOpacity }} />
+</svg>
+  )
+}

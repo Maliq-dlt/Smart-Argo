@@ -1,7 +1,15 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('/fonts/nunito-sans-latin.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 /* Hallmark · macrostructure: Workbench · nav: N9 edge-aligned · footer: Ft2 inline
- * theme: botanical sage (user palette) · typography: Inter / JetBrains Mono (user brief)
+ * theme: botanical sage (user palette) · typography: Nunito Sans / system mono
  * pre-emit critique: P4 H4 E4 S5 R5 V4 · UI is a working simulator, not a product tour.
  */
 :root {
@@ -17,7 +25,7 @@
   --onion: #b57681; --onion-dark: #8e5368; --wire: #5a625d; --steel: #c2c8c5;
   --sensor-green: #3e6261; --sensor-edge: #244d45; --sensor-mark: #d0b87a; --sensor-head: #74766d;
   --label-rule: #b5bab0; --plant-shadow: #e5e3dc; --dot-grid: #e4e5df; --overlay: #20282170;
-  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-ui: 'Nunito Sans', 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-family: var(--font-ui); color: var(--ink); background: var(--paper); font-synthesis: none;
   text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
@@ -350,7 +358,7 @@ input[type=checkbox] { accent-color: var(--accent); height: 13px; width: 13px; f
 :root {
   --paper: #f5f5f7; --surface: #ffffff; --subtle: #f0f1f3; --ink: #202723; --muted: #626b67;
   --border: #dce1de; --border-soft: #edf0ed; --accent: #35684d; --accent-hover: #27563d;
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-ui: 'Nunito Sans', 'Segoe UI', sans-serif;
   --sky-day: #cce5eb; --sky-horizon: #f1f2de; --sky-night: #15283f; --sky-night-horizon: #354754;
   --sky-sun: #ffe5a0; --scene-ink: #293f3e; --scene-muted: #405c58;
   --glass: #ffffffdd; --card-shadow: #17281c06; --cloud-shadow: #ffffff40;
@@ -453,7 +461,7 @@ select, input[type=number] { color: var(--ink); background: var(--surface); bord
   --forest: #163d2a; --forest-mid: #245a3d; --mint: #75b697; --accent-soft: #374d40;
 }
 html, body { overflow-x: clip; }
-.app-shell { display: grid; grid-template-columns: 214px minmax(0, 1fr); gap: 16px; padding: 14px; max-width: 1920px; margin: 0 auto; }
+.app-shell { display: grid; grid-template-columns: 13.375rem minmax(0, 1fr); gap: 16px; padding: 14px; max-width: 1920px; margin: 0 auto; }
 .app-sidebar { position: sticky; top: 14px; height: calc(100dvh - 28px); min-height: 650px; background: var(--surface); border-radius: 24px; padding: 26px 16px 16px; display: flex; flex-direction: column; }
 .app-sidebar .brand { color: var(--ink); gap: 9px; padding: 0 9px; margin-bottom: 34px; text-decoration: none; font-size: 24px; }
 .app-sidebar .brand-mark { color: var(--accent); background: var(--sage); width: 39px; height: 39px; border-radius: 50%; }
@@ -461,7 +469,7 @@ html, body { overflow-x: clip; }
 .sidebar-nav { display: grid; gap: 5px; }
 .nav-caption { text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-size: 10px; font-weight: 600; padding: 10px 15px 7px; }
 .nav-caption:not(:first-child) { margin-top: 20px; }
-.sidebar-nav a, .sidebar-nav button { position: relative; display: flex; align-items: center; gap: 11px; width: 100%; min-height: 46px; border-radius: 12px; padding: 10px 13px; border: 0; background: transparent; color: var(--muted); font-size: 13px; text-decoration: none; text-align: left; white-space: nowrap; }
+.sidebar-nav a, .sidebar-nav button { position: relative; display: flex; align-items: center; gap: 11px; width: 100%; min-height: 46px; border-radius: 12px; padding: 10px 13px; border: 0; background: transparent; color: var(--muted); font-size: 13px; text-decoration: none; text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .sidebar-nav .lucide { width: 19px; height: 19px; stroke-width: 1.65; flex-shrink: 0; }
 .sidebar-nav .nav-active { background: var(--sage); color: var(--accent); font-weight: 650; }
 .sidebar-nav .nav-active::after { display: none; }
@@ -582,7 +590,7 @@ html, body { overflow-x: clip; }
 .history-panel { margin-top: 4px; }.history-panel .point-detail { background: var(--subtle); }.page-footer { font-family: var(--font-ui); }
 @media (max-height: 850px) and (min-width: 761px) { .sidebar-garden { margin-top: 25px; }.app-sidebar { height: auto; min-height: calc(100dvh - 28px); position: static; }.sidebar-content { min-height: 570px; } }
 @media (max-width: 1250px) {
-  .app-shell { grid-template-columns: 192px minmax(0, 1fr); gap: 10px; }.app-sidebar { padding-left: 12px; padding-right: 12px; }.app-sidebar .brand { font-size: 21px; padding: 0 4px; }.sidebar-nav a, .sidebar-nav button { font-size: 12px; padding: 10px; gap: 9px; }.sidebar-nav .nav-active::before { left: -12px; }
+  .app-shell { grid-template-columns: 12rem minmax(0, 1fr); gap: 10px; }.app-sidebar { padding-left: 12px; padding-right: 12px; }.app-sidebar .brand { font-size: 21px; padding: 0 4px; }.sidebar-nav a, .sidebar-nav button { font-size: 12px; padding: 10px; gap: 9px; }.sidebar-nav .nav-active::before { left: -12px; }
   .app-content main { padding: 26px 16px 0; }.analytics-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'distribution care' 'quality readings' 'ranges clock'; }
   .topbar-tools { gap: 8px; }.app-topbar { padding: 14px 18px; }.topbar-tools .clock-settings > summary { font-size: 11px; }
@@ -716,7 +724,7 @@ body { background: radial-gradient(ellipse at 55% 30%, var(--wash-lilac), transp
 .studio-workspace .sensor-controls .panel-heading { padding: 18px 20px; }
 .dashboard-grid > .panel, .analytics-metrics > div:not(.metric-featured) { background: var(--glass); border: 1px solid var(--glass-edge); backdrop-filter: blur(16px); }
 .dashboard-grid > .dashboard-clock { background: var(--forest); }.dashboard-clock .button { background: var(--surface); color: var(--ink); }.dashboard-clock .button:disabled { color: var(--forest-muted); }
-@media (min-width: 1251px) and (max-width: 1490px) { .app-shell { grid-template-columns: 190px minmax(0, 1fr); gap: 12px; }.app-content main { padding-left: 12px; padding-right: 12px; }.app-sidebar { padding-left: 12px; padding-right: 12px; }.app-sidebar .brand { font-size: 21px; padding: 0 3px; }.sidebar-nav button, .sidebar-nav a { font-size: 12px; gap: 8px; padding-left: 10px; padding-right: 10px; } }
+@media (min-width: 1251px) and (max-width: 1490px) { .app-shell { grid-template-columns: 11.875rem minmax(0, 1fr); gap: 12px; }.app-content main { padding-left: 12px; padding-right: 12px; }.app-sidebar { padding-left: 12px; padding-right: 12px; }.app-sidebar .brand { font-size: 21px; padding: 0 3px; }.sidebar-nav button, .sidebar-nav a { font-size: 12px; gap: 8px; padding-left: 10px; padding-right: 10px; } }
 @media (max-width: 1250px) {
   .studio-workspace .simulation-grid { grid-template-columns: minmax(0, 1.25fr) minmax(280px, 1fr); grid-template-areas: 'scene controls' 'readings controls'; gap: 20px; }
   .studio-overview { grid-area: readings; grid-template-columns: minmax(0, 1fr); }.studio-workspace .visual-stack { grid-area: scene; }.studio-workspace .control-stack { grid-area: controls; }
@@ -976,4 +984,125 @@ body { background: var(--paper); }
 @media (prefers-reduced-motion: reduce) {
   .app-shell .button:active:not(:disabled), .ui-dialog .button:active:not(:disabled), .ui-popover .button:active:not(:disabled), .icon-button:active:not(:disabled) { transform: none; }
   .app-shell .button, .ui-dialog .button, .ui-popover .button, .icon-button { transition: none; }
+}
+
+/* Popular 21st.dev Spotlight Card: decorative border, native touch and solid surfaces. */
+.spotlight-card { position: relative; --spotlight-color: var(--accent); }
+.landing-experiment-data.spotlight-card { --spotlight-color: var(--landing-paper); }
+.analytics-metrics .metric-featured.spotlight-card { --spotlight-color: var(--forest-ink); }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  @supports (mask-composite: exclude) {
+    .spotlight-card::after { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none; background: radial-gradient(180px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%), var(--spotlight-color), transparent); mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; opacity: 0; transition: opacity .2s; }
+    .spotlight-card:hover::after, .spotlight-card:focus-within::after { opacity: .8; }
+  }
+}
+
+/* HeroUI Disclosure rhythm with native state and focus; the simulator remains local. */
+.dashboard-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(240px, .85fr); grid-template-areas: 'readings care clock'; }
+.dashboard-analysis { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: 'distribution quality ranges'; }
+.dashboard-details { border: 1px solid var(--border-soft); border-radius: 22px; background: var(--surface); }
+.dashboard-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; list-style: none; padding: 20px 24px; cursor: pointer; font-size: 14px; font-weight: 550; }
+.dashboard-details > summary::-webkit-details-marker { display: none; }
+.dashboard-details summary small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 5px; }
+.dashboard-details summary > .lucide { width: 18px; height: 18px; flex: 0 0 auto; transition: transform .2s ease-out; }
+.dashboard-details[open] summary > .lucide { transform: rotate(180deg); }
+.dashboard-details-body { display: grid; gap: 20px; padding: 0 20px 20px; }
+@supports selector(details::details-content) {
+  .dashboard-details::details-content { block-size: 0; overflow: clip; interpolate-size: allow-keywords; transition: block-size .22s ease-out, content-visibility .22s allow-discrete; }
+  .dashboard-details[open]::details-content { block-size: auto; }
+}
+/* Origin UI/shadcn Button: consistent focus, icon sizes and quiet hover feedback. */
+.app-shell .button, .ui-dialog .button, .ui-popover .button { border-radius: 14px; }
+.app-shell .button > .lucide, .sidebar-nav .lucide { width: 18px; height: 18px; flex-shrink: 0; pointer-events: none; stroke-width: 1.75; }
+.sidebar-nav .nav-active::before { display: none; }
+.dashboard-details > summary:hover { background: var(--subtle); border-radius: 22px; }
+@media (max-width: 1150px) {
+  .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'readings care' 'clock clock'; }
+  .dashboard-summary .dashboard-clock { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 8px 24px; }
+  .dashboard-analysis { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'distribution quality' 'ranges ranges'; }
+}
+@media (max-width: 680px) {
+  .dashboard-summary, .dashboard-analysis { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-summary { grid-template-areas: 'readings' 'care' 'clock'; }
+  .dashboard-analysis { grid-template-areas: 'distribution' 'quality' 'ranges'; }
+  .dashboard-summary .dashboard-clock { display: flex; }
+  .dashboard-details > summary { padding: 18px; }
+  .dashboard-details-body { padding: 0 12px 12px; gap: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-details::details-content, .dashboard-details summary > .lucide { transition: none; }
+}
+
+
+/* Smart Agro: soft letterforms, readable copy, emphasis reserved for values and actions. */
+:root { --text-caption: .8125rem; --text-label: .875rem; --text-body: 1rem; --text-section: 1.25rem; --text-title: 2rem; }
+body { font-size: var(--text-body); }
+.agro-mark { display: block; width: 32px; height: 32px; flex: 0 0 auto; }
+.brand, .landing-brand { font-weight: 600; letter-spacing: -.04em; }
+.page-heading h1 { font-size: var(--text-title); line-height: 1.2; font-weight: 550; letter-spacing: -.035em; }
+.page-heading p, .dashboard-care .care-recommendation p, .studio-workspace .care-recommendation p, .analytic-note { font-size: var(--text-body); line-height: 1.65; max-width: 65ch; }
+.panel-heading h2, .studio-overview h2, .dashboard-clock h2, .analysis-toolbar h2, .analytic-card h3 { font-size: var(--text-body); font-weight: 600; }
+.sidebar-nav a, .sidebar-nav button, .app-shell .button, .segment-label, .ui-select-trigger, .ui-select-item, .ui-dialog, .ui-popover { font-size: var(--text-label); }
+.session-context small, .context-strip, .chart-help, .chart-legend, .point-detail label, .point-detail span, .dashboard-clock p, .dashboard-clock > span, .dashboard-details summary small, .analytics-metrics p, .stat-card-heading span { font-size: var(--text-label); }
+.analytics-metrics strong, .studio-reading strong, .world-clock strong, .dashboard-clock > strong { font-weight: 550; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+.dashboard-care .decision-eyebrow h2 { font-size: var(--text-label); font-weight: 600; }
+.dashboard-care .care-recommendation h3 { font-size: 1.5rem; font-weight: 550; line-height: 1.35; letter-spacing: -.025em; }
+.dashboard-clock .button { max-width: 100%; white-space: normal; }
+.dashboard-readings h3, .point-detail strong { font-size: var(--text-body); font-weight: 600; }
+.dashboard-readings dt { font-size: var(--text-label); }
+.dashboard-readings dd { font-size: 1.5rem; font-weight: 550; }
+.dashboard-readings dd small { font-size: var(--text-caption); font-weight: 400; }
+.dashboard-details > summary { font-size: var(--text-body); font-weight: 600; }
+.dashboard-details summary small { font-weight: 400; line-height: 1.5; }
+
+/* Dashboard: clear conditions, one next action, quiet session controls. */
+.dashboard-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-areas: 'readings care' 'clock clock'; }
+.dashboard-summary .dashboard-clock { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: 'label time action' 'date status action' 'note note note'; gap: 4px 24px; min-height: 0; padding: 20px 24px; background: var(--surface); color: var(--ink); }
+.dashboard-summary .dashboard-clock::before, .dashboard-summary .dashboard-clock::after { display: none; }
+.dashboard-summary .clock-card-heading { grid-area: label; }
+.dashboard-summary .dashboard-clock > p { grid-area: date; color: var(--muted); }
+.dashboard-summary .dashboard-clock > strong { grid-area: time; font-size: 1.5rem; margin: 0; letter-spacing: -.025em; }
+.dashboard-summary .clock-play-state { grid-area: status; color: var(--muted); margin: 0; }
+.dashboard-summary .dashboard-clock > .button { grid-area: action; background: var(--subtle); color: var(--ink); border: 1px solid var(--border-soft); }
+.dashboard-summary .dashboard-clock > .button:hover:not(:disabled) { background: var(--sage); }
+.dashboard-summary .dashboard-clock > .button:disabled { color: var(--muted); }
+.dashboard-summary .clock-pause-note { grid-area: note; color: var(--muted); margin-top: 8px; }
+.chart-details { border-top: 1px solid var(--border-soft); }
+.chart-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; min-height: 64px; list-style: none; cursor: pointer; font-size: var(--text-label); font-weight: 600; }
+.chart-details > summary::-webkit-details-marker { display: none; }
+.chart-details > summary:hover { background: var(--subtle); }
+.chart-details > summary > span { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.chart-details summary small { flex-basis: 100%; font-size: var(--text-label); font-weight: 400; color: var(--muted); }
+.chart-details summary .lucide { width: 18px; height: 18px; flex-shrink: 0; }
+.chart-details summary > .lucide { transition: transform .18s ease-out; }
+.chart-details[open] summary > .lucide { transform: rotate(180deg); }
+.care-timeline { margin: 0; padding: 0 24px 16px; list-style: none; max-height: 16rem; overflow-y: auto; overscroll-behavior: contain; }
+.care-timeline li { position: relative; padding-left: 24px; border-radius: 8px; }
+.care-timeline li::before { content: ''; position: absolute; left: 7px; top: 0; bottom: 0; width: 1px; background: var(--border-soft); }
+.care-timeline li::after { content: ''; position: absolute; left: 4px; top: 19px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.care-timeline button { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; width: 100%; min-height: 44px; padding: 10px 0; text-align: left; font-size: var(--text-label); }
+.care-timeline time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.care-timeline li[data-selected=true] { background: var(--subtle); }
+.care-timeline p { padding: 0 12px 12px 0; font-size: var(--text-label); line-height: 1.65; color: var(--muted); }
+.chart-care-marker > .lucide { width: 16px; height: 16px; min-height: 0; max-height: none; }
+.chart-care-marker { cursor: pointer; color: var(--accent); }
+.chart-care-marker:hover .care-marker-disc, .chart-care-marker:focus-visible .care-marker-disc, .chart-care-marker[aria-pressed=true] .care-marker-disc { stroke: var(--accent); stroke-width: 2px; fill: var(--sage); }
+.simulation-controls:focus-visible, .controls-panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+@media (max-width: 680px) {
+  .dashboard-summary { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'readings' 'care' 'clock'; }
+  .dashboard-summary .dashboard-clock { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'label time' 'date status' 'action action' 'note note'; padding: 20px; gap: 8px 16px; }
+  .dashboard-summary .dashboard-clock > .button { justify-self: start; margin-top: 8px; }
+  .chart-details > summary { padding: 16px; }
+  .care-timeline { padding-inline: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .chart-details summary > .lucide { transition: none; } }
+.page-actions { flex-wrap: wrap; max-width: 100%; }
+.page-actions .button { max-width: 100%; white-space: normal; }
+.dashboard-summary .clock-card-heading { margin-bottom: 0; }
+@media (min-width: 681px) {
+  .dashboard-summary .dashboard-readings header { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  .dashboard-summary .dashboard-readings dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr)); gap: 16px; margin: 24px 0; }
+  .dashboard-summary .dashboard-readings dl > div { display: block; padding: 0; border-bottom: 0; }
+  .dashboard-summary .dashboard-readings dt .lucide { flex-shrink: 0; }
+  .dashboard-summary .dashboard-readings dd { margin-top: 8px; text-align: left; }
 }

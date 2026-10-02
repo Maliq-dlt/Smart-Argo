@@ -1,4 +1,5 @@
-import type { Sample } from './agronomyEngine.ts'
+import type { PotCase, Sample } from './agronomyEngine.ts'
+import type { LogEntry } from './sessionStore.ts'
 
 export type Metric = 'moisture' | 'temp_c' | 'ph'
 export const METRICS = {
@@ -43,4 +44,27 @@ export function summarizeSamples(rows: Sample[], metric: Metric) {
   }
   return { count: values.length, failed, missing, mean, min: values.length ? Math.min(...values) : null,
     max: values.length ? Math.max(...values) : null, bins, days: [...days.values()].slice(-7) }
+}
+
+export interface CareEvent { t_h: number; kind: 'water' | 'feed' | 'plant'; label: string; message: string }
+
+// ponytail: existing log messages identify care; add typed events when care persistence changes.
+export function careEvents(logs: readonly LogEntry[], data: PotCase): CareEvent[] {
+  const events: CareEvent[] = []
+  logs.forEach(log => {
+    const time = /^(\d+):([0-5]\d):([0-5]\d)$/.exec(log.time)
+    if (!time) return
+    const hour = +time[1] + +time[2] / 60 + +time[3] / 3600
+    if (!Number.isFinite(hour) || hour > data.now_h) return
+    const water = log.kind === 'action' ? /^(?:Siram|Penyiraman) \d+(?:\.\d+)? mL dicatat\./.exec(log.message) : null
+    const kind = water ? 'water' : log.kind === 'action' && log.message.startsWith('Pemupukan dicatat pengguna.') ? 'feed' :
+      log.kind === 'system' && log.message.startsWith('Bibit ditanam pukul ') ? 'plant' : null
+    if (kind) events.push({ t_h: hour, kind,
+      label: water ? water[0].replace(' dicatat.', '') : kind === 'feed' ? 'Pupuk dicatat' : 'Bibit ditanam', message: log.message })
+  })
+  const water = data.watering
+  if (water && !events.some(event => event.kind === 'water' && Math.abs(event.t_h - water.t_h) < 1 / 3600)) {
+    events.push({ t_h: water.t_h, kind: 'water', label: `Siram ${water.volume_ml} mL`, message: 'Siraman tercatat dalam data sesi. Volume bukan saran dosis.' })
+  }
+  return events.sort((a, b) => a.t_h - b.t_h)
 }
