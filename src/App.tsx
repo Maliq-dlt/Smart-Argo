@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import Lenis from 'lenis'
+import { gsap } from 'gsap'
+import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
+
 import { Activity, ArrowDownToLine, ArrowUpFromLine, ArrowUpRight, BookOpen, Check, ChevronRight, Clock3, Droplets, FlaskConical, Leaf, Pause, Play, RotateCcw, Settings2, Save, ShieldCheck, Sprout, Thermometer, TriangleAlert, X, LayoutDashboard, GitCompareArrows, Terminal, Radio, Menu } from 'lucide-react'
-import { addSample, evaluate, parseCase, phaseAt, recordWatering, type PotCase, type Profile } from './lib/agronomyEngine'
+import { addSample, evaluate, parseCase, phaseAt, type PotCase, type Profile } from './lib/agronomyEngine'
 import scenarios from './lib/scenarios.json'
 import ThemeToggle from './components/ThemeToggle'
 import SegmentedControl from './components/ui/segmented-control'
@@ -12,7 +15,9 @@ import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription, SheetC
 import { SelectField } from './components/ui/select'
 import PlantPotVisualizer, { type CareEffect } from './components/PlantPotVisualizer'
 import PlantMood from './components/PlantMood'
+import PlantIllustration from './components/PlantIllustration'
 import AgroMark from './components/AgroMark'
+import SessionReport from './components/SessionReport'
 import SensorControls from './components/SensorControls'
 import StatisticsDashboard from './components/StatisticsDashboard'
 import TerminalSimulator from './components/TerminalSimulator'
@@ -21,17 +26,21 @@ import { appendSession, createSession, exportSession as encodeSession, importSes
 import ProfileEditor from './components/ProfileEditor'
 import ClockSettings from './components/ClockSettings'
 import DevicePanel from './components/DevicePanel'
+import MiroEcosystemWorkspace from './components/MiroEcosystemWorkspace'
 import { clockDate, clockTime, utcLabel } from './lib/sessionClock'
 import { deviceStatuses, type DeviceSnapshot } from './lib/telemetry'
 import SimulationControls from './components/SimulationControls'
 import SimulationOverview from './components/SimulationOverview'
-import { createJourney, simulationOf, advanceSimulation, plantSeed, waterSimulation, recordFertilizer, feedingDue, shouldPause, simulationStopped, simulationStopReason, sampleIntervalMs, logEvent, type SimulationState } from './lib/simulation'
+import { createJourney, simulationOf, advanceSimulation, plantSeed, waterSimulation, canUndoWater, undoWaterSimulation, recordFertilizer, feedingDue, shouldPause, simulationStopped, simulationStopReason, sampleIntervalMs, logEvent, type SimulationState } from './lib/simulation'
+
+gsap.registerPlugin(ScrollToPlugin)
 
 const pages = [
   { id: 'statistics', hash: '#statistik', label: 'Dashboard', title: 'Dashboard', description: 'Kondisi dan langkah berikutnya.', icon: LayoutDashboard },
   { id: 'simulation', hash: '#simulasi', label: 'Simulasi', title: 'Ruang tanam', description: 'Mulai dari bibit, rawat seiring waktu.', icon: Sprout },
   { id: 'comparison', hash: '#bandingkan', label: 'Bandingkan sesi', title: 'Bandingkan sesi', description: 'Dua riwayat, sudut pandang baru.', icon: GitCompareArrows },
   { id: 'devices', hash: '#perangkat', label: 'Status perangkat', title: 'Status perangkat', description: 'Periksa laporan sensor dan tetesan dari berkas.', icon: Radio },
+  { id: 'ecosystem', hash: '#ekosistem', label: 'Ekosistem', title: 'Ekosistem Produk', description: 'Akun, aktivasi QR, unit pot/kebun, maskot AI, energi surya, reward, kurasi & bukti blockchain.', icon: ShieldCheck },
   { id: 'terminal', hash: '#terminal', label: 'Terminal', title: 'Terminal', description: 'Telusuri kejadian, data, dan alasan keputusan.', icon: Terminal },
 ] as const
 const pageFromHash = () => pages.find(p => p.hash === location.hash)?.id ?? 'simulation'
@@ -80,25 +89,27 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [careEffect])
   const reducedMotion = useReducedMotion()
-  const smooth = useRef<Lenis | null>(null), previousPage = useRef<typeof page | null>(null), pendingCare = useRef(false)
+  const previousPage = useRef<typeof page | null>(null), pendingCare = useRef(false)
+  const scrollTween = useRef<gsap.core.Tween | null>(null)
   const scrollTo = useCallback((top: number) => {
-    if (smooth.current) { smooth.current.resize(); smooth.current.scrollTo(top, { duration: .65 }) }
-    else window.scrollTo({ top })
-  }, [])
-  useEffect(() => {
-    if (reducedMotion) return
-    const lenis = new Lenis({ autoRaf: true, duration: .8, anchors: false,
-      prevent: node => Boolean(node.closest('[data-lenis-prevent], .terminal-content, .log-lines')) })
-    smooth.current = lenis
-    // Radix locks body; also cancel any in-flight Lenis navigation on the root.
-    const syncLock = () => document.body.hasAttribute('data-scroll-locked') ? lenis.stop() : lenis.start()
-    const lockObserver = new MutationObserver(syncLock)
-    lockObserver.observe(document.body, { attributes: true, attributeFilter: ['data-scroll-locked'] })
-    syncLock()
-    return () => { lockObserver.disconnect(); lenis.destroy(); smooth.current = null }
+    scrollTween.current?.kill()
+    if (reducedMotion) window.scrollTo({ top, behavior: 'instant' })
+    else scrollTween.current = gsap.to(window, { scrollTo: { y: top, autoKill: true }, duration: .65, ease: 'power2.inOut' })
   }, [reducedMotion])
+  useEffect(() => () => { scrollTween.current?.kill() }, [])
   const sim = simulationOf(session), journey = sim.mode === 'journey'
   const developmentDay = journey ? Math.floor(sim.growthHours / 24) : session.day
+  const [printSession, setPrintSession] = useState<Session | null>(null)
+  const [dashboardRoots, setDashboardRoots] = useState(false)
+  useEffect(() => {
+    const prepare = () => flushSync(() => {
+      setPrintSession(currentSession.current); setRunning(false); setPlaying(false)
+      setPauseNote('Waktu dijeda untuk ringkasan cetak. Tekan Lanjutkan waktu setelah selesai.')
+    })
+    const finish = () => setPrintSession(null)
+    window.addEventListener('beforeprint', prepare); window.addEventListener('afterprint', finish)
+    return () => { window.removeEventListener('beforeprint', prepare); window.removeEventListener('afterprint', finish) }
+  }, [])
   const [notice, setNotice] = useState(boot.restored ? 'Sesi terakhir dipulihkan. Ilustrasi dijeda; jam sensor tetap tersimpan.' : '')
   const [error, setError] = useState(''), [profileVersion, setProfileVersion] = useState(0)
   const [modal, setModal] = useState<'profile' | 'guide' | null>(null)
@@ -139,7 +150,7 @@ export default function App() {
       pendingCare.current = false
       target?.focus({ preventScroll: true })
       if (care && target) scrollTo(Math.max(0, target.getBoundingClientRect().top + window.scrollY - 24))
-      else if (initial) { smooth.current?.scrollTo(0, { immediate: true }); window.scrollTo({ top: 0, behavior: 'instant' }) }
+      else if (initial) { scrollTween.current?.kill(); window.scrollTo({ top: 0, behavior: 'instant' }) }
       else scrollTo(0)
     }
   }, [page, scrollTo])
@@ -207,6 +218,7 @@ export default function App() {
   function commit(next: PotCase, message: string, kind: LogEntry['kind'] = 'action') {
     const checked = parseCase(next), output = evaluate(checked)
     edit(s => ({ ...s, data: checked, scenario: 'custom', freshPh: kind === 'data' ? false : s.freshPh,
+      simulation: s.simulation && checked.now_h !== s.data.now_h ? { ...s.simulation, waterUndo: undefined } : s.simulation,
       logs: [...s.logs, { id: (s.logs.at(-1)?.id ?? 0) + 1, time: sessionTime(next.now_h), kind, message },
         { id: (s.logs.at(-1)?.id ?? 0) + 2, time: sessionTime(next.now_h), kind: 'rule' as const, message: output.decision }].slice(-500) }))
     setError('')
@@ -234,7 +246,7 @@ export default function App() {
   function configureSimulation(change: Partial<SimulationState>) {
     if (change.source) { setRunning(false); setPauseNote('Sumber sampel diubah. Tekan Lanjutkan waktu.') }
     if (change.pauseOnCare !== undefined) setPauseNote('')
-    edit(s => ({ ...s, simulation: { ...simulationOf(s), ...change } }))
+    edit(s => ({ ...s, simulation: { ...simulationOf(s), ...change, ...(change.source ? { waterUndo: undefined } : {}) } }))
   }
   function advance(steps: number) {
     try { const next = advanceSimulation(session, steps); edit(next); setPauseNote(shouldPause(next, session) ? simulationStopReason(next) || (feedingDue(next) && !feedingDue(session) ? 'Jeda otomatis: pengingat jadwal pupuk tiba.' : `Jeda otomatis: ${evaluate(next.data).action}`) : '') }
@@ -283,6 +295,25 @@ export default function App() {
       return next
     })
   }
+  function recordWater(volume: number) {
+    edit(s => waterSimulation(s, volume))
+    setRunning(false); showCareEffect('water')
+    setPauseNote('Siraman menunggu sampel berikutnya. Tinjau catatan, lalu lanjutkan waktu.')
+    setNotice('Siraman dicatat. Pembacaan sensor tetap sampai sampel berikutnya.')
+  }
+  const undoAvailable = canUndoWater(session)
+  // Toast Undo pattern: https://21st.dev/@shugar/components/toast
+  const waterStatus = undoAvailable && <div className="pending-water">
+    <div role="status"><Droplets aria-hidden="true" /><span><strong>Siraman {data.watering!.volume_ml.toLocaleString('id-ID')} mL tercatat</strong><small>{sim.source === 'manual' ? 'Tambahkan sampel untuk mengamati respons.' : running ? 'Menunggu sampel berikutnya.' : 'Lanjutkan waktu untuk memproses sampel berikutnya.'}</small></span></div>
+    <button type="button" className="button" onClick={() => {
+      edit(undoWaterSimulation); setCareEffect(null); setNotice('Siraman dibatalkan. Riwayat sensor tetap utuh.')
+      setPauseNote('Siraman dibatalkan. Waktu tetap dijeda.')
+      requestAnimationFrame(() => {
+        const target = document.querySelector<HTMLElement>(page === 'statistics' ? '.dashboard-care > a' : '.care-actions button, .watering-control button')
+        target?.focus({ preventScroll: true })
+      })
+    }}><RotateCcw aria-hidden="true" />Batalkan siraman</button>
+  </div>
   const recommendation = <section className={`care-recommendation ${calm ? 'calm' : blocked ? 'blocked' : ''}`} aria-labelledby="decision-heading">
     <div className="decision-eyebrow">{calm ? <ShieldCheck /> : <TriangleAlert />}<h2 id="decision-heading">{blocked ? 'Periksa sebelum merawat' : 'Catatan perawatan'}</h2></div>
     <h3>{journey && !sim.planted ? 'Bibit siap memulai perjalanan' : result.action}</h3><p>{journey && !sim.planted ? 'Tanam untuk memulai waktu, lalu amati perubahan media dan perkembangan tanaman.' : result.reason}</p>
@@ -312,9 +343,9 @@ export default function App() {
       <div className="topbar-tools"><ClockSettings clock={session.clock} hour={data.now_h} onChange={clock => { setRunning(false); setPauseNote('Zona waktu diubah. Tekan Lanjutkan waktu.'); edit({ clock }) }} /><ThemeToggle /></div>
     </header>
     <motion.main key={page} initial={previousPage.current === null ? false : { opacity: reducedMotion ? 1 : 0, y: reducedMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .22, ease: "easeOut" }} id="main" tabIndex={-1} className={`page-${page}`}>
-      <div className="page-heading"><div><h1>{currentPage.title}</h1><p>{currentPage.description}</p></div><div className="page-actions">
+      <div className="page-heading"><div>{page === 'statistics' && <span className="workspace-eyebrow">Ruang tumbuh · Smart Agro</span>}<h1>{currentPage.title}</h1><p>{currentPage.description}</p></div><div className="page-actions">
         {page === 'statistics' && <a className="button primary" href="#simulasi"><Sprout />Ruang tanam</a>}
-        <Popover><PopoverTrigger asChild><button className="button"><ArrowDownToLine />Berkas<ChevronRight /></button></PopoverTrigger><PopoverContent className="session-actions-popover" align="end" aria-label="Menu sesi"><strong>{session.name}</strong><PopoverClose asChild><button className="button" onClick={() => importFile.current?.click()}><ArrowUpFromLine />Impor</button></PopoverClose><PopoverClose asChild><button className="button" onClick={exportSession}><ArrowDownToLine />Ekspor sesi</button></PopoverClose></PopoverContent></Popover></div></div>
+        <Popover><PopoverTrigger asChild><button className="button"><ArrowDownToLine />Berkas<ChevronRight /></button></PopoverTrigger><PopoverContent className="session-actions-popover" align="end" aria-label="Menu sesi"><strong>{session.name}</strong><PopoverClose asChild><button className="button" onClick={() => importFile.current?.click()}><ArrowUpFromLine />Impor</button></PopoverClose><PopoverClose asChild><button className="button" onClick={exportSession}><ArrowDownToLine />Ekspor sesi</button></PopoverClose><PopoverClose asChild><button className="button" onClick={() => window.print()}><BookOpen />Ringkasan cetak</button></PopoverClose></PopoverContent></Popover></div></div>
       <input ref={importFile} type="file" accept=".json,application/json" className="sr-only" aria-label="Impor kasus JSON" onChange={e => void importSession(e.target.files?.[0])} />
       <div className="saved-session-bar"><span className="active-session-name"><Leaf />{data.profile.crop} · {journey ? 'Perjalanan tanam' : 'Eksperimen'}</span><span className={`save-status ${saveState.error ? 'save-failed' : ''}`} role="status"><Save />{saveState.error ? 'Belum tersimpan' : saveState.book === book ? 'Tersimpan di perangkat' : 'Menyimpan…'}</span></div>
       {saveState.error && <div className="storage-error" role="alert"><p>{saveState.error}</p><div><button className="button" onClick={exportSession}>Ekspor sesi aktif</button>{!boot.error && <button className="button" onClick={persist}>Coba simpan lagi</button>}</div></div>}
@@ -334,8 +365,8 @@ export default function App() {
       {error && <div className="error-banner" role="alert"><TriangleAlert />{error}<button className="icon-button" onClick={() => setError('')} aria-label="Tutup kesalahan"><X /></button></div>}
       {page === 'simulation' && <>
 
-      <div className="workspace workspace-v2 studio-workspace"><div className="main-workspace"><div className="simulation-grid"><SimulationOverview data={data} decision={result} />
-        <div className="visual-stack"><PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} running={running} rate={sim.rate} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} onion={onion} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} />
+      <div className="workspace workspace-v2 studio-workspace"><div className="main-workspace"><div className="simulation-grid"><div className="visual-stack"><SimulationOverview data={data} decision={result} />
+        <PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} running={running} rate={sim.rate} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} onion={onion} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} />
 {!journey && <section className="timeline" aria-label="Ilustrasi fase tanaman"><div className="timeline-label"><span>Ilustrasi fase tanaman</span><strong>Hari <b>{String(day).padStart(2, '0')}</b><small> / {maxDay} HST</small></strong></div>
         <div className="timeline-controls"><button className={`icon-button play-button ${playing ? 'playing' : ''}`} aria-label={playing ? 'Jeda timelapse' : 'Putar timelapse'} onClick={() => { if (day >= maxDay) setDay(0); setPlaying(!playing) }}>{playing ? <Pause /> : <Play />}</button><button className="icon-button" aria-label="Reset timelapse" onClick={() => { setDay(0); setPlaying(false) }}><RotateCcw /></button></div>
         <div className="timeline-track"><input aria-label="Hari setelah tanam" type="range" min="0" max={maxDay} step="1" value={day} onChange={e => { setDay(Number(e.target.value)); setPlaying(false) }} /><div className="timeline-phases"><span>Awal tanam</span><span>Vegetatif</span><span>{onion ? 'Pembentukan umbi' : 'Berbunga'}</span><span>{onion ? 'Pematangan' : 'Berbuah'}</span></div></div>
@@ -343,20 +374,23 @@ export default function App() {
       </section>}
       {journey && <div className="journey-progress"><span>{sim.planted ? `HST ${day} / ${maxDay}` : 'Bibit siap ditanam'}</span><progress aria-label="Perjalanan tanam" max={maxDay} value={day} /><span>{phaseAt(developmentDay, onion)}</span></div>}
         </div>
-        <div className="control-stack"><SimulationControls pauseNote={playbackNote} recommendation={recommendation} session={session} running={running} onChange={configureSimulation} onRun={toggleRunning} onAdvance={advance} onPlant={() => { edit(plantSeed(session)); showCareEffect('plant'); setNotice('Bibit ditanam. Waktu simulasi berjalan.'); setPauseNote(''); setRunning(true) }} onWater={() => { edit(waterSimulation(session, 150)); showCareEffect('water'); setNotice('Siraman dicatat. Respons muncul pada sampel berikutnya.') }} onFeed={() => edit(recordFertilizer(session))} />
+        <div className="control-stack"><SimulationControls waterStatus={sim.source !== 'manual' ? waterStatus : null} waterPending={undoAvailable} pauseNote={playbackNote} recommendation={recommendation} session={session} running={running} onChange={configureSimulation} onRun={toggleRunning} onAdvance={advance} onPlant={() => { edit(plantSeed(session)); showCareEffect('plant'); setNotice('Bibit ditanam. Waktu simulasi berjalan.'); setPauseNote(''); setRunning(true) }} onWater={() => recordWater(150)} onFeed={() => edit(recordFertilizer(session))} />
         {!journey && sim.source === 'manual' &&
-        <SensorControls clock={session.clock} key={session.id} reading={reading} setReading={value => edit({ reading: value })} now={data.now_h} freshPh={session.freshPh} setFreshPh={value => edit({ freshPh: value })} volume={session.volume} setVolume={value => edit({ volume: value })} canAdd={data.samples.length < 10000} onSample={freshPh => {
+        <SensorControls waterStatus={waterStatus} waterPending={undoAvailable} clock={session.clock} key={session.id} reading={reading} setReading={value => edit({ reading: value })} now={data.now_h} freshPh={session.freshPh} setFreshPh={value => edit({ freshPh: value })} volume={session.volume} setVolume={value => edit({ volume: value })} canAdd={data.samples.length < 10000} onSample={freshPh => {
           try { commit(addSample(data, { ...reading, ph: freshPh ? reading.ph : null, valid: true }), `Sampel baru: indeks ${reading.moisture}, ${reading.temp_c} °C; pH ${freshPh ? reading.ph : 'tidak diukur'}.`, 'data') }
           catch (err) { setError(err instanceof Error ? err.message : 'Sampel gagal') }
-        }} onWater={volume => { commit(recordWatering(data, volume), `Penyiraman ${volume} mL dicatat. Menunggu sampel respons menit ke-10–45.`); showCareEffect('water'); setNotice(`Siraman ${volume} mL dicatat; pembacaan sensor tidak diubah.`) }} onFault={fault} />
+        }} onWater={recordWater} onFault={fault} />
         }</div>
       </div></div><a href="#statistik" className="button statistics-link"><Activity />Lihat statistik sesi<ArrowUpRight /></a></div>
       </>}
       {page === 'statistics' && <div className="statistics-page">
-        <StatisticsDashboard clock={session.clock} key={session.id} data={data} decision={result} logs={session.logs}
-          care={<div className="panel dashboard-care">{recommendation}<a className="button primary" href="#simulasi" onClick={event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) pendingCare.current = true }}>{journey && !sim.planted ? 'Mulai menanam' : 'Buka perawatan'}<ArrowUpRight /></a></div>}
+        <StatisticsDashboard awaitingPlant={journey && !sim.planted} manual={sim.source === 'manual'} feedback={waterStatus} clock={session.clock} key={session.id} data={data} decision={result} logs={session.logs}
+          care={<div className="panel dashboard-care">{recommendation}
+            <div className="dashboard-specimen"><div aria-hidden="true"><PlantIllustration viewBox="65 80 330 390" day={developmentDay} onion={onion} moisture={last.moisture} contact planted={sim.planted} shellOpacity={dashboardRoots ? 0 : 1} showSensors={false} /></div>
+              <button type="button" className="specimen-toggle" aria-pressed={dashboardRoots} onClick={() => setDashboardRoots(!dashboardRoots)}>{dashboardRoots ? 'Tutup penampang' : sim.planted ? 'Lihat akar' : 'Lihat media'}<ArrowUpRight aria-hidden="true" /></button><small>Ilustrasi fase tanam</small>
+            </div><a className="button primary" href="#simulasi" onClick={event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) pendingCare.current = true }}>{journey && !sim.planted ? 'Mulai menanam' : 'Buka perawatan'}<ArrowUpRight /></a></div>}
           readings={<section className="panel dashboard-readings" aria-labelledby="readings-title"><header><h3 id="readings-title">Kondisi pot saat ini</h3><span className="crop-tag"><Sprout />{data.profile.crop}</span></header><dl>
-            <div><dt><Droplets />Kelembapan</dt><dd>{last.valid ? last.moisture : 'Gagal'}<small>{last.valid ? '/ 100' : ''}</small></dd></div>
+            <div className="reading-primary"><dt><Droplets />Kelembapan</dt><dd>{last.valid ? last.moisture : 'Gagal'}<small>{last.valid ? '/ 100' : ''}</small></dd></div>
             <div><dt><Thermometer />Suhu tanah</dt><dd>{last.valid ? last.temp_c.toFixed(1) : 'Gagal'}<small>{last.valid ? '°C' : ''}</small></dd></div>
             <div><dt><FlaskConical />pH terakhir</dt><dd>{phRow?.ph?.toFixed(1) ?? '—'}<small>{!phRow ? 'belum diukur' : !data.profile.ph_validated ? 'belum tervalidasi' : phFresh ? 'tervalidasi' : 'lebih dari 24 jam'}</small></dd></div>
           </dl><p className="readings-status"><span className={`status-dot ${!dataGood ? 'alert' : ''}`} />{dataGood ? 'Pembacaan valid' : 'Periksa pembacaan'} · {ageMinutes} menit lalu</p><div className="plant-stage"><span>{journey ? 'Perjalanan tanam' : 'Ilustrasi fase tanaman'}<strong>{journey && !sim.planted ? 'Belum ditanam' : `${day} HST`}</strong></span><progress aria-label={journey ? 'Umur perjalanan tanam' : 'Umur ilustrasi'} value={day} max={maxDay} /><p>{phaseAt(developmentDay, onion)}{journey ? ' · fase model' : ' · ilustrasi'}</p></div></section>}
@@ -364,6 +398,7 @@ export default function App() {
         />
       </div>}
       {page === 'devices' && <DevicePanel key={session.id} clock={session.clock} snapshot={session.deviceSnapshot} onImport={importDevice} />}
+      {page === 'ecosystem' && <MiroEcosystemWorkspace activePotCase={data} onApplyProfileVersion={(profile, label) => { applyProfile(profile); setNotice(`Profil terkurasi ${label} diterapkan ke sesi simulator.`) }} />}
       {page === 'comparison' && <SessionComparison sessions={book.sessions} activeId={book.activeId} onSnapshot={snapshot} />}
       {page === 'terminal' && <section className="terminal-page panel" aria-label="Terminal sesi"><div className="technical-content">
         <div className="terminal-page-heading"><span className="tag">{running ? 'WAKTU BERJALAN' : 'DIJEDA'}</span><button className="button" onClick={toggleRunning} disabled={simulationStopped(session)}>{running ? <Pause /> : <Play />}{running ? 'Jeda' : 'Lanjutkan waktu'}</button></div><div className="decision-code"><Activity /><code>{result.decision}</code></div>
@@ -381,5 +416,6 @@ export default function App() {
       <h3>Mode perjalanan dan sampel</h3><p>Perjalanan dimulai dengan Tanam & mulai. Sesi baru berjalan terus sampai dijeda. Jeda saat perhatian bersifat opsional; saat dilanjutkan, peringatan yang sama tidak langsung menjeda lagi. Waktu sensor, grafik, dan terminal memakai satu timestamp UTC. Zona awal mengikuti perangkat dan bisa diganti manual; HST tetap durasi sejak tanam. Waktu sensor dan HST bergerak bersama; siklus pagi–malam memengaruhi suhu dan pengeringan sintetis. Model perkembangan melambat ketika kondisi media kurang mendukung. Semua dinamika ini untuk latihan, belum divalidasi sebagai model pertumbuhan tanaman. Mode acak menambah variasi, sedangkan manual tersedia di Eksperimen.</p><p>Pupuk memakai jadwal pribadi (0 = nonaktif) dan catatan tindakan. Sensor tidak menentukan kebutuhan/dosis pupuk; catatan tidak mengubah pH, nutrisi, atau pertumbuhan.</p><h3>Batas model</h3><p>Timelapse 0–90 HST untuk cabai dan 0–65 HST untuk bawang hanya menggambarkan fase. Tidak mengubah ambang, memprediksi hasil panen, mengukur EC/NPK, mendiagnosis penyakit, atau menentukan dosis pupuk dan dolomit.</p><p>Proyeksi kering memakai regresi linear lokal, minimal 6 sampel selama 2,5 jam, R² ≥0,8, dan horizon maksimal 12 jam. Bukan waktu siram pasti.</p><p>Sesi disimpan otomatis di browser ini. Refresh memulihkan sesi aktif dalam keadaan dijeda. Ganti skenario membuat sesi baru; riwayat sebelumnya tetap tersedia pada Bandingkan sesi. Ekspor versi baru memulihkan draf, log, serta posisi ilustrasi saat diimpor. Kasus Python tetap didukung. Simpanan tidak tersinkron antarperangkat atau alamat hosting; gunakan ekspor JSON untuk memindahkannya.</p>
       <p className="source-note">Sumber: Makalah_Asisten_Perawatan_Tanaman_Satu_Pot.docx, Bab V, dan simulasi_pot.py. Semua skenario sintetis; belum divalidasi pada tanaman atau perangkat aktual.</p>
     </DialogContent></Dialog>
+    {printSession && <SessionReport session={printSession} />}
   </>
 }

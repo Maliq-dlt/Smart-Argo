@@ -19,7 +19,7 @@ export default function DevicePanel({ snapshot, clock, onImport }: { snapshot?: 
   const packet = snapshot?.packet, stamp = packet ? { ...clock, startedAtMs: Date.parse(packet.measured_at) } : null
   return <section className="panel device-panel" aria-label="Pratinjau paket perangkat"><div className="device-body">
     <p>Buka paket JSON untuk memeriksa format dan status yang dilaporkan. Pratinjau berkas tidak menghubungkan perangkat atau mengendalikan tetesan; data simulasi tetap terpisah.</p>
-    <div className="device-actions"><button className="button" onClick={() => file.current?.click()}><Upload />Buka paket JSON</button><a className="button" href="telemetry-example.json" download><Download />Contoh paket</a></div>
+    <div className="device-actions"><button className="button" onClick={() => file.current?.click()}><Upload />Buka paket JSON</button><a className="button" href="telemetry-example.json" download><Download />Contoh paket</a><a className="button" href="#ekosistem">Ekosistem Produk</a></div>
     <input className="sr-only" type="file" accept=".json,application/json" aria-label="Impor paket perangkat" ref={file} onChange={e => void load(e.target.files?.[0])} />
     {error && <p role="alert" className="field-error">{error} Pratinjau sebelumnya tetap tersimpan.</p>}
     {packet && stamp ? <><div className="packet-heading"><strong>{packet.device_id}</strong><span className="tag">{packet.source === 'example' ? 'CONTOH' : 'DARI BERKAS'}</span></div>

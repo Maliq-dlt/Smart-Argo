@@ -1,6 +1,8 @@
 import { useId, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
+// Halaska: https://21st.dev/@halaska-studio/components/segmented-control
+// Native radios replace the source resize listener and keyboard handler.
 export default function SegmentedControl({ label, value, options, onValueChange }: {
   label: string; value: string; options: { value: string; label: ReactNode }[]; onValueChange: (value: string) => void
 }) {

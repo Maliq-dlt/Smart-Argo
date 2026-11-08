@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { SlidersHorizontal, Droplets, Plus, FlaskConical, Thermometer, ChevronDown, CircleAlert, Unplug, Clock3, Layers3 } from 'lucide-react'
 import { type Reading } from '../lib/sessionStore'
 import { clockTime, clockDate, utcLabel, type SessionClock } from '../lib/sessionClock'
 
-export default function SensorControls({ clock, reading, setReading, onSample, onWater, onFault, canAdd, now, freshPh, setFreshPh, volume, setVolume }: {
-  clock: SessionClock; reading: Reading; setReading: (reading: Reading) => void; onSample: (freshPh: boolean) => void
+export default function SensorControls({ clock, reading, setReading, onSample, onWater, onFault, canAdd, now, freshPh, setFreshPh, volume, setVolume, waterStatus, waterPending }: {
+  waterStatus: ReactNode; waterPending: boolean; clock: SessionClock; reading: Reading; setReading: (reading: Reading) => void; onSample: (freshPh: boolean) => void
   onWater: (volume: number) => void; onFault: (fault: 'stale' | 'invalid' | 'jump' | 'media') => void; canAdd: boolean
   now: number; freshPh: boolean; setFreshPh: (value: boolean) => void; volume: string; setVolume: (value: string) => void
 }) {
@@ -24,8 +24,9 @@ export default function SensorControls({ clock, reading, setReading, onSample, o
       <button className="button primary add-sample" disabled={!canAdd} onClick={() => { onSample(freshPh); setFreshPh(false) }}><Plus />Tambah sampel<span>+30 menit</span></button>
       {!canAdd && <p className="field-error">Batas 10.000 sampel tercapai. Ekspor lalu mulai sesi baru.</p>}
       <div className="watering-control"><h3><Droplets />Catat penyiraman</h3><form onSubmit={e => { e.preventDefault(); const v = Number(volume); if (!Number.isFinite(v) || v < .1 || v > 5000) { setError('Volume harus 0,1–5.000 mL.'); return } setError(''); onWater(v) }}>
-        <label className="unit-input"><span className="sr-only">Volume siraman</span><input type="number" min=".1" max="5000" step=".1" value={volume} onChange={e => setVolume(e.target.value)} required /><span>mL</span></label><button className="button" type="submit">Catat siram</button></form>
+        <label className="unit-input"><span className="sr-only">Volume siraman</span><input type="number" min=".1" max="5000" step=".1" value={volume} onChange={e => setVolume(e.target.value)} required /><span>mL</span></label><button className="button" type="submit" disabled={waterPending}>Catat siram</button></form>
         {error && <p role="alert" className="field-error">{error}</p>}<p>Volume catatan, bukan dosis anjuran. Tambahkan sampel sesudah siram untuk melihat respons.</p></div>
+      {waterStatus}
       <details className="faults"><summary><CircleAlert />Uji gangguan<ChevronDown /></summary><div className="fault-buttons">
         <button onClick={() => onFault('stale')}><Clock3 />Data basi</button><button disabled={!canAdd} onClick={() => onFault('invalid')}><Unplug />Bacaan gagal</button>
         <button disabled={!canAdd} onClick={() => onFault('jump')}><SlidersHorizontal />Lonjakan probe</button><button onClick={() => onFault('media')}><Layers3 />Ganti media</button>

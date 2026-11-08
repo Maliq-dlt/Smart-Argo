@@ -9,3 +9,16 @@ tests/playback-browser.js
 *.log
 .DS_Store
 .env*
+
+.serena/
+
+# Local agent state, design experiments and exported board snapshots
+.code-review-graph/
+.kilo/
+.opencode/
+.taste-skill/
+design-previews/
+docs/diagram/miro-atlas-2026-10-22/
+__pycache__/
+*.py[cod]
+.uv-cache/

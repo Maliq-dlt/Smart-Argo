@@ -1,4 +1,4 @@
-import { addSample, evaluate, phaseAt, recordWatering, type PotCase } from './agronomyEngine.ts'
+import { addSample, evaluate, parseCase, phaseAt, recordWatering, type PotCase } from './agronomyEngine.ts'
 import { createSession, sessionTime, type Session, type LogEntry } from './sessionStore.ts'
 import { clockTime, localHour, type SessionClock } from './sessionClock.ts'
 
@@ -6,6 +6,7 @@ export interface SimulationState {
   mode: 'journey' | 'experiment'; source: 'auto' | 'random' | 'manual'; planted: boolean
   seed: number; growthHours: number; pendingWater: number; rate: number; pauseOnCare: boolean
   feedEveryDays: number; lastFedAt: number
+  waterUndo?: { at_h: number; logId: number; pendingWater: number; watering?: PotCase['watering'] }
 }
 export const simulationOf = (s: Session): SimulationState => s.simulation ?? {
   mode: 'experiment', source: 'manual', planted: true, seed: 137,
@@ -84,7 +85,7 @@ export function advanceSimulation(session: Session, steps = 1): Session {
     const oldPhase = phaseAt(Math.floor(sim.growthHours / 24), onion)
     const data = addSample(s.data, { moisture, temp_c, ph, valid: true })
     const comfortable = moisture >= oldResult.evidence.low && moisture < oldResult.evidence.wet && temp_c < data.profile.hot_c
-    sim = { ...sim, pendingWater: 0, growthHours: sim.growthHours + (sim.mode === 'journey' ? (comfortable ? .5 : .1) : 0) }
+    sim = { ...sim, pendingWater: 0, waterUndo: undefined, growthHours: sim.growthHours + (sim.mode === 'journey' ? (comfortable ? .5 : .1) : 0) }
     const oldDay = s.day
     s = { ...s, data, simulation: sim, day: sim.mode === 'journey' ? Math.floor(now / 24) : s.day,
       reading: { moisture, temp_c, ph: ph ?? s.reading.ph, valid: true }, freshPh: false, scenario: 'custom', updatedAt: Date.now() }
@@ -105,8 +106,29 @@ export function waterSimulation(s: Session, volume: number): Session {
   const sim = simulationOf(s)
   if (!sim.planted) throw new Error('Tanam bibit terlebih dahulu.')
   const data = recordWatering(s.data, volume)
-  return logEvent({ ...s, data, simulation: { ...sim, pendingWater: Math.min(100, sim.pendingWater + volume / 8) } },
-    `Siram ${volume} mL dicatat. Model latihan menerapkan respons pada sampel berikutnya.`)
+  return logEvent({ ...s, data, simulation: { ...sim,
+    pendingWater: sim.source === 'manual' ? sim.pendingWater : Math.min(100, sim.pendingWater + volume / 8),
+    waterUndo: { at_h: data.now_h, logId: (s.logs.at(-1)?.id ?? 0) + 1, pendingWater: sim.pendingWater, watering: s.data.watering },
+  } }, `Siram ${volume} mL dicatat. ${sim.source === 'manual' ? 'Pembacaan sensor tetap; tambahkan sampel untuk mengamati respons.' : 'Model latihan menerapkan respons pada sampel berikutnya.'}`)
+}
+
+// ponytail: one pending action has an inverse; add an undo stack only for multi-action editing.
+export function canUndoWater(s: Session) {
+  const undo = simulationOf(s).waterUndo
+  const entries = undo ? s.logs.filter(log => log.id === undo.logId) : []
+  return Boolean(undo && undo.at_h === s.data.now_h && s.data.watering?.t_h === undo.at_h &&
+    entries.length === 1 && entries[0].kind === 'action' && /^Siram \d/.test(entries[0].message))
+}
+
+export function undoWaterSimulation(s: Session): Session {
+  if (!canUndoWater(s)) return s
+  const sim = simulationOf(s), undo = sim.waterUndo!, data = { ...s.data }
+  if (undo.watering === undefined) delete data.watering
+  else data.watering = undo.watering
+  return { ...s, data: parseCase(data),
+    simulation: { ...sim, pendingWater: undo.pendingWater, waterUndo: undefined }, updatedAt: Date.now(),
+    logs: s.logs.map(log => log.id === undo.logId ? { ...log, message: `Siraman ${s.data.watering!.volume_ml} mL dibatalkan sebelum sampel berikutnya.` } : log),
+  }
 }
 
 export function recordFertilizer(s: Session): Session {

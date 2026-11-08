@@ -14,7 +14,7 @@ class SimulatorBoundary extends Component<{ children: ReactNode; loadFailed: boo
     if (this.state.failed || this.props.loadFailed) return <main className="site-loading" role="alert" tabIndex={-1}>
       <h1>Simulator belum dapat dibuka.</h1>
       <p>Muat ulang untuk mencoba lagi. Simpanan sesi tetap berada di browser.</p>
-      <button className="landing-cta" onClick={() => location.reload()}>Muat ulang</button>
+      <button className="button" onClick={() => location.reload()}>Muat ulang</button>
       <a href="#">Kembali ke beranda</a>
     </main>
     return this.props.children

@@ -57,3 +57,29 @@ export function deviceStatuses(packet: TelemetryPacket, now = Date.now()): Devic
     message: !d.installed ? 'Belum terpasang.' : d.fault ? `Perangkat melaporkan gangguan: ${d.fault}` : `Perintah ${d.command}; umpan balik ${d.feedback}; ${d.flow_ml_min === null ? 'aliran belum diukur' : `aliran ${d.flow_ml_min} mL/menit`}. ${d.feedback === 'unknown' || d.flow_ml_min === null ? 'Status tetesan belum terverifikasi.' : d.command !== d.feedback ? 'Perintah dan umpan balik berbeda; periksa perangkat.' : flowMismatch ? 'Aliran tidak sesuai perintah. Periksa waktu mulai operasi dan saluran; satu paket belum membuktikan sumbatan atau kebocoran.' : 'Status sesuai paket; bukan hasil pemeriksaan fisik.'}` })
   return rows
 }
+
+
+export interface TelemetryPacketV2 {
+  domain: 'smart-agro.telemetry.v2'; schema_version: 2; source: 'device'
+  device_id: string; unit_id: string; boot_id: string; sequence: number
+  measured_at: string; clock_status: 'synced' | 'unsynced'; sensors: TelemetryPacket['sensors']
+}
+export function parseTelemetryV2(input: unknown): TelemetryPacketV2 {
+  object(input)
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if (input.domain !== 'smart-agro.telemetry.v2' || input.schema_version !== 2 || input.source !== 'device') throw new Error('Paket harus telemetri perangkat v2.')
+  if ('drip' in input || 'actuator' in input) throw new Error('Telemetri v2 tidak menerima perintah aktuator.')
+  object(input.sensors)
+  if (Object.keys(input.sensors).length !== 3) throw new Error('Paket harus memuat tepat tiga sensor.')
+  for (const field of ['device_id', 'unit_id', 'boot_id'] as const) {
+    if (typeof input[field] !== 'string' || !uuid.test(input[field])) throw new Error(`${field} harus UUID.`)
+  }
+  if (typeof input.sequence !== 'number' || !Number.isInteger(input.sequence) || input.sequence < 0 || input.sequence > 2147483647) throw new Error('Sequence harus bilangan bulat 0–2147483647.')
+  if (input.clock_status !== 'synced' && input.clock_status !== 'unsynced') throw new Error('Status sinkronisasi jam tidak valid.')
+  const parsed = parseTelemetry({ schema_version: 1, source: 'device', device_id: input.device_id,
+    sample_id: `${input.boot_id}:${input.sequence}`, measured_at: input.measured_at, sensors: input.sensors,
+    drip: { installed: false, command: 'unknown', feedback: 'unknown', flow_ml_min: null, fault: null } })
+  return { domain: 'smart-agro.telemetry.v2', schema_version: 2, source: 'device', device_id: input.device_id as string,
+    unit_id: input.unit_id as string, boot_id: input.boot_id as string, sequence: input.sequence,
+    measured_at: parsed.measured_at, clock_status: input.clock_status, sensors: parsed.sensors }
+}

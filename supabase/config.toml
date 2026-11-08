@@ -1,0 +1,15 @@
+# Auth is validated against Supabase Auth inside the handler.
+[functions.product-claim]
+verify_jwt = false
+
+# Device Ed25519 proof is checked by the handler; device does not carry an account JWT.
+[functions.telemetry-ingest]
+verify_jwt = false
+
+# Owner identity and live session are verified by Auth and owner-scoped RPC.
+[functions.unit-explanation]
+verify_jwt = false
+
+# A registered meter signs energy evidence; no browser JWT or quality flag establishes trust.
+[functions.energy-ingest]
+verify_jwt = false

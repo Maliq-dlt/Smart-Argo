@@ -1,4 +1,4 @@
-import { Activity, ArrowUpRight, Droplets, FlaskConical, ShieldCheck, Thermometer } from 'lucide-react'
+import { Activity, ArrowUpRight, ChevronDown, Droplets, FlaskConical, ShieldCheck, Thermometer } from 'lucide-react'
 import type { Decision, PotCase } from '../lib/agronomyEngine'
 import { chartSegments } from '../lib/chartData'
 
@@ -12,13 +12,13 @@ export default function SimulationOverview({ data, decision }: { data: PotCase; 
   const y = (v: number) => 80 - v * .65
   const { slope_per_h, r2 } = decision.evidence
   return <aside className="studio-overview" aria-label="Ringkasan sensor simulasi">
-    <section className="panel studio-readings"><header><h2>Kondisi media</h2><span>Sensor terakhir</span></header>
-      <div className="studio-reading"><span><Droplets />Kelembapan</span><strong>{last.valid ? last.moisture : 'Gagal'}<small>{last.valid ? '/ 100' : ''}</small></strong><p>Indeks lokal · acuan air {decision.evidence.low}</p></div>
+    <section className="studio-readings"><header><h2>Kondisi media</h2><span>Sensor terakhir</span></header>
+      <div className="studio-metrics"><div className="studio-reading"><span><Droplets />Kelembapan</span><strong>{last.valid ? last.moisture : 'Gagal'}<small>{last.valid ? '/ 100' : ''}</small></strong><p>Indeks lokal · acuan air {decision.evidence.low}</p></div>
       <div className="studio-reading"><span><Thermometer />Suhu tanah</span><strong>{last.valid ? last.temp_c.toFixed(1) : 'Gagal'}<small>{last.valid ? '°C' : ''}</small></strong><p>Acuan panas {data.profile.hot_c} °C</p></div>
-      <div className="studio-reading"><span><FlaskConical />pH media</span><strong>{ph?.ph?.toFixed(1) ?? '—'}<small>pH</small></strong><p>{!ph ? 'Belum diukur' : !data.profile.ph_validated ? 'Belum tervalidasi' : !freshPh ? 'Lebih dari 24 jam lalu' : `${Math.round((data.now_h - ph.t_h) * 60)} menit lalu · tervalidasi`}</p></div>
+      <div className="studio-reading"><span><FlaskConical />pH media</span><strong>{ph?.ph?.toFixed(1) ?? '—'}<small>pH</small></strong><p>{!ph ? 'Belum diukur' : !data.profile.ph_validated ? 'Belum tervalidasi' : !freshPh ? 'Lebih dari 24 jam lalu' : `${Math.round((data.now_h - ph.t_h) * 60)} menit lalu · tervalidasi`}</p></div></div>
       <p className="studio-data-status"><ShieldCheck />{last.valid ? `${Math.round((data.now_h - last.t_h) * 60)} menit sejak sampel valid` : 'Sampel gagal · periksa sensor'}</p>
     </section>
-    <section className="panel studio-trend"><header><h2><Activity />Pola kelembapan</h2><span>12 jam terakhir</span></header>
+    <details className="studio-trend"><summary><span><Activity />Pola kelembapan<small>{rows.length} sampel · 12 jam terakhir</small></span><ChevronDown aria-hidden="true" /></summary><div>
       <svg viewBox="0 0 200 94" role="img" aria-label={`Kelembapan 12 jam terakhir, ${rows.length} sampel. Garis terputus pada sampel gagal atau jeda lebih dari satu jam.`}>
         {[20, 50, 80].map(v => <line key={v} x1="8" x2="192" y1={y(v)} y2={y(v)} stroke="var(--border-soft)" strokeDasharray="2 4" />)}
         {chartSegments(rows, 'moisture').map((segment, i) => <polyline key={i} points={segment.map(s => `${x(s.t_h)},${y(s.moisture)}`).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />)}
@@ -26,6 +26,6 @@ export default function SimulationOverview({ data, decision }: { data: PotCase; 
       </svg>
       <strong>{slope_per_h === null ? 'Tren belum tersedia' : `${slope_per_h > 0 ? '+' : ''}${slope_per_h} poin/jam`}</strong><p>{slope_per_h === null ? 'Perlu riwayat yang layak untuk proyeksi.' : `Tren keputusan sesi · R² ${r2}`} · {data.samples.length} sampel tersimpan</p>
       <a href="#statistik">Statistik lengkap<ArrowUpRight /></a>
-    </section>
+    </div></details>
   </aside>
 }

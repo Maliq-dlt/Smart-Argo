@@ -1,0 +1,48 @@
+# Development only: loopback APIs, isolated data under the repository .tmp directory.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: ${PHASE1_DB_PASSWORD:?required}
+    volumes:
+      - ../.tmp/phase1/pgdata:/var/lib/postgresql/data
+      - ./local-bootstrap.sql:/docker-entrypoint-initdb.d/00-bootstrap.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  auth:
+    image: supabase/gotrue:v2.197.0
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: [127.0.0.1:54324:9999]
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: http://127.0.0.1:54321/auth/v1
+      GOTRUE_SITE_URL: http://127.0.0.1:5173
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:${PHASE1_DB_PASSWORD}@db:5432/postgres?search_path=auth
+      GOTRUE_JWT_SECRET: ${PHASE1_JWT_SECRET:?required}
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_DISABLE_SIGNUP: 'false'
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: 'true'
+      GOTRUE_MAILER_AUTOCONFIRM: 'true'
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: 100
+  rest:
+    image: postgrest/postgrest:v14.18
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: [127.0.0.1:54325:3000]
+    environment:
+      PGRST_DB_URI: postgres://postgres:${PHASE1_DB_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${PHASE1_JWT_SECRET:?required}
+      PGRST_DB_MAX_ROWS: 100

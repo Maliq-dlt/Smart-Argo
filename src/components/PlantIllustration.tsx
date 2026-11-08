@@ -98,7 +98,9 @@ export default function PlantIllustration({ day, age = day, onion, moisture, con
     <text x="31" y="349">Zona akar</text><text x="31" y="363" className="svg-muted">kontak lokal</text>
   </g>
   </motion.g>}
-  <motion.path className="plant-shell" d="M114 316H340L314 435Q226 450 140 435Z" fill={`url(#${id}-pot)`} style={{ opacity: shellOpacity }} />
+  {typeof shellOpacity === 'number'
+    ? <path className="plant-shell" d="M114 316H340L314 435Q226 450 140 435Z" fill={`url(#${id}-pot)`} opacity={shellOpacity} />
+    : <motion.path className="plant-shell" d="M114 316H340L314 435Q226 450 140 435Z" fill={`url(#${id}-pot)`} style={{ opacity: shellOpacity }} />}
 </svg>
   )
 }

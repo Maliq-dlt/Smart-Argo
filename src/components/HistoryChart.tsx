@@ -39,7 +39,7 @@ export default function HistoryChart({ clock, data, decision, logs = [], metric 
   return <section className="panel history-panel" aria-labelledby="history-title">
     <div className="panel-heading"><h2 id="history-title"><ChartNoAxesCombined />Riwayat sensor</h2><label className="metric-picker">Parameter<SelectField label="Parameter grafik" value={metric} onValueChange={value => onMetricChange?.(value as Metric)} options={Object.entries(METRICS).map(([value, item]) => ({ value, label: item.label }))} /></label></div>
     <p className="chart-help">{rows.length} dari {data.samples.length} sampel · {utcLabel(clock, data.now_h)}. Pilih titik untuk rinciannya.</p>
-    <div className="chart-wrap" ref={chart}><svg viewBox={`0 0 ${width} ${care.length ? 292 : 245}`} role="group" aria-label={`Grafik ${spec.label} terhadap waktu sesi`}>
+    <div className="chart-wrap" ref={chart}><svg key={metric} className="reading-feedback" viewBox={`0 0 ${width} ${care.length ? 292 : 245}`} role="group" aria-label={`Grafik ${spec.label} terhadap waktu sesi`}>
       {[0, 1, 2, 3, 4].map(i => { const n = spec.min + (spec.max - spec.min) * i / 4; return <g key={i}><text x="28" y={y(n) + 4} textAnchor="end">{n}</text><line x1="38" x2={width - 28} y1={y(n)} y2={y(n)} stroke="var(--border-soft)" /></g> })}
       <text x="38" y="17">{spec.unit}</text>
       {limits.map((limit, i) => <line key={i} className="threshold-line" x1="38" x2={width - 28} y1={y(limit)} y2={y(limit)} stroke={i === 0 ? 'var(--amber)' : 'var(--muted)'} strokeDasharray="4 5" />)}

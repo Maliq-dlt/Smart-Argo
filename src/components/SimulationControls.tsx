@@ -6,8 +6,8 @@ import { feedingDue, scenePeriod, worldTime, simulationOf, simulationStopped, sa
 import { clockDate, utcLabel, logClock } from '../lib/sessionClock'
 import type { Session } from '../lib/sessionStore'
 
-export default function SimulationControls({ session, running, pauseNote, recommendation, onChange, onRun, onAdvance, onPlant, onWater, onFeed }: {
-  session: Session; running: boolean; pauseNote: string; recommendation: ReactNode; onChange: (change: Partial<SimulationState>) => void
+export default function SimulationControls({ session, running, pauseNote, recommendation, waterStatus, waterPending, onChange, onRun, onAdvance, onPlant, onWater, onFeed }: {
+  session: Session; running: boolean; pauseNote: string; recommendation: ReactNode; waterStatus: ReactNode; waterPending: boolean; onChange: (change: Partial<SimulationState>) => void
   onRun: () => void; onAdvance: (steps: number) => void; onPlant: () => void; onWater: () => void; onFeed: () => void
 }) {
   const sim = simulationOf(session), journey = sim.mode === 'journey'
@@ -25,7 +25,8 @@ export default function SimulationControls({ session, running, pauseNote, recomm
       </>}
       {sim.planted && pauseNote && <div className="clock-state-note" role="status"><p>{pauseNote}</p>{sim.source === 'manual' && <button className="text-button" onClick={() => onChange({ source: 'auto' })}>Gunakan waktu otomatis</button>}</div>}
       {recommendation}
-      {sim.planted && sim.source !== 'manual' && <div className="care-actions"><button className="button" disabled={complete} onClick={onWater}><Droplets />Siram 150 mL</button><p>Volume latihan. Respons pada sampel berikutnya.</p></div>}
+      {sim.planted && sim.source !== 'manual' && <div className="care-actions"><button className="button" disabled={complete || waterPending} onClick={onWater}><Droplets />Siram 150 mL</button><p>Volume latihan. Respons pada sampel berikutnya.</p></div>}
+      {waterStatus}
       {feedingDue(session) && <div className="feed-reminder" role="status"><ListChecks /><div><strong>Pengingat pupuk tiba</strong><p>Periksa jadwal perawatan pribadimu.</p><button className="text-button" onClick={onFeed} disabled={complete}>Catat sudah diberi pupuk</button></div></div>}
       <Sheet><SheetTrigger asChild><button className="settings-row"><Settings2 /><span>Pengaturan waktu & sampel</span><ChevronDown /></button></SheetTrigger><SheetContent><header className="sheet-heading"><SheetTitle>Waktu & sampel</SheetTitle><SheetDescription>Atur ritme simulasi dan pengingat perawatan.</SheetDescription></header><div className="settings-section">
         <fieldset className="source-options"><legend>Sumber sampel</legend>{([['auto', 'Otomatis'], ['random', 'Acak'], ['manual', 'Manual']] as const).filter(([v]) => !journey || v !== 'manual').map(([v,label]) => <label key={v}><input type="radio" name="sample-source" value={v} checked={sim.source === v} onChange={() => onChange({ source: v, pendingWater: 0 })} />{label}</label>)}</fieldset>

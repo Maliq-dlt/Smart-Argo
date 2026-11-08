@@ -1,1 +1,1 @@
-export const isSimulatorHash = (hash: string) => ['#statistik', '#simulasi', '#bandingkan', '#perangkat', '#terminal'].includes(hash)
+export const isSimulatorHash = (hash: string) => ['#statistik', '#simulasi', '#bandingkan', '#perangkat', '#terminal', '#ekosistem'].includes(hash)

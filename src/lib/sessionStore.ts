@@ -65,12 +65,27 @@ export function parseSession(input: unknown): Session {
       if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > max) throw new Error(`Simulasi ${key} tidak valid.`)
     }
     if (!Number.isInteger(sim.seed) || !Number.isInteger(sim.feedEveryDays)) throw new Error('Jadwal atau seed simulasi tidak valid.')
+    if (sim.waterUndo !== undefined) {
+      object(sim.waterUndo)
+      const undo = sim.waterUndo
+      if (typeof undo.at_h !== 'number' || !Number.isFinite(undo.at_h) || undo.at_h < 0 || undo.at_h > data.now_h ||
+        typeof undo.logId !== 'number' || !Number.isSafeInteger(undo.logId) || undo.logId < 0 ||
+        typeof undo.pendingWater !== 'number' || !Number.isFinite(undo.pendingWater) || undo.pendingWater < 0 || undo.pendingWater > 100)
+        throw new Error('Catatan pembatalan siraman tidak valid.')
+      parseCase({ ...data, watering: undo.watering })
+    }
   }
   if (!Array.isArray(input.logs) || input.logs.length > 500) throw new Error('Log sesi tidak valid.')
   for (const log of input.logs) {
     object(log); text(log.time, 40); text(log.message, 2000)
     if (typeof log.id !== 'number' || !Number.isSafeInteger(log.id) || log.id < 0 || !['data', 'action', 'rule', 'system', 'fault'].includes(log.kind as string))
       throw new Error('Entri log tidak valid.')
+  }
+  const undo = (input.simulation as SimulationState | undefined)?.waterUndo
+  if (undo) {
+    const entries = input.logs.filter(log => log.id === undo.logId)
+    if (entries.length !== 1 || entries[0].kind !== 'action' || !/^Siram \d/.test(entries[0].message))
+      throw new Error('Catatan siraman untuk pembatalan tidak ditemukan.')
   }
   return { ...input, clock } as unknown as Session
 }

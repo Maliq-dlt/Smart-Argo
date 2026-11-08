@@ -3,19 +3,26 @@ import SegmentedControl from './ui/segmented-control'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Activity, ChevronDown, Clock3, MoveVertical, ShieldCheck } from 'lucide-react'
 import type { Decision, PotCase } from '../lib/agronomyEngine'
-import { METRICS, summarizeSamples, type Metric } from '../lib/chartData'
+import { METRICS, chartSegments, summarizeSamples, type Metric } from '../lib/chartData'
 import type { SessionClock } from '../lib/sessionClock'
 import type { LogEntry } from '../lib/sessionStore'
 import HistoryChart from './HistoryChart'
 import SpotlightCard from './ui/spotlight-card'
+import AgroMark from './AgroMark'
 
-export default function StatisticsDashboard({ clock, data, decision, logs, care, readings, playback }: { clock: SessionClock; data: PotCase; decision: Decision; logs: LogEntry[]; care: ReactNode; readings: ReactNode; playback: ReactNode }) {
+export default function StatisticsDashboard({ clock, data, decision, logs, care, readings, playback, awaitingPlant, manual, feedback }: { awaitingPlant: boolean; manual: boolean; feedback: ReactNode; clock: SessionClock; data: PotCase; decision: Decision; logs: LogEntry[]; care: ReactNode; readings: ReactNode; playback: ReactNode }) {
   const [metric, setMetric] = useState<Metric>('moisture')
   const [windowHours, setWindowHours] = useState(0)
   const [bin, setBin] = useState<number | null>(null)
   const rows = useMemo(() => data.samples.filter(r => !windowHours || r.t_h >= data.now_h - windowHours), [data, windowHours])
   const stats = useMemo(() => summarizeSamples(rows, metric), [rows, metric])
   const spec = METRICS[metric], format = (v: number | null) => v === null ? '—' : v.toLocaleString('id-ID', { maximumFractionDigits: 1 })
+  // ponytail: 120 recent samples keep the mini chart small; aggregate for longer visual ranges.
+  const chartRows = useMemo(() => rows.slice(-120), [rows])
+  const segments = useMemo(() => chartSegments(chartRows, metric), [chartRows, metric])
+  const chartStart = chartRows[0]?.t_h ?? data.now_h, chartEnd = chartRows.at(-1)?.t_h ?? chartStart
+  const chartX = (hour: number) => 6 + (hour - chartStart) / Math.max(.5, chartEnd - chartStart) * 248
+  const chartY = (value: number) => 66 - (value - spec.min) / (spec.max - spec.min) * 56
   const quality = [
     { label: 'Valid & terukur', count: stats.count, color: 'var(--accent)' },
     { label: 'Gagal', count: stats.failed, color: 'var(--danger)' },
@@ -26,6 +33,13 @@ export default function StatisticsDashboard({ clock, data, decision, logs, care,
   let offset = 0
   return <>
     <div className="dashboard-grid dashboard-summary">{readings}{care}{playback}</div>
+    {feedback}
+    {/* Minimal Welcome Onboarding: https://21st.dev/@ziegfiroyt/components/onboarding3 */}
+    {data.samples.length < 2 ? <section className="panel observation-empty" aria-labelledby="observation-start-title">
+      <AgroMark aria-hidden="true" /><div><h2 id="observation-start-title">{awaitingPlant ? 'Mulai dari bibit' : 'Pengamatan baru dimulai'}</h2>
+      <p>{awaitingPlant ? 'Tanam bibit di Ruang tanam untuk mulai mengamati perubahan media.' : manual ? 'Tambahkan sampel berikutnya di Ruang tanam untuk melihat perubahan.' : 'Lanjutkan waktu. Grafik akan muncul setelah sampel berikutnya tercatat.'}</p>
+      <span>Satu sampel awal sudah tercatat; pembacaan tetap tersedia di atas.</span></div>
+    </section> : <>
     <div className="analysis-toolbar"><div><h2>Pengamatan sesi</h2><p>{rows.length} sampel · {windowHours ? `${windowHours} jam terakhir` : 'seluruh sesi'}</p></div>
       <div className="analysis-filters"><label><span>Parameter</span><SelectField label="Parameter statistik" value={metric} onValueChange={value => { setMetric(value as Metric); setBin(null) }} options={Object.entries(METRICS).map(([value, item]) => ({ value, label: item.label }))} /></label>
       <div className="range-filter"><span>Rentang statistik</span><SegmentedControl label="Rentang statistik" value={String(windowHours)} onValueChange={value => setWindowHours(Number(value))} options={[{ value: '0', label: 'Semua' }, { value: '24', label: '24 jam' }, { value: '72', label: '72 jam' }]} /></div></div>
@@ -36,7 +50,13 @@ export default function StatisticsDashboard({ clock, data, decision, logs, care,
     <details className="dashboard-details"><summary><span>Analisis statistik<small>Sebaran, kualitas, dan rentang pengukuran</small></span><ChevronDown aria-hidden="true" /></summary>
     <div className="dashboard-details-body">
     <div className="analytics-metrics">
-      <SpotlightCard className="metric-featured"><div className="stat-card-heading"><span>Rata-rata {spec.label.toLowerCase()}</span><Activity /></div><strong>{format(stats.mean)} <small>{spec.unit}</small></strong><p>Dari {stats.count} pengukuran valid</p></SpotlightCard>
+      {/* Progress Metric Card: https://21st.dev/@makviesainte/components/progress-metric-card */}
+      <SpotlightCard className="metric-featured"><div className="stat-card-heading"><span>Rata-rata {spec.label.toLowerCase()}</span><Activity aria-hidden="true" /></div><strong>{format(stats.mean)} <small>{spec.unit}</small></strong><p>Dari {stats.count} pengukuran valid</p>
+        {segments.length ? <figure className="metric-sparkline"><svg viewBox="0 0 260 76" role="img" aria-label={`${spec.label}, ${chartRows.length} sampel terakhir dalam rentang pilihan; skala ${spec.min}–${spec.max} ${spec.unit}. Garis terputus pada sampel gagal, tidak diukur, atau jeda lebih dari satu jam.`}>
+          {[10, 38, 66].map(y => <line key={y} x1="6" x2="254" y1={y} y2={y} />)}
+          {segments.map((segment, index) => <g key={index}><polyline points={segment.map(row => `${chartX(row.t_h)},${chartY(row[metric]!)}`).join(' ')} /><circle cx={chartX(segment.at(-1)!.t_h)} cy={chartY(segment.at(-1)![metric]!)} r="2" /></g>)}
+        </svg><figcaption><span>{spec.min}–{spec.max} {spec.unit}</span><span>{chartRows.length < rows.length ? `${chartRows.length} sampel terakhir` : windowHours ? `${windowHours} jam terakhir` : 'Seluruh sesi'}</span></figcaption></figure> : <p className="metric-empty">Belum ada bacaan valid untuk grafik mini.</p>}
+      </SpotlightCard>
       <SpotlightCard><div className="stat-card-heading"><span>Terendah — tertinggi</span><MoveVertical /></div><strong>{format(stats.min)} <small>—</small> {format(stats.max)}</strong><p>{spec.unit} · hanya nilai valid</p></SpotlightCard>
       <SpotlightCard><div className="stat-card-heading"><span>Pengukuran valid</span><ShieldCheck /></div><strong>{format(measuredPercent)}<small>%</small></strong><p>{stats.count} dari {rows.length} sampel</p></SpotlightCard>
       <SpotlightCard><div className="stat-card-heading"><span>Durasi teramati</span><Clock3 /></div><strong>{format(rows.length > 1 ? rows.at(-1)!.t_h - rows[0].t_h : 0)}<small>jam</small></strong><p>{rows.length > 1 ? 'Sampel pertama hingga terakhir' : 'Perlu sampel berikutnya'}</p></SpotlightCard>
@@ -59,5 +79,6 @@ export default function StatisticsDashboard({ clock, data, decision, logs, care,
       </section>
     </div>
     </div></details>
+    </>}
   </>
 }

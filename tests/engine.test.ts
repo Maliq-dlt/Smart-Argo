@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { addSample, evaluate, parseCase, phaseAt, recordWatering, type PotCase } from '../src/lib/agronomyEngine.ts'
 
-const root = fileURLToPath(new URL('../../', import.meta.url))
+const root = fileURLToPath(new URL('../scripts/reference/', import.meta.url))
 const cases: PotCase[] = JSON.parse(readFileSync(new URL('../src/lib/scenarios.json', import.meta.url), 'utf8'))
 const clone = (index = 1) => structuredClone(cases[index])
 const python = process.env.PYTHON ?? 'python'
