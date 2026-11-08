@@ -1,206 +1,161 @@
-# Smart Agro · Simulator satu pot
+<div align="center">
 
-Aplikasi React + TypeScript untuk mengeksplorasi keputusan perawatan dari riwayat tiga parameter: indeks kelembapan kapasitif, suhu DS18B20, dan pH tanah + DMS. Acuan utama: `../Makalah_Asisten_Perawatan_Tanaman_Satu_Pot.docx`, Bab V, serta `../simulasi_pot.py`.
+# Smart Agro
 
-## Menjalankan
+**Observe the plant. Understand the evidence. Choose the next step.**
 
-Node.js ≥22.18 dan npm diperlukan. Jalankan dari direktori `simulasi-web`:
+An interactive plant-care simulator and local IoT backend for traceable observations, product ownership, and evidence-based decisions.
 
-```powershell
-$env:TEMP = Join-Path (Get-Location) '.tmp'
-$env:TMP = $env:TEMP
-New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
-npm ci
+[Get started](#get-started) · [Explore the app](#explore-the-app) · [Architecture](#architecture) · [Contributing](CONTRIBUTING.md)
+
+![Smart Agro plant story](docs/images/landing.png)
+
+</div>
+
+Smart Agro connects a scroll-driven plant story with a working simulator and a separate authenticated product workspace. The interface is in Indonesian. The simulator runs offline in the browser; Docker adds PostgreSQL, authentication, signed telemetry ingestion, profile curation, and program rewards.
+
+## Get started
+
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) with Linux containers and Compose v2 or newer. Run from the repository root:
+
+```sh
+git clone https://github.com/Maliq-dlt/Smart-Argo.git
+cd Smart-Argo
+docker compose up --build -d --wait
+```
+
+Open **[http://127.0.0.1:8088](http://127.0.0.1:8088)**. No host Node.js, Python, Supabase account, or manual `.env` setup is required. The first build downloads images and dependencies.
+
+```sh
+# Check actual services, compiled assets, authentication and access controls
+docker compose --profile tools run --rm verify
+
+# Inspect services
+docker compose ps -a
+
+# Stop while preserving data and generated keys
+docker compose stop
+
+# Resume
+docker compose up -d --wait
+```
+
+Database data and generated credentials persist in separate named volumes. `docker compose down` also preserves these volumes. Removing volumes erases the local installation; retain both when backing up or moving it. Only port `8080` is published, on loopback.
+
+Local assessment mode automatically confirms new registrations. It sends no verification email and does not establish mailbox ownership. This Compose setup is intended for local assessment and development.
+
+## Explore the app
+
+1. **Choose a plant.** Select cabai or bawang, lock the specimen, and scroll through five chapters. GSAP changes its scale, angle, and composition; keyboard controls and reduced motion remain available.
+2. **Try a care decision.** Compare drying and persistently wet observations, then open **Coba simulator**. Plant a seed, change scenarios, advance time, water, or record a fertilizer reminder.
+3. **Read the history.** Open Dashboard or Terminal for sensor trends, decision evidence, and the journal. Export a session before clearing browser storage.
+4. **Open Ekosistem.** Register in **Akun & kepemilikan produk online**. Browser-local ecosystem demos and online account records use separate data stores.
+5. **Exercise device workflows.** Activation requires a provisioned product, sealed activation code, and Ed25519 signature. Integration tests provision software fixtures and verify the protocol. A fresh database contains no fabricated devices or readings.
+
+![Smart Agro dashboard](docs/images/dashboard.png)
+
+## What is implemented
+
+| Area | Current behavior |
+| --- | --- |
+| Plant story | Cabai/bawang selection, locked specimen, reversible GSAP scroll composition, reduced motion. |
+| Simulator | Deterministic rules, timestamped readings, reproducible scenarios, planting/watering effects, reminders, session import/export and comparisons. |
+| Accounts and ownership | Email/password Auth, private owner reads, session-bound activation challenges, Ed25519 verification, transactional claims and RLS. |
+| Device telemetry | Signed v2 envelopes, sensor quality, sequence/replay protection, bounded history, explicit stale/missing readings. |
+| Community knowledge | Contributions, curator review, immutable profile versions, evidence/scope, no self-approval. |
+| Explanations | Deterministic rule evidence and saved explanations. Generative AI is not configured. |
+| Energy and rewards | Signed meter evidence, server policies, transactional ledger/reservations and program redemptions. |
+| Audit outbox | Atomic pending jobs and verifiable commitments. No blockchain network or contract is configured. |
+
+Tests use generated keys and synthetic observations. They do not establish calibration, field accuracy, actuator operation, actual energy savings, or physical-device integration. Rewards are internal program records, not money or cryptocurrency. Plant images are 2.5D cutouts rather than freely rotatable 3D models.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser[Browser] -->|localhost:8080| App[Node gateway + Vite build]
+    App --> Auth[Supabase Auth]
+    App --> REST[PostgREST]
+    App --> Handlers[Signed API handlers]
+    Handlers --> App
+    Auth --> DB[(PostgreSQL 17)]
+    REST --> DB
+```
+
+The gateway serves compiled web assets and same-origin APIs. Four TypeScript handlers verify product claims, plant telemetry, rule explanations, and energy evidence. Auth and PostgREST reach PostgreSQL on the private Compose network. Initialization generates credentials once; versioned migrations run transactionally before the app becomes ready.
+
+The browser receives only its API origin and public anonymous key through `runtime-config.js`. Database passwords, JWT signing material and service-role keys stay on the backend. The runtime uses an unprivileged Node user, without `node_modules` or frontend build tools.
+
+```text
+src/components/        Landing, simulator, dashboards, product workspace
+src/lib/               Rules, sessions, protocol clients and validation
+supabase/functions/    Request handlers and signature verification
+supabase/migrations/   Schema, RLS and transactional operations
+scripts/               Shared gateway, local launcher, Python reference
+tests/                Unit, integration, container and browser checks
+docs/                 Protocols, implementation evidence and diagrams
+```
+
+Stack: React 18, TypeScript, Vite, Tailwind CSS, Radix UI, GSAP, Framer Motion, Node.js, PostgreSQL, Supabase Auth and PostgREST. Scrolling uses native browser scrolling with GSAP ScrollTrigger/ScrollTo; Lenis is not used.
+
+## Local development
+
+Use Node.js **22.18+**, npm, and Python **3.10+** for parity tests.
+
+```sh
+npm ci --cache .cache/npm
 npm run dev
 ```
 
-Buka http://127.0.0.1:5173. `.npmrc` menempatkan cache npm di `../.cache/npm`. Dependensi frontend mengikuti brief: React 18, Vite, TypeScript, Tailwind CSS, Framer Motion, Lenis, Lucide, dan shadcn/ui berbasis Radix (Tabs, Select, Dialog, Popover, Sheet). Komponen di `src/components/ui/` memakai token desain aplikasi; slider dan checkbox tetap HTML native. Tidak ada backend atau credential.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The simulator needs no backend. For online features, run `npm run backend:local` in another terminal first, then start/restart Vite. This separate developer stack uses ports `54321`, `54324`, `54325` and the `smart-agro-phase1` Compose project.
 
-## Landing page
+The launcher creates `.env.local` only if absent. It preserves existing configuration; public local values are also written to `.tmp/phase1/browser.env`. Keep generated environment files and `.tmp/` out of Git. See [implementation phases](docs/IMPLEMENTATION_PHASES.md) for provisioning and hosted Supabase setup.
 
-URL tanpa hash membuka landing Smart Agro: satu pot tanah liat 3D dengan lima pilihan bunga, carousel melengkung, bayangan botani, dan gerak pointer. Header, galeri, cerita, eksperimen, serta penutup memakai palet hijau lumut dan krem yang sama. Header ganda, tombol autoplay, kontrol rotasi pot, CTA cerita, serta teks pengisi dihapus. Three.js dimuat terpisah; model bertekstur Poly Haven (CC0) memakai WebP yang ditanam di GLB. Pemilih menerima klik, geser, Space/Enter, dan tombol panah. Pilihan bergilir setiap empat detik dan tetap berjalan sesudah klik atau geser, dengan timer dimulai ulang setelah pilihan berubah. Fokus keyboard menjeda sementara; keluar dari carousel melanjutkannya. Autoplay berhenti saat bagian tidak terlihat atau tab tersembunyi. Reduced motion serta WebGL yang tidak tersedia memakai poster lokal. Kartu eksperimen dan ringkasan dashboard mengadaptasi Spotlight Card dari koleksi Popular 21st.dev: sorotan tepi mengikuti pointer tanpa memindahkan kartu, mengunci sentuhan, atau mengubah data. Reduced motion menonaktifkan efek ini. Kredit aset dan referensi berada di `public/flowers/CREDITS.md`. Bunga merupakan eksplorasi visual; simulator mencontohkan cabai dan bawang.
+For static hosting, run `npm run build` and publish `dist/`. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` at build time for online features. Static hosting does not include the Docker backend. Never put service-role keys in a `VITE_` variable.
 
-Cerita selanjutnya mengikuti satu pot cabai: permukaan, zona akar, cara model membaca data, eksperimen keputusan, lalu ajakan mencoba simulator. Referensi narasi [Corn Revolution](https://cornrevolution.resn.global/#) dianalisis lewat Playwright pada adegan utama dan frame transisi. Desktop memakai satu panggung sticky tanpa kartu penampang terpisah: pot yang sama tetap terpasang, kamera mendekat ke akar, dinding pot tersingkap, lalu probe muncul mengikuti progres scroll. Gerak dapat dibalik dengan scroll; tidak ada penguncian scroll atau autoplay cerita. Latar lumut, cahaya lembut, dan grain lokal menyatukan panggung dengan galeri.
+## Verification
 
-Pola **Sticky Scroll Reveal** dan **Progress Indicator** dari 21st.dev tetap dipakai untuk bab serta anchor. Teks dan kontrol berada dalam alur halaman. Tab **Kelembapan / Suhu / pH** menyorot probe terkait beserta keterbatasan pembacaannya; **Reading Text Reveal** menghubungkan galeri dan cerita. Bagian pola menjelaskan mutu data, durasi, dan acuan lokal di bawah pot yang sama. Grafik riwayat hanya muncul sekali pada eksperimen; **Container Scroll Animation** tetap dipakai pada meja eksperimen. Toleransi batas bab mencegah indikator berganti bolak-balik akibat jitter. Ponsel dan reduced motion memakai ilustrasi statis per bagian serta scroll native. Anchor, keyboard, penjelasan sensor, data skenario, dan batas simulasi tetap tersedia.
-Lenis menghaluskan gulir roda mouse dan link bagian pada landing selama 900 ms. Gulir sentuh tetap native; `prefers-reduced-motion` menonaktifkan Lenis dan transisi dekoratif. Fokus berpindah ke tujuan link tanpa loncatan; instance gulir dibersihkan saat masuk simulator dan dibuat kembali saat pulang ke beranda. Framer Motion cukup untuk tiga adegan ini, sehingga tidak menambah GSAP. Tipografi landing dan simulator memakai satu keluarga yang lembut: isi utama 16 px, label 14 px, keterangan 13 px, judul halaman 32 px, nilai sensor dashboard 24 px. Ukuran ditetapkan dalam rem; judul landing mengikuti viewport. Judul memakai bobot 450–550, sedangkan aksi dan label penting 600. Lambang SVG pot/akar milik proyek konsisten pada header, sidebar, footer, dan favicon. Lebar sidebar memakai rem agar mengikuti pembesaran teks.
-
-**Cepat mengering** dan **Basah menetap** mengganti pembacaan, grafik, dan alasan keputusan dari skenario bawaan melalui mesin agronomi yang sama. Grafik mengikuti waktu pengamatan dan indeks 0–100. Tab sensor serta pilihan skenario mendukung tombol panah dan Space/Enter, dan tidak menulis sesi. Angka merupakan contoh simulasi, bukan pembacaan perangkat nyata.
-
-Bagian **Sebelum mulai** mengadaptasi Feature Accordion Section (ruixen.ui, 21st.dev): tiga jawaban tentang sumber data, jenis tanaman, serta batas saran perawatan. Native details/summary mendukung Space/Enter, membuka satu jawaban per grup, dan reduced motion. Galeri bunga tetap visual, bukan diagnosis.
-
-Perpindahan landing dan aplikasi mengadaptasi pola fade **Page Transition** dari 21st.dev melalui View Transitions native selama 320 ms. Beranda tetap tampil sampai modul aplikasi siap; koneksi lambat mendapat status kecil yang dapat dibatalkan, tanpa layar loading penuh atau durasi loading buatan. Snapshot menangkap konten aplikasi yang sudah terlihat, tanpa fade kedua atau transform pada pembungkus halaman. Browser tanpa View Transitions memakai fade singkat 220 ms dari opacity .65; reduced motion berpindah langsung. Gulir awal disetel segera agar tween Lenis dari halaman sebelumnya tidak terbawa. Back, pembatalan pemuatan, tautan langsung, dan kegagalan impor tetap ditangani.
-
-**Coba simulator** membuka `#simulasi`. Kelima hash aplikasi tetap dapat dibuka langsung; logo di sidebar kembali ke beranda. Landing tidak menjalankan atau menyimpan sesi. Simulator dimuat saat dibuka, lalu memulihkan sesi dalam keadaan dijeda. Framer Motion tetap menangani transisi UI; Three.js menangani objek 3D. GSAP tidak diperlukan.
-
-## Alur penggunaan
-
-**Simulasi** (`#simulasi`) berisi statistik di kiri, ilustrasi pertumbuhan di tengah, serta waktu/perawatan di kanan pada desktop. Di ponsel, ilustrasi dan kontrol tampil lebih dahulu. **Dashboard** (`#statistik`) menampilkan kondisi pot, catatan perawatan, waktu sesi, dan satu grafik parameter pilihan. **Analisis statistik** tertutup saat dibuka; pengguna dapat membukanya untuk melihat ringkasan numerik, sebaran, kualitas, dan rentang harian. Navigasi tidak mengganti sesi atau menghentikan waktu yang sedang berjalan.
-
-Sidebar membuka lima halaman: **Dashboard** (`#statistik`), **Simulasi** (`#simulasi`), **Bandingkan sesi** (`#bandingkan`), **Status perangkat** (`#perangkat`), dan **Terminal** (`#terminal`). Setiap halaman dapat dibuka langsung, dimuat ulang, atau dikunjungi lewat Back/Forward. Di ponsel, gunakan **Buka navigasi**; pemilihan tujuan menutup menu, sedangkan Escape mengembalikan fokus ke tombol menu. Navigasi memindahkan fokus ke konten halaman. Identitas sesi pada toolbar hanya menampilkan sesi aktif.
-
-Kartu ringkasan dan grafik mengikuti parameter/rentang pilihan. **Kondisi pot saat ini**, rekomendasi, fase tanaman, serta jam sesi selalu menunjukkan sesi terkini; filter statistik tidak memotong riwayat keputusan. Pada ponsel, rekomendasi tampil sesudah ringkasan. Disclosure mengadaptasi HeroUI dari 21st.dev melalui `details/summary` native: Space/Enter membuka panel, animasi 220 ms jika browser mendukung, dan reduced motion berpindah langsung. Tombol serta ikon sidebar mengikuti proporsi Origin UI/shadcn; seluruh kontrol memakai token tema aplikasi. Tidak ada pencarian, akun, atau notifikasi tiruan.
-
-Dashboard menyatukan tiga sensor dalam baris sejajar pada desktop; jam sesi menjadi baris kontrol kompak. Ponsel mempertahankan daftar sensor yang mudah dipindai. **Mulai menanam / Buka perawatan** langsung membawa fokus dan gulir ke kontrol yang relevan, termasuk input manual; shortcut tidak melakukan tindakan atau memajukan waktu. **Detail pengukuran** tertutup awal dan terbuka ketika titik grafik dipilih. Angka, mutu, dan batas keputusan tetap tersedia saat diperlukan.
-
-Marker tanam, siram, dan pupuk mengikuti catatan sesi pada grafik. Tindakan dengan waktu sama berbagi satu marker; klik atau Enter/Space membuka **Perawatan tercatat**. Timeline ringkas mengadaptasi Activity Timeline dari 21st.dev. Maksimal 12 waktu perawatan terbaru pada rentang grafik, dengan log lengkap tetap di Terminal. Siraman skenario/sesi lama tanpa log memakai nilai watering yang sudah tercatat; tidak menggandakan siraman yang memiliki log. Waktu log tidak sah atau di masa depan diabaikan. Pupuk hanya catatan jadwal, volume siram bukan saran dosis. Tidak mengubah engine, format simpanan, atau menambah dependency.
-
-### Tampilan dan gerak
-
-Ruang tanam, navigasi, dan toolbar memakai permukaan solid di atas latar abu lembut dengan aksen sage. Radius kartu 22 px dan bayangan tipis membedakan kelompok informasi; tanpa backdrop blur. Tombol **Sensor** menampilkan/menyembunyikan probe pada ilustrasi; nilai sensor tetap tersedia di panel kiri. Framer Motion menggerakkan tanaman, langit, serta transisi halaman 220 ms. Lenis menghaluskan gulir roda mouse dan perpindahan ke atas halaman (650 ms); gulir sentuh tetap native. Link sidebar halaman yang sedang aktif kembali ke atas. Fokus keyboard berpindah ke konten halaman tanpa loncatan gulir.
-
-Log terminal dan dialog bergulir secara native. Saat dialog atau Select terbuka, penguncian Radix juga menghentikan animasi gulir Lenis yang masih berjalan; gulir halaman aktif kembali setelah panel ditutup. `prefers-reduced-motion` meniadakan tween gulir/transform; kontras tinggi mempertegas garis pembatas kartu dan kontrol. Nunito Sans variable (400–700) disimpan lokal sebagai WOFF2 Latin 31 kB, berlisensi SIL Open Font License. Preload dan font-display: swap menjaga teks tersedia; Segoe UI menjadi fallback. Tidak ada permintaan font eksternal saat aplikasi dibuka. Acuan materi: [Apple Design Resources](https://developer.apple.com/design/resources/) dan [HIG Materials](https://developer.apple.com/design/human-interface-guidelines/materials). Kontrol shadcn/Radix mengelola fokus, Escape, navigasi keyboard, dan posisi menu. Pengaturan tanaman serta waktu/sampel berada dalam Sheet; pemilih zona waktu dan aksi sesi memakai Popover. Library animasi dibundel terpisah agar dapat dicache sendiri; konten statistik tetap langsung tersedia saat navigasi panel.
-
-Mode Perjalanan tanam/Eksperimen dan rentang statistik memakai segmented control dengan radio HTML; tombol panah memilih opsi melalui keyboard. Tab terminal tetap memakai Radix. Penanda aktif memakai Framer Motion dengan spring teredam; reduced motion berpindah langsung. Tombol menyusut ringan saat ditekan, lalu kembali halus. Angka sensor tetap menampilkan nilai tercatat tanpa ticker tambahan. Tidak ada dependency baru.
-
-Penyebab waktu dijeda tampil dekat kontrol: jeda pengguna, pemulihan sesi, tab tidak aktif, pergantian zona/sumber, mode manual, perhatian baru, atau batas sesi. Mode manual menyediakan **Gunakan waktu otomatis**. Tab yang kembali aktif dan sesi yang baru dipulihkan tetap menunggu tombol lanjut, sehingga simulasi tidak berjalan tanpa terlihat. Jeda otomatis juga ditulis pada log.
-
-### Perjalanan tanam
-
-1. Buka **Atur tanaman & skenario** untuk memilih cabai atau bawang, lalu tekan **Tanam & mulai**. Waktu langsung berjalan. Pot baru dimulai pada HST 0 dengan timestamp ketika **Tanam & mulai** ditekan. **Pot baru** mempertahankan perjalanan sebelumnya untuk **Bandingkan sesi**. Animasi bibit jatuh dan tunas muncul hanya diputar saat menanam.
-2. Pilih **Otomatis** untuk pola lingkungan atau **Acak** untuk variasi dengan seed tersimpan. **Pengaturan waktu & sampel** memuat sumber dan opsi jeda. Playback selalu menghasilkan satu sampel per 30 menit simulasi: Lambat = satu hari dalam 288 detik, Normal = 24 detik, Cepat = 6 detik. **+30 menit** dan **+1 hari** tersedia untuk langkah terkontrol.
-3. HST, jam sensor, suasana pagi/siang/sore/malam, dan perkembangan visual mengikuti waktu yang sama. Sesi baru berjalan terus secara bawaan. Opsi **Jeda otomatis saat perlu tindakan** menghentikan langkah saat muncul kondisi perhatian atau pengingat pupuk baru; satu hari tidak selalu dilewati penuh. **Lanjutkan waktu** melewati peringatan yang telah dilihat, sehingga kondisi yang sama tidak langsung menjeda lagi. Peringatan tetap terlihat. Pilihan jeda pada sesi lama tetap dipertahankan.
-4. **Siram 150 mL** mencatat tindakan dan memutar animasi penyiram, tetesan, serta riak tanah. Respons sintetis diterapkan sekali pada sampel berikutnya, tanpa mengubah riwayat sebelumnya. Kondisi media yang kurang mendukung memperlambat perkembangan visual dalam model latihan.
-5. **Jadwal pupuk pribadi** memakai interval pilihan pengguna; 0 menonaktifkan pengingat. **Catat sudah diberi pupuk** mengatur ulang tanggal pengingat dan menulis log. Tidak ada deteksi kebutuhan/dosis pupuk maupun perubahan pH atau nutrisi yang diasumsikan.
-6. **Jurnal terbaru** dapat dibuka untuk melihat kejadian terbaru. Perjalanan berhenti pada 90 HST untuk cabai atau 65 HST untuk bawang. Bentuk akhir mengikuti perkembangan model, bukan jaminan panen nyata. Buka statistik untuk mengevaluasi riwayat atau membandingkan salinan sesi.
-
-Animasi perawatan bersifat sesaat: tidak menambah sampel atau pertumbuhan, tidak tersimpan, dan tidak diputar ulang setelah navigasi atau pemulihan sesi. Reduced motion menyembunyikan efek dekoratif. Satu **Mood tanaman** di sidebar menampilkan maskot 2D dengan ekspresi dari status simulasi; bukan diagnosis kesehatan dan tidak mengulang angka sensor. Analisis AI belum ditambahkan.
-
-### Eksperimen
-
-Buka **Atur tanaman & skenario** untuk memilih satu dari 10 skenario makalah. **Otomatis** dan **Acak** menghasilkan sampel tanpa mengisi slider. **Manual** membuka kontrol kelembapan, suhu, pH, volume, dan gangguan. Slider menyiapkan pembacaan; **Tambah sampel** memajukan jam sensor 30 menit. pH hanya dicatat jika pengukuran baru disertakan; selain itu nilainya `null`. **Catat siram** pada mode manual tidak mengarang respons sensor: masukkan sendiri sampel berikutnya.
-
-HST di **Ilustrasi fase tanaman** tetap terpisah dari jam sensor dalam mode eksperimen. **Acuan lokal** mengubah observasi media dan jadwal kunjungan. Mengganti media memulai sesi baru. Skenario dan impor sebelumnya tetap tersimpan untuk perbandingan. Beralih antara Perjalanan tanam dan Eksperimen membuka sesi terakhir dari mode tersebut.
-
-Halaman **Dashboard** menyediakan pilihan kelembapan, suhu, pH, serta rentang seluruh sesi / 24 jam / 72 jam. Ringkasan menampilkan rata-rata, minimum–maksimum, persentase pengukuran valid, dan durasi teramati. Selain riwayat garis, tersedia histogram, diagram donat mutu data, dan rentang minimum/rata-rata/maksimum per 24 jam (maksimal 7 kelompok berisi data). Semua dihitung dari sampel nyata dalam sesi; sampel gagal dan pH kosong dikecualikan dari statistik numerik. Persentase valid merujuk status sampel, bukan kalibrasi. Halaman **Terminal** memuat log, JSON, jejak aturan, bukti pendukung, dan kontrol waktu. Ketuk titik, gunakan Enter/Spasi, atau pilih sampel untuk membaca waktu, nilai, dan status. Silang menandai gagal; wajik menandai tidak diukur. Garis terputus pada keduanya dan pada jeda lebih dari satu jam. **Bandingkan sesi** menerima dua sesi pilihan pengguna dan salinan sebelum/sesudah tindakan.
-
-Tombol tema menampilkan kondisi aktif: matahari untuk terang, bulan sabit untuk gelap. Pilihan disimpan lokal dan awalnya mengikuti sistem. View Transition native membuka tema baru melalui lingkaran dari pusat tombol (480 ms), disertai pergantian ikon; klik cepat tidak menumpuk transisi. Fokus keyboard dipertahankan. Browser tanpa API tersebut memakai perubahan langsung dan gerak ikon; reduced motion meniadakan animasi tema. Tema antarmuka terpisah dari waktu dunia simulasi. Matahari bergerak dari timur ke barat, disusul bulan dan langit malam; awan melayang pelan. Animasi langit menginterpolasi dua waktu yang telah tercatat, tidak membuat pembacaan tambahan. Preferensi pengurangan gerak menghentikan interpolasi dan animasi dekoratif.
-
-## Penyimpanan dan cadangan
-
-Perubahan disimpan otomatis ke `localStorage` pada perangkat. Status penyimpanan tampil di atas simulator. Refresh memulihkan sesi terakhir beserta riwayat, draf slider, pilihan pH baru, volume, HST, kecepatan, dan log; waktu otomatis dan pemutaran ilustrasi selalu dijeda; tab yang disembunyikan juga dijeda tanpa mengejar waktu saat kembali. Skenario baru, impor, serta salinan tidak menghapus sesi sebelumnya.
-
-Panel **Lanjutkan sesi** dan menu riwayat dihapus. Pemulihan otomatis setelah refresh tetap aktif; sesi lama tersedia di **Bandingkan sesi**. Menu **Berkas** memuat **Impor** dan **Ekspor sesi**. **Ekspor sesi** mencadangkan sesi aktif sebagai JSON versi 2. **Impor** menerima versi 2, ekspor versi 1, dan kontrak kasus Python; keputusan selalu dihitung ulang. Versi 2 memulihkan metadata, draf, dan log lengkap, dengan ID baru agar sesi asal tetap utuh. Batas impor 2 MB / 10.000 sampel. Grafik menampilkan 120 sampel terakhir; log dibatasi 500 entri. Semua sampel sampai batas 10.000 tetap tersimpan dan ikut ekspor.
-
-Simpanan terikat pada alamat situs (origin) dan browser. Data localhost tidak otomatis muncul pada domain hosting; gunakan ekspor/impor. Membersihkan data browser menghapus simpanan lokal. Tidak ada sinkronisasi akun. Saat kuota penuh, simpanan rusak, atau ada perubahan dari tab lain, aplikasi menampilkan kegagalan penyimpanan dan mempertahankan data lama. Ekspor perubahan aktif sebelum memuat ulang ketika konflik tab terjadi.
-
-## Waktu UTC dan kesiapan perangkat
-
-**Zona perangkat** berada pada toolbar sesi aktif. Awalnya mengikuti zona waktu browser/perangkat, termasuk pergantian DST. Pilihan manual tersedia dari UTC−12:00 hingga UTC+14:00, kelipatan 15 menit. Web, langit, grafik, pratinjau perangkat, dan terminal memformat waktu melalui `src/lib/sessionClock.ts`.
-
-Setiap sesi menyimpan `clock.startedAtMs` sebagai timestamp UTC dan `clock.offsetMinutes` (null = otomatis). Waktu sampel = awal sesi + `t_h` jam. UTC dan durasi HST tidak berubah saat zona diganti; langit dan lingkungan sintetis selanjutnya mengikuti jam lokal pilihan. Tampilan tanggal menangani pergantian hari. Sesi skenario memakai acuan sehingga sampel terakhir bertepatan dengan waktu pembukaan; waktu sebelumnya tetap ilustratif. Sesi lama tanpa metadata waktu diberi acuan dari waktu simpan terakhir dikurangi durasi, bukan rekonstruksi timestamp historis perangkat.
-
-Halaman **Status perangkat** membuka validator/pratinjau JSON. Tersedia contoh berlabel `example`. Nilai tiap sensor wajib memiliki status; gagal atau tidak diukur disimpan sebagai null. Umpan balik aktuator dan aliran dibedakan dari perintah. Paket tua, waktu perangkat di masa depan, error sensor, dan fault tetesan menghasilkan status yang dapat ditelusuri di terminal. Paket maksimum 64 KB. Impor gagal mempertahankan paket sebelumnya; paket terakhir ikut autosave dan ekspor sesi.
-
-Belum ada koneksi langsung, server ingest, firmware, atau kendali tetesan. Pratinjau paket tidak masuk ke statistik/keputusan simulasi. Kontrak dan kebutuhan integrasi berikutnya: [`docs/telemetry-v1.md`](docs/telemetry-v1.md). Sensor kapasitif menyatakan indeks kelembapan, bukan kapasitas air yang dapat dihitung dari angka saja.
-
-**Acuan fase per HST** di bawah ilustrasi menampilkan rentang bawaan dan fase model saat ini. Saat melewati batas HST, terminal mencatat pergantian acuan. Rentang ini bukan deteksi bunga/buah dan belum mendekati tanaman nyata secara tervalidasi. Kesesuaian 1:1 memerlukan varietas, tanggal tanam, catatan fase lapangan, dan kalibrasi model.
-
-## Model dan batas
-
-- `src/lib/agronomyEngine.ts` mengikuti urutan 10 aturan dan validasi Python, termasuk median acuan, mutu data, evaluasi siram, basah menetap, tiga bacaan kering, suhu, pH berulang, serta regresi linear lokal.
-- Prediksi memerlukan ≥6 sampel valid, durasi ≥2,5 jam, jeda ≤1 jam, kemiringan <−1 poin/jam, R² ≥0,8, dan horizon ≤12 jam. Riwayat prediksi dibatasi enam jam dan setelah penyiraman terakhir.
-- Skenario JSON berasal dari `simulasi_pot.cases()`. Nilai `expected` hanya metadata pengujian; mesin tidak memakainya untuk mengambil keputusan.
-- Pada eksperimen, HST ilustrasi terpisah dari jam sampel. Pada perjalanan, HST = jam berlalu / 24 (dibulatkan ke bawah); perkembangan gambar dapat tertinggal saat media kurang mendukung. Fase gambar tidak mengubah profil acuan mesin keputusan.
-- `src/lib/simulation.ts` adalah model latihan tambahan: pengeringan bergantung siklus cahaya, suhu mengikuti kurva harian, pH baru dibuat saat pergantian hari, dan seed membuat variasi acak dapat diulang. Respons siram memakai koefisien sintetis (volume/8 poin pada sampel berikutnya). Perkembangan bertambah 0,5 jam pada kondisi mendukung dan 0,1 jam pada kondisi lain. Angka ini belum dikalibrasi atau divalidasi secara agronomi.
-- Tidak ada RS485/Modbus, EC, TDS, NPK, penentuan dosis pupuk/dolomit, diagnosis penyakit, prediksi pertumbuhan, atau klaim penghematan. Perangkat tidak terhubung. Penampilan tanaman tidak menunjukkan kesehatan dari sensor.
-- Indeks 0–100 bukan kadar air volumetrik. Acuan angka bawaan merupakan demonstrasi, belum validasi agronomi. Antarmuka DMS aktual harus dikonfirmasi sebelum firmware atau pengkabelan dibuat.
-- Font sistem dipakai tanpa unduhan Google Fonts. Lenis 1.3.26 ditambahkan untuk gulir halus; Tabs tetap memakai Radix. Navigasi sidebar dan kartu dashboard mengikuti referensi pengguna dengan tema botani; tidak ada pemasangan penuh shadcn/ui.
-
-## Hosting statis
-
-Aplikasi tidak memerlukan backend, database, API key, atau environment variable. Gunakan Node.js 24 LTS (minimum 22.18) untuk build:
-
-```powershell
-npm ci
-npm run build
-npm run preview
-```
-
-Build menghasilkan `dist/`. Unggah **isi** folder tersebut (`index.html`, `assets/`, `favicon.svg`, `telemetry-example.json`) ke direktori situs, lalu akses lewat HTTP/HTTPS. Jangan membuka `index.html` melalui `file://`. `base: './'` membuat aset bekerja di root domain maupun subfolder seperti `/simulator/` dengan URL berakhiran `/`.
-
-Pilihan hosting:
-
-| Platform | Pengaturan |
-| --- | --- |
-| Vercel | Root Directory: `simulasi-web` jika seluruh workspace diunggah sebagai repo, atau `.` jika repo hanya berisi aplikasi. Framework: Vite; install: `npm ci`; build: `npm run build`; output: `dist`. `vercel.json` sudah tersedia. |
-| Netlify / Cloudflare Pages | Base/root: `.` untuk repo Smart-Argo ini; gunakan `simulasi-web` hanya jika folder induk ikut menjadi root repo; build: `npm run build`; publish/output relatif ke root aplikasi: `dist`; Node 24. |
-| cPanel / hosting statis | Ekstrak isi paket build ke `public_html/` atau subfolder tujuan. |
-
-Tidak perlu rewrite SPA karena kelima halaman memakai navigasi hash. Situs publik sebaiknya memakai HTTPS. Repo aplikasi: [Maliq-dlt/Smart-Argo](https://github.com/Maliq-dlt/Smart-Argo). Integrasi Cloudflare membangun perubahan yang didorong ke GitHub; status deploy diperiksa terpisah dari hasil build lokal.
-
-## Verifikasi
-
-Python ≥3.10 diperlukan untuk pemeriksaan kesetaraan; `PYTHON` bisa menunjuk executable tertentu.
-
-```powershell
-npm test
+```sh
 npm run lint
 npm run typecheck
+npm test
 npm run build
-python ../simulasi_pot.py --self-test
+python scripts/reference/simulasi_pot.py --self-test
 ```
 
-`npm test` memakai runner bawaan Node, tanpa framework tes tambahan. Pemeriksaan mencakup 10 skenario, kesetaraan hasil dan bukti dengan Python pada 110 kasus, validasi JSON, kegagalan data, pH, kontinuitas riwayat, batas prediksi, dan pencatatan tindakan. Tes sesi mencakup pemulihan, ekspor/impor, pergantian sesi, validasi metadata, kuota, konflik tab, dan segmentasi grafik.
+Unit checks include decision/evidence parity with the bundled Python reference across 110 cases. Backend integration checks cover ownership, denied access, replay/concurrency, rollback, curation, explanations, signed energy and reward accounting:
 
-Tampilan mempertahankan referensi pengguna: sidebar, toolbar sesi, kartu ringkasan, grid grafik/perawatan, dan studio tanaman. Palet netral/sage, kontrol shadcn/Radix, serta ilustrasi SVG dipertahankan. Panduan visual lokal ada di `design.md`. Belum ada pengujian perangkat atau tanaman nyata. Dokumen dan program Python asli tidak diedit.
+```sh
+# Start npm run backend:local in a separate terminal first
+npm run test:backend
+```
 
-Paket versi 1.7: `.tmp/release/smart-agro-v1.7.0.zip`. ZIP hanya memuat isi `dist/`; ekstrak langsung di direktori hosting tujuan. Situs belum dipublikasikan saat verifikasi versi 1.7.
+These tests target the isolated developer stack. They create synthetic accounts/products and briefly install rollback-test triggers. Do not run them against a shared or production database.
 
-Verifikasi versi 1.3: `npm test` lulus 28/28, termasuk kesetaraan 110 kasus Python, perjalanan 90 HST, statistik valid/kosong/gagal, batas histogram, serta orbit siang–malam. Lint, type-check, dan build lulus. Chrome menguji 48 kombinasi mode/tema/viewport (320/375/414/768/1024/1440 px), autoplay/jeda, interpolasi langit, malam, tindakan, 10 keputusan makalah, sumber sampel, grafik, keyboard, perbandingan, ekspor/impor, dan pemulihan. Hasil ada di `.tmp/apple-browser-report.json`. Build statis lulus di `/` dan `/simulator/` beserta aset dan favicon HTTP 200; hasil ada di `.tmp/hosting-smoke-report.json`. Browser uji: Chrome lokal; belum perangkat fisik atau Safari/Firefox.
-
-
-Verifikasi versi 1.4: 34/34 tes Node lulus; lint, type-check, dan build lulus. Chrome memeriksa kesamaan jam web/langit/grafik/terminal, offset sistem dan manual, pergantian hari/DST, masukan manual, migrasi sesi lama, paket sensor error/fault tetesan, penolakan paket invalid tanpa kehilangan pratinjau, dan ekspor/impor. Dua halaman × dua tema × enam lebar (320/375/414/768/1024/1440 px) lulus dengan panel waktu/perangkat/terminal terbuka. Build dan contoh paket diuji di root serta `/simulator/`. Hasil: `.tmp/clock-device-browser-report.json`, `.tmp/hosting-smoke-report.json`, dan `.tmp/clock-device-diff-report.json`. Pengujian belum memakai perangkat IoT, tanaman nyata, atau Safari/Firefox.
-
-Verifikasi versi 1.5: 34/34 tes lulus, termasuk kesetaraan 110 kasus Python; lint, type-check, dan build lulus. Uji Chrome build produksi mencakup 24 kombinasi halaman/tema/lebar, navigasi sidebar serta fokus keyboard, menu ponsel/Escape, pemilihan dan penamaan sesi, perbandingan, playback, sinkronisasi jam, impor paket, sembilan kombinasi parameter/rentang, histogram, pemilihan titik, penanda gagal/kosong, pemulihan, dan ekspor/impor. Hosting root/subfolder serta aset HTTP 200 lulus; enam pasangan kontras teks per tema memenuhi 4,5:1. Laporan: `.tmp/dashboard-browser-report.json`, `.tmp/dashboard-hosting-report.json`, `.tmp/dashboard-diff-report.json`, dan `.tmp/dashboard-scope-review.md`. Skrip pemeriksaan browser: `.tmp/dashboard-browser.cjs` dan `.tmp/dashboard-hosting.cjs`, memakai Playwright dari runtime Codex lokal. Tidak ada dependency tambahan atau perubahan mesin agronomi. Situs belum dipublikasikan; Safari/Firefox dan perangkat fisik belum diuji.
-
-Verifikasi versi 1.6: 36/36 tes lulus, termasuk dua regresi waktu kontinu/jeda sekali serta kesetaraan 110 kasus Python. `npm run lint`, `npm run typecheck` (juga dijalankan oleh build), dan `npm run build` lulus. Chrome build produksi memeriksa 24 kombinasi ukuran/tema/halaman, playback lebih dari 30 jam, jeda/resume, pengingat pupuk, perpindahan sidebar cepat, gulir Lenis, fokus keyboard, gulir terminal/dialog, mode manual/otomatis, overlay sensor, pemulihan, dan reduced motion. Hosting root/subfolder serta 12 pasangan kontras teks utama per mount lulus. Laporan: `.tmp/studio-browser-report.json`, `.tmp/studio-hosting-report.json`, `.tmp/studio-diff-report.json`, `.tmp/studio-scope-review.md`. Kontras bukan audit aksesibilitas lengkap. Safari/Firefox dan perangkat fisik belum diuji; situs belum dipublikasikan.
-
-
-## Catatan historis versi 1.7
-
-Bagian ini mencatat perilaku saat rilis 1.7; alur terkini mengikuti bagian penggunaan di atas.
-
-Daftar **Lanjutkan sesi** memakai kartu ringkas; tombol pensil membuka form nama. **Lanjutkan** menjalankan waktu otomatis dari data tersimpan, termasuk sesi aktif yang dijeda. Sesi manual, bibit belum ditanam, dan sesi selesai memakai **Buka sesi** sesuai statusnya. Refresh tetap memulihkan sesi dalam keadaan dijeda.
-
-Timer sensor terpisah dari pembaruan ilustrasi dan form. Sebelumnya timelapse yang lebih cepat daripada interval sensor membatalkan timeout berulang kali, sehingga waktu tidak maju. Interval tetap memakai sesi terbaru; perubahan yang lebih baru tidak ditimpa oleh tick tertunda.
-
-HST tampil di bagian atas ilustrasi; label Timur–Barat dihapus. Disclosure mengubah tinggi isi tanpa memudarkan seluruh panel. Dropdown memakai native customizable select: daftar membulat, penanda pilihan, keyboard/typeahead bawaan, dan gulir lokal. Browser yang belum mendukung `appearance: base-select` memakai picker sistem; browser tanpa `interpolate-size` membuka disclosure langsung. Preferensi reduced motion tetap dihormati. Framer Motion dan Lenis yang sudah ada dipertahankan; tidak ada dependency baru.
-
-Regresi timer di browser bisa dijalankan memakai Playwright yang sudah tersedia serta Chrome lokal, tanpa instalasi paket atau browser otomatis:
+Browser checks use an existing Playwright installation and Google Chrome. PowerShell example against Docker:
 
 ```powershell
-$env:PLAYWRIGHT_MODULE = 'C:/path/to/installed/node_modules/playwright'
-$env:TEST_URL = 'http://127.0.0.1:4173/'
+$env:PLAYWRIGHT_MODULE = 'C:/path/to/node_modules/playwright'
+$env:TEST_URL = 'http://127.0.0.1:8088/'
 $env:TEMP = Join-Path (Get-Location) '.tmp'
 $env:TMP = $env:TEMP
-node tests/playback-browser.js
+New-Item -ItemType Directory -Force $env:TEMP | Out-Null
+node tests/landing-browser.mjs
+node tests/dashboard-browser.js
+node tests/route-transition-browser.js
+$env:TEST_URL = 'http://127.0.0.1:8088/#simulasi'
+node tests/ui-browser.js
 ```
 
+Evidence is saved under ignored `.tmp/`. Account/energy/reward browser suites require the developer backend and their software fixtures. Chrome viewport emulation does not substitute for Safari, Firefox or physical-device testing.
 
-Verifikasi versi 1.7: 36/36 tes Node lulus (termasuk 110 kasus kesetaraan Python), self-test Python lulus, lint dan type-check/build lulus. Regresi browser baru memeriksa lima kombinasi laju sensor/ilustrasi, pause/resume, rename, siram, riwayat tetap utuh, dan refresh. Chrome memeriksa 36 kombinasi tampilan/tema/lebar untuk kartu sesi, pemilih native, disclosure, serta reduced motion, ditambah 24 kombinasi regresi navigasi, Lenis, jurnal, dan jam kontinu. Tidak ada error browser. Root/subfolder dan aset HTTP 200 lulus. Laporan: `.tmp/refinement-ui-report.json`, `.tmp/refinement-legacy-browser-report.json`, `.tmp/refinement-legacy-hosting-report.json`, `.tmp/refinement-diff-report.json`, `.tmp/refinement-scope-review.md`. Safari/Firefox dan perangkat fisik belum diuji. Situs belum dipublikasikan saat verifikasi versi 1.7.
+## Documentation
 
-## Verifikasi antarmuka
+- [Implementation phases and verification boundaries](docs/IMPLEMENTATION_PHASES.md)
+- [Signed telemetry v2](docs/telemetry-v2.md) · [Simulator telemetry v1](docs/telemetry-v1.md)
+- [Profile curation and evidence explanations](docs/profile-curation.md)
+- [Energy evidence and program rewards](docs/energy-rewards.md)
+- [System diagrams and specification](docs/diagram/README.md)
+- [Contributing](CONTRIBUTING.md) · [Third-party credits](docs/ACKNOWLEDGMENTS.md) · [Plant credits](public/plants/CREDITS.md)
 
-`npm test` memeriksa model, sesi, statistik, dan kontrak perangkat; `npm run lint`, `npm run typecheck`, dan `npm run build` memeriksa source/build.
-
-Dengan Chrome dan Playwright yang tersedia di lingkungan pengembangan, jalankan preview hasil build lalu `node tests/ui-browser.js`. `node tests/route-transition-browser.js
-node tests/dashboard-browser.js` memeriksa pemuatan lambat, snapshot konten penuh, pembatalan, fallback native, dan gulir balik cepat; buktinya berada di `.tmp/route-transition/`. Jika Playwright berada di lokasi lain, isi `PLAYWRIGHT_MODULE` dengan path modul tersebut. `TEST_URL` dapat mengganti alamat bawaan `http://127.0.0.1:4173/#simulasi`.
-
-Pemeriksaan browser mencakup lingkaran tema, ikon, klik cepat, reduced motion/fallback, jam tetap maju antarhalaman, penyimpanan, impor/ekspor, fokus, Select di dalam Sheet, gulir modal, lima halaman beserta refresh/Back/Forward, animasi tanam/siram tanpa mutasi sensor tambahan, maskot, perbandingan sesi, pratinjau perangkat, grafik, serta lebar 320/375/414/768 px. Tangkapan layar tersimpan di `.tmp/ui-check/` dan tidak diunggah.
-
-Verifikasi versi 1.9: 36/36 tes Node lulus, termasuk 110 kasus kesetaraan Python. Lint, type-check, build produksi, dan regresi Chrome `tests/ui-browser.js` lulus. Tinjauan visual mencakup halaman terpisah, mode gelap, maskot, efek tanam/siram, serta lebar 320/375/414/768 px. Belum diuji pada Safari/Firefox atau perangkat fisik. Tidak ada dependency baru.
-
-Verifikasi versi 1.10: 36/36 tes Node lulus (termasuk 110 kasus kesetaraan Python), lint, type-check, build produksi, dan regresi Chrome lulus. Regresi mencakup keyboard segmented control/tab, filter tanpa perubahan data sesi, efek tekan tombol, reduced motion, dan tautan jurnal ke Terminal. Tinjauan visual mencakup simulasi/statistik/terminal pada 320/375/414/768/1440 px dan tema gelap. Kontras teks kontrol yang berubah: 4,53:1, 6,44:1, dan 7,39:1. Safari/Firefox serta perangkat fisik belum diuji.
-
-
-## Verifikasi Studio flora
-
-Hero bunga memakai pola Circular Carousel dari nexus-ui/21st.dev, disesuaikan dengan pot Three.js, aset lokal botani, dan carousel melengkung. Bagian cerita menggunakan komposisi sticky dari Scroll 01 oleh felipemenezes098. Footer merujuk susunan ringkas Minimal Two-Column Footer oleh ln-dev7 melalui metadata katalog; source footer tidak diambil. Source Circular Carousel serta Interactive 3D Card Carousel berhasil diambil melalui rotasi MCP 21st_1 sampai 21st_10 dengan jeda 2,5 detik; komponen kedua hanya pembanding. Kredit carousel dan aset ada di public/flowers/CREDITS.md.
-
-39/39 tes Node, lint, typecheck, build produksi, self-test Python, dan git diff --check lulus. tests/ui-browser.js memeriksa 14 kombinasi ukuran layar/reduced motion, termasuk breakpoint 820/900 px, kartu terpisah, hover/fokus kartu aktif, perpindahan tepi dua arah, judul tanpa tabrakan kontrol, keyboard sesudah swipe, lima bunga, autoplay sesudah pilihan manual, jeda/resume fokus keyboard, eksperimen engine, dan regresi simulator. Pemeriksaan tambahan memvalidasi root/subfolder, putaran autoplay lima bunga, respons pointer, serta poster dan autoplay sentuh ketika WebGL tidak tersedia. Kontras 14 pasangan teks/permukaan diperiksa, seluruhnya di atas 4,5:1. Laporan revisi: `.tmp/landing-refinement/verification.md`; tangkapan layar serta source Scroll 01 berada dalam folder yang sama.
-
-Browser pengujian: Chrome dengan SwiftShader dan emulasi sentuh; belum Safari/Firefox atau perangkat fisik. Vite masih memperingatkan chunk flowerScene 623,96 kB (158,85 kB gzip), dimuat dinamis. Sesi lanjutan ini tidak menambah dependency.
-
-
-Perbaikan gerak galeri bunga: kartu aktif desktop tidak dimunculkan saat hover/fokus. Kartu ujung berpindah ke sisi seberang lewat reset di luar frame, berdasarkan pola loop Infinite Slider dari ibelick/21st.dev; tidak melewati pusat pot. Autoplay mengunjungi kelima bunga dan tetap berjalan sesudah klik/geser; fokus keyboard menjeda sementara. Bayangan daun memakai aset lokal dan kisi cahaya CSS. Regresi browser mengambil sampel posisi animasi kedua arah serta memeriksa kartu aktif tetap tersembunyi.
+Font licenses accompany the local assets. The repository does not currently declare a project-wide open-source license.

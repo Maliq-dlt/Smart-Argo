@@ -1,5 +1,7 @@
 # Sistem kerja tim Smart Agro
 
+> Rencana tim per 26 September 2026. Jadwal, stack, dan hasil uji di bawah adalah snapshot historis. Implementasi terkini: [README](../README.md) dan [fase implementasi](IMPLEMENTATION_PHASES.md).
+
 Panduan untuk Malik, Noval, Yola, Fransisco, dan Teofilus. Disusun 26 September 2026 berdasarkan proyek lokal dan klarifikasi tim: 4–6 jam per orang per minggu, perangkat IoT belum tersedia, AI serta blockchain wajib masuk demo.
 
 Rekomendasi: satu board Trello, satu pemilik per tugas, review terpisah dari pelaksana, dan evaluasi mingguan. Pertahankan simulator yang sudah berjalan. Tiga minggu pertama menghasilkan demo perangkat lunak dengan AI nyata serta transaksi blockchain pada jaringan uji. Integrasi sensor menyusul setelah fondasi siap.
@@ -305,16 +307,16 @@ Verifikasi dijalankan dengan Node v24.14.1 dan Python runtime lokal; cache serta
 | `npm run lint` | Lulus, exit code 0. |
 | `npm run typecheck` | Lulus, exit code 0. |
 | `npm run build -- --outDir .tmp/team-plan-build` | Lulus; output pemeriksaan berada di folder sementara. |
-| `python ../simulasi_pot.py --self-test` | Lulus; 10 skenario serta pemeriksaan batas. Eksekusi memakai path Python eksplisit. |
+| `python scripts/reference/simulasi_pot.py --self-test` | Lulus; 10 skenario serta pemeriksaan batas. Eksekusi memakai path Python eksplisit. |
 
 Regresi browser tidak dijalankan ulang dalam analisis ini. Deployment publik, hardware, integrasi model AI dan transaksi blockchain baru belum diverifikasi; semuanya merupakan rencana berikutnya, bukan kemampuan yang sudah selesai. Tes sekarang membuktikan baseline perangkat lunak yang diuji.
 
 Rujukan utama workspace:
 
-- [Makalah SmartAgro](<D:/Portofolio Project/Agricultur/Makalah_SmartAgro.docx>)
-- [README aplikasi](<D:/Portofolio Project/Agricultur/simulasi-web/README.md>)
-- [Kontrak telemetri](<D:/Portofolio Project/Agricultur/simulasi-web/docs/telemetry-v1.md>)
-- [Mesin aturan TypeScript](<D:/Portofolio Project/Agricultur/simulasi-web/src/lib/agronomyEngine.ts>)
-- [Acuan Python](<D:/Portofolio Project/Agricultur/simulasi_pot.py>)
+- Makalah SmartAgro (dokumen akademik workspace tim; tidak dibundel dalam repo)
+- [README aplikasi](../README.md)
+- [Kontrak telemetri](telemetry-v1.md)
+- [Mesin aturan TypeScript](../src/lib/agronomyEngine.ts)
+- [Acuan Python](../scripts/reference/simulasi_pot.py)
 
 Mulai pada kickoff: Malik mengunci target satu alur demo; Noval memastikan setup anggota kedua; Yola memasukkan lima kasus penerimaan; Fransisco menetapkan posisi dua interaksi; Teofilus menyepakati kontrak snapshot/API. Hanya kartu yang memenuhi Ready masuk komitmen minggu pertama.

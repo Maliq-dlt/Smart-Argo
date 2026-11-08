@@ -1,8 +1,8 @@
 # Smart Agro
 
-## Register
+## Identity
 
-brand
+Smart Agro — Amati. Pahami. Rawat.
 
 ## Users
 
@@ -10,7 +10,7 @@ Calon pengguna perangkat Smart Agro. Mereka perlu memahami nilai sistem dalam pe
 
 ## Product Purpose
 
-Landing page memperkenalkan Smart Agro melalui cerita kondisi satu pot, pengamatan riwayat, dan alasan keputusan perawatan. Simulator menjadi demonstrasi interaktif. Implementasi saat ini berjalan lokal di browser; koneksi perangkat, kendali aktuator, dan validasi agronomi belum tersedia.
+Landing page memperkenalkan Smart Agro melalui cerita kondisi satu pot, pengamatan riwayat, dan alasan keputusan perawatan. Simulator menjadi demonstrasi interaktif. Simulator berjalan lokal di browser. Backend lokal menyediakan akun, aktivasi kepemilikan, telemetri bertanda tangan, kurasi profil, penjelasan aturan, dan reward program. Perangkat fisik, kendali aktuator, validasi agronomi lapangan, layanan AI generatif, dan transaksi blockchain belum diverifikasi.
 
 ## Brand Personality
 

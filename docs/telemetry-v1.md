@@ -1,6 +1,6 @@
 # Kontrak paket perangkat v1
 
-Status implementasi: validator JSON dan pratinjau berkas berjalan di browser. Belum ada perangkat, endpoint, firmware, streaming, atau kendali aktuator. Makalah dasar memakai tiga parameter dan tidak memakai pompa; status tetesan merupakan perluasan rancangan.
+Status implementasi v1: validator JSON dan pratinjau berkas berjalan di browser. Jalur server bertanda tangan kini tersedia secara terpisah melalui [kontrak v2](telemetry-v2.md); v1 tetap impor berkas tanpa autentikasi perangkat. Firmware, perangkat fisik, streaming, dan kendali aktuator belum diverifikasi. Makalah dasar memakai tiga parameter dan tidak memakai pompa; status tetesan merupakan perluasan rancangan.
 
 `public/telemetry-example.json` adalah contoh eksplisit (`source: "example"`), bukan hasil pembacaan perangkat. Buka **Statistik → Perangkat & paket data → Buka paket JSON**. Validasi gagal mempertahankan paket sebelumnya. Paket dan galat disimpan bersama sesi, tetapi tidak dimasukkan ke sampel atau keputusan agronomi simulasi.
 
@@ -33,7 +33,7 @@ Perintah ON bukan bukti katup terbuka. Umpan balik aktuator dan sensor aliran ha
 
 ## Integrasi perangkat berikutnya
 
-Pilih HTTP/SSE/WebSocket atau gateway MQTT setelah board, DMS, aktuator, sensor aliran, dan koneksi tersedia. Gateway perlu autentikasi, TLS, batas ukuran, ID perangkat/pot, deduplikasi sample_id, penanganan paket di luar urutan, waktu terima server, dan validasi jam perangkat. CORS mengikuti origin hosting. Jangan menyimpan credential di bundle frontend.
+Ingest HTTPS v2 telah diuji pada stack lokal; gunakan kontrak v2 untuk integrasi firmware. SSE/WebSocket atau gateway MQTT dapat ditambahkan bila kebutuhan perangkat dan koneksi sudah diukur. Gateway perlu autentikasi, TLS, batas ukuran, ID perangkat/pot, deduplikasi sample_id, penanganan paket di luar urutan, waktu terima server, dan validasi jam perangkat. CORS mengikuti origin hosting. Jangan menyimpan credential di bundle frontend.
 
 Firmware menggunakan NTP/RTC sesuai ketersediaan perangkat dan mengirim UTC, status sinkronisasi, serta umur pengukuran yang sebenarnya. UI hanya mengubah tampilan zona; offset manual tidak memperbaiki jam perangkat yang salah. Perintah fisik memerlukan acknowledgment, timeout, batas durasi/volume, dan kondisi aman di firmware. Pratinjau ini tidak mengirim perintah.
 
