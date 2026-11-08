@@ -6,13 +6,17 @@
 
 An interactive plant-care simulator and local IoT backend for traceable observations, product ownership, and evidence-based decisions.
 
-[Get started](#get-started) · [Explore the app](#explore-the-app) · [Architecture](#architecture) · [Contributing](CONTRIBUTING.md)
+[Live demo](https://smart-agro-demo.pages.dev/) · [Get started](#get-started) · [Explore the app](#explore-the-app) · [Architecture](#architecture) · [Contributing](CONTRIBUTING.md)
 
 ![Smart Agro plant story](docs/images/landing.png)
 
 </div>
 
 Smart Agro connects a scroll-driven plant story with a working simulator and a separate authenticated product workspace. The interface is in Indonesian. The simulator runs offline in the browser; Docker adds PostgreSQL, authentication, signed telemetry ingestion, profile curation, and program rewards.
+
+**[Open the public demo](https://smart-agro-demo.pages.dev/)** — hosted on Cloudflare Pages. The plant story, simulator, dashboards, and browser-local ecosystem are available without installation. Data stays in the visitor's browser; online accounts, shared device telemetry, and server-side rewards require the backend described below.
+
+The demo uses direct uploads; pushing to GitHub does not automatically redeploy it.
 
 ## Get started
 
@@ -40,7 +44,7 @@ docker compose stop
 docker compose up -d --wait
 ```
 
-Database data and generated credentials persist in separate named volumes. `docker compose down` also preserves these volumes. Removing volumes erases the local installation; retain both when backing up or moving it. Only port `8080` is published, on loopback.
+Database data and generated credentials persist in separate named volumes. `docker compose down` also preserves these volumes. Removing volumes erases the local installation; retain both when backing up or moving it. Only port `8088` is published, on loopback.
 
 Local assessment mode automatically confirms new registrations. It sends no verification email and does not establish mailbox ownership. This Compose setup is intended for local assessment and development.
 
@@ -73,7 +77,7 @@ Tests use generated keys and synthetic observations. They do not establish calib
 
 ```mermaid
 flowchart LR
-    Browser[Browser] -->|localhost:8080| App[Node gateway + Vite build]
+    Browser[Browser] -->|localhost:8088| App[Node gateway + Vite build]
     App --> Auth[Supabase Auth]
     App --> REST[PostgREST]
     App --> Handlers[Signed API handlers]
