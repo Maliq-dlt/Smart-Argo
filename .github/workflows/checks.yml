@@ -1,0 +1,37 @@
+name: Checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  application:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12'
+      - run: npm ci --cache .cache/npm
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: python scripts/reference/simulasi_pot.py --self-test
+      - run: git diff --check
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: docker compose up --build -d --wait --wait-timeout 180
+      - run: docker compose --profile tools run --rm verify
+      - if: always()
+        run: docker compose ps -a
+      - if: always()
+        run: docker compose down

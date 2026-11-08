@@ -1,0 +1,110 @@
+name: smart-agro
+services:
+  init:
+    image: smart-agro:local
+    build: .
+    pull_policy: never
+    command: [node, scripts/docker-config.mjs]
+    volumes: [config:/run/smart-agro]
+
+  db:
+    image: postgres:17-alpine
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/smart-agro/db-password
+    volumes:
+      - config:/run/smart-agro:ro
+      - database:/var/lib/postgresql/data
+      - ./supabase/local-bootstrap.sql:/docker-entrypoint-initdb.d/00-bootstrap.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d postgres]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+
+  auth:
+    image: supabase/gotrue:v2.197.0
+    depends_on:
+      db:
+        condition: service_healthy
+    command: [/bin/sh, -ec, '. /run/smart-agro/auth.env; exec auth']
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: http://127.0.0.1:8088/auth/v1
+      GOTRUE_SITE_URL: http://127.0.0.1:8088
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_DISABLE_SIGNUP: 'false'
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: 'true'
+      GOTRUE_MAILER_AUTOCONFIRM: 'true'
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: 100
+    volumes: [config:/run/smart-agro:ro]
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:9999/health]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+
+  migrate:
+    image: postgres:17-alpine
+    depends_on:
+      auth:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: postgres
+      PGDATABASE: postgres
+    volumes:
+      - config:/run/smart-agro:ro
+      - ./supabase/migrations:/migrations:ro
+      - ./docker/migrate.sh:/migrate.sh:ro
+    command: [sh, /migrate.sh]
+
+  rest:
+    image: postgrest/postgrest:v14.18
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: [/bin/postgrest, /run/smart-agro/postgrest.conf]
+    volumes: [config:/run/smart-agro:ro]
+    restart: unless-stopped
+
+  app:
+    image: smart-agro:local
+    depends_on:
+      rest:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      APP_ORIGIN: http://127.0.0.1:8088
+    volumes: [config:/run/smart-agro:ro]
+    ports: [127.0.0.1:8088:54321]
+    init: true
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:54321/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 8s
+      retries: 30
+    restart: unless-stopped
+
+  verify:
+    image: smart-agro:local
+    profiles: [tools]
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes: [config:/run/smart-agro:ro]
+    command: [node, tests/docker-smoke.mjs]
+
+volumes:
+  config:
+  database:
