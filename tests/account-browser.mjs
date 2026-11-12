@@ -4,6 +4,8 @@ import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
+// The site curtain (loading screen) covers the first paint; interact only once it has lifted, like a visitor would.
+const curtainOpen = page => page.waitForFunction(() => { const c = document.querySelector('.curtain'); return !c || c.dataset.state === 'open' })
 const browser = await chromium.launch({ headless:true,channel:'chrome' })
 const sql = input => execFileSync('docker',['exec','-i','smart-agro-phase1-db-1','psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','postgres'],{input,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim()
 const id=randomUUID(),device=randomUUID(),run=randomUUID().slice(0,8),serial=`TEST-UI-${run}`.toUpperCase()
@@ -17,7 +19,7 @@ const profileId=randomUUID(),plantId=randomUUID(),contributionId=randomUUID()
 page.on('pageerror',e=>errors.push(e.message))
 const panel=page.getByRole('region',{name:'Akun & kepemilikan produk online',exact:true})
 try{
-  await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173/#ekosistem')
+  await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173/#ekosistem'); await curtainOpen(page)
   await panel.getByLabel('Email',{exact:true}).fill(email)
   await panel.getByLabel('Kata sandi',{exact:true}).fill(password)
   await panel.getByRole('button',{name:'Daftar',exact:true}).click()

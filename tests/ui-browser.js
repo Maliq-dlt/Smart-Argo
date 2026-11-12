@@ -4,6 +4,8 @@ import { createRequire } from 'node:module'
 
 // PLAYWRIGHT_MODULE may point to an existing Playwright installation; no browser download.
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
+// The site curtain (loading screen) covers the first paint; interact only once it has lifted, like a visitor would.
+const curtainOpen = page => page.waitForFunction(() => { const c = document.querySelector('.curtain'); return !c || c.dataset.state === 'open' })
 const url = process.env.TEST_URL || 'http://127.0.0.1:4173/#simulasi'
 await mkdir('.tmp/ui-check', { recursive: true })
 const browser = await chromium.launch({ headless: true, channel: 'chrome', args: ['--enable-unsafe-swiftshader'] })
@@ -57,7 +59,7 @@ try {
       return animate.call(this, frames, options)
     }
   })
-  await page.goto(url)
+  await page.goto(url); await curtainOpen(page)
   await page.getByRole('heading', { name: 'Ruang tanam', exact: true, level: 1 }).waitFor()
   assert.equal(await page.getByText('Lanjutkan sesi', { exact: false }).count(), 0)
   assert.equal(await page.locator('.plant-mood').count(), 1)
@@ -248,7 +250,7 @@ try {
     const mobile = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: 'reduce', colorScheme: 'light' })
     monitor(mobile)
     await mobile.addInitScript(() => { document.startViewTransition = () => { throw new Error('Reduced motion must bypass snapshots') } })
-    await mobile.goto(url)
+    await mobile.goto(url); await curtainOpen(mobile)
     await mobile.locator('.theme-toggle').click()
     await waitTheme(mobile, 'dark')
     await mobile.locator('.theme-toggle').click()
@@ -286,7 +288,7 @@ try {
   }
   const enlarged = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
   monitor(enlarged)
-  await enlarged.goto(new URL('#statistik', url).href)
+  await enlarged.goto(new URL('#statistik', url).href); await curtainOpen(enlarged)
   await enlarged.getByRole('heading', { name: 'Dashboard', exact: true, level: 1 }).waitFor()
   await enlarged.evaluate(() => document.fonts.ready)
   await enlarged.addStyleTag({ content: 'html { font-size: 200% !important; }' })

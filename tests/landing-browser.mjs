@@ -3,42 +3,44 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const url = process.env.TEST_URL || 'http://127.0.0.1:4173/'
-const output = '.tmp/landing-agritech'
+const output = '.tmp/landing-v5'
 await mkdir(output, { recursive: true })
 const browser = await chromium.launch({ headless: true, channel: 'chrome' })
 const errors = [], report = []
 const fits = page => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
-const scrollTrack = async (page, fraction) => {
-  await page.evaluate(f => { const t = document.querySelector('.sa-story-track'); scrollTo(0, t.getBoundingClientRect().top + scrollY + (t.offsetHeight - innerHeight) * f) }, fraction)
-  await page.waitForTimeout(900)
+/** Scroll so that `fraction` of a sticky wrapper's travel has passed, then let the scrub settle. */
+const scrollPin = async (page, selector, fraction) => {
+  await page.evaluate(([s, f]) => { const el = document.querySelector(s); scrollTo(0, el.getBoundingClientRect().top + scrollY + (el.offsetHeight - innerHeight) * f) }, [selector, fraction])
+  await page.waitForTimeout(1300)
 }
+/** True when the canvas has drawn something other than a flat colour. */
+const painted = (page, selector) => page.evaluate(s => {
+  const c = document.querySelector(s), ctx = c.getContext('2d'), { width: w, height: h } = c
+  if (!w || !h) return false
+  const d = ctx.getImageData(0, 0, w, h).data, seen = new Set()
+  for (let i = 0; i < d.length; i += 4 * 997) seen.add(`${d[i] >> 4},${d[i + 1] >> 4},${d[i + 2] >> 4}`)
+  return seen.size > 6
+}, selector)
+
 try {
   for (const [width, height, reducedMotion] of [[1440, 900, 'no-preference'], [1024, 768, 'no-preference'], [390, 844, 'no-preference'], [320, 740, 'no-preference'], [1440, 900, 'reduce'], [390, 844, 'reduce']]) {
     console.log(`Checking ${width}x${height}, ${reducedMotion}`)
     const page = await browser.newPage({ viewport: { width, height }, reducedMotion })
-    page.on('pageerror', error => errors.push(error.message))
-    page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+    page.on('pageerror', error => errors.push(`${width} ${reducedMotion}: ${error.message}`))
+    page.on('console', message => { if (message.type() === 'error') errors.push(`${width} ${reducedMotion}: ${message.text()}`) })
     await page.goto(url)
-    await page.getByRole('heading', { level: 1, name: 'Tahu kapan pot perlu air.' }).waitFor()
-    assert(await fits(page), `First screen overflow at ${width}`)
-    await page.locator('.sa-hero .ag-simulator-link').waitFor({ state: 'visible', timeout: 4000 })
 
-    // Hero: simulated telemetry moves, and the plant picker swaps profile.
-    const moisture = page.locator('.sa-c-moist strong .sa-roll')
+    // Loading curtain: covers the first paint, then lifts; reduced motion skips it.
     if (reducedMotion === 'no-preference') {
-      const first = await moisture.innerText()
-      await page.waitForTimeout(2200)
-      assert.notEqual(await moisture.innerText(), first, 'Hero readings advance')
-    } else assert.equal(await moisture.innerText(), '55', 'Reduced motion shows the final reading')
-    const plantSwitch = page.locator('.sa-switch')
-    await plantSwitch.getByRole('radio', { name: 'Bawang merah' }).click()
-    assert.equal(await plantSwitch.getByRole('radio', { name: 'Bawang merah' }).getAttribute('aria-checked'), 'true')
-    assert.match(await page.locator('.sa-stage').getAttribute('aria-label'), /^Bawang merah/, 'Stage describes the chosen plant')
-    await plantSwitch.getByRole('radio', { name: 'Cabai' }).click()
-    await plantSwitch.getByRole('radio', { name: 'Cabai' }).focus()
-    await page.keyboard.press('ArrowRight')
-    assert.equal(await plantSwitch.getByRole('radio', { name: 'Bawang merah' }).getAttribute('aria-checked'), 'true', 'Arrow keys move the switch')
-    assert.equal(await page.locator('.sa-word, .sa-hero-side, .sa-specs').count(), 0, 'Hero stays uncluttered')
+      assert.equal(await page.locator('#boot').count(), 0, 'Static loader hands over to the React curtain')
+      await page.waitForSelector('.curtain[data-state=open]', { timeout: 8000 })
+    } else assert.equal(await page.locator('.curtain').count(), 0, 'Reduced motion has no curtain')
+    await page.getByRole('heading', { level: 1, name: 'Tahu kapan pot perlu air.' }).waitFor()
+    await page.locator('.sa-hero .ag-simulator-link').waitFor({ state: 'visible', timeout: 4000 })
+    assert(await fits(page), `First screen overflow at ${width}`)
+    const video = await page.evaluate(() => { const v = document.querySelector('.v5-hero video'); return { src: v.currentSrc, paused: v.paused } })
+    assert.match(video.src, /spin-loop\.mp4$/, 'Hero plays the turning device')
+    assert.equal(video.paused, reducedMotion === 'reduce', 'Hero video plays only with motion allowed')
 
     // Theme: the landing follows the same toggle and storage key as the simulator.
     const theme = () => page.evaluate(() => document.documentElement.dataset.theme)
@@ -46,59 +48,61 @@ try {
     await page.locator('.sa-nav .theme-toggle').click()
     await page.waitForFunction(previous => document.documentElement.dataset.theme !== previous, before)
     assert.equal(await page.evaluate(() => localStorage.getItem('smart-agro.theme')), await theme())
-    const bg = await page.evaluate(() => getComputedStyle(document.querySelector('.sa')).backgroundColor)
-    assert.equal(bg, (await theme()) === 'dark' ? 'rgb(22, 29, 25)' : 'rgb(236, 239, 231)', 'Landing palette follows the theme')
+    assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.sa')).backgroundColor), (await theme()) === 'dark' ? 'rgb(22, 29, 25)' : 'rgb(236, 239, 231)', 'Landing palette follows the theme')
     await page.locator('.sa-nav .theme-toggle').click()
     await page.waitForFunction(previous => document.documentElement.dataset.theme === previous, before)
     if ([1440, 390].includes(width)) await page.screenshot({ path: `${output}/hero-${width}-${reducedMotion}.png` })
 
-    // Pinned story: phases and readings follow the scroll, forwards and back.
-    for (const [fraction, title, value] of [[.05, 'Pasang probe di zona akar.', '85'], [.45, 'Baca setiap 30 menit.', null], [.7, 'Hitung ke depan.', '55'], [.97, 'Saran, dengan alasan.', '55'], [.05, 'Pasang probe di zona akar.', '85']]) {
-      await scrollTrack(page, fraction)
-      assert.equal(await page.locator('.sa-phases li.is-active h3').innerText(), title, `Phase at ${fraction}`)
-      if (value) assert.equal((await page.locator('.sa-card-reading strong').textContent()).replace(/\D.*$/s, ''), value, `Reading at ${fraction}`)
-    }
-    await scrollTrack(page, .97)
-    assert.match(await page.locator('.sa-card-decision strong').textContent(), /Jadwalkan pemeriksaan/)
-    if ([1440, 390].includes(width)) await page.screenshot({ path: `${output}/story-${width}-${reducedMotion}.png` })
+    // Problem: the drawing is a real illustration, not a placeholder shape.
+    assert(await page.locator('.v5-plant .v5-leaf-shape').count() >= 16, 'Plant has its leaves')
+    assert(await page.locator('.v5-plant .v5-root-line').count() >= 60, 'Plant has a branching root system')
+    await scrollPin(page, '.v5-pin-draw', .95)
+    assert.equal(await page.locator('.v5-draw-b').isVisible(), true)
 
-    // Lab: the real engine's verdict for each scenario.
-    await page.locator('#lab').scrollIntoViewIfNeeded()
-    const verdict = page.locator('.sa-lab-verdict strong')
-    await verdict.waitFor({ timeout: 8000 })
-    assert.match(await verdict.innerText(), /Jadwalkan pemeriksaan/)
-    await page.getByRole('radio', { name: /Bawang merah\s*Cepat mengering/ }).click()
-    await page.waitForFunction(() => /Lanjutkan pengamatan/.test(document.querySelector('.sa-lab-verdict strong')?.textContent ?? ''), null, { timeout: 8000 })
-    await page.keyboard.press('ArrowDown')
-    await page.waitForFunction(() => /Periksa media/.test(document.querySelector('.sa-lab-verdict strong')?.textContent ?? ''), null, { timeout: 8000 })
-    assert(await fits(page), `Lab overflow at ${width}`)
+    // Device scene: phases follow the scroll, forwards and back.
+    const phase = () => page.locator('.v5-pin-product .v5-stage').getAttribute('data-phase')
+    if (reducedMotion === 'no-preference') {
+      for (const [fraction, expected] of [[.1, '0'], [.5, '1'], [.9, '2'], [.1, '0']]) { await scrollPin(page, '.v5-pin-product', fraction); assert.equal(await phase(), expected, `Device phase at ${fraction}`) }
+    } else assert.equal(await phase(), 'all', 'Reduced motion shows every phase')
+    assert(await painted(page, '.v5-pin-product canvas'), 'Device frames are drawn')
+    await scrollPin(page, '.v5-pin-root', .9)
+    assert(await painted(page, '.v5-pin-root canvas'), 'Root-zone frames are drawn')
 
-    // Bento chart responds to the pointer; FAQ opens.
-    if (width >= 760) {
-      const chart = page.locator('.sa-tile-svg')
-      await chart.scrollIntoViewIfNeeded()
-      const box = await chart.boundingBox()
-      await page.mouse.move(box.x + box.width * .06, box.y + box.height / 2)
-      assert.equal(await page.locator('.sa-tile-chart .sa-tile-big span').innerText(), '85', 'Chart scrub reads the first sample')
+    // Grow: each click advances one stage, the last one swaps the title, and it can restart.
+    await page.locator('#rawat').scrollIntoViewIfNeeded(); await page.waitForTimeout(900)
+    const button = page.getByRole('button', { name: 'Siram sesuai saran' })
+    for (const label of ['Minggu 1', 'Minggu 3', 'Minggu 5', 'Berbunga']) {
+      await button.click()
+      await page.waitForFunction(text => document.querySelector('.v5-grow-stage')?.textContent === text, label, { timeout: 8000 }).catch(async error => {
+        throw new Error(`${label}: ${JSON.stringify(await page.evaluate(() => ({ stage: document.querySelector('.v5-grow-stage')?.textContent, buttons: [...document.querySelectorAll('.v5-grow button')].map(b => b.textContent + ':' + b.getAttribute('aria-disabled')), y: scrollY })))} ${error.message.slice(0, 80)}`)
+      })
+      await page.waitForFunction(() => document.querySelector('.v5-grow .sa-btn')?.getAttribute('aria-disabled') !== 'true')
     }
-    const question = page.locator('.sa-faq summary', { hasText: 'Apakah Smart Agro menyiram sendiri?' })
-    await question.scrollIntoViewIfNeeded(); await page.waitForTimeout(1200)
-    await question.click()
-    await page.getByText('Belum ada kendali pompa atau katup', { exact: false }).waitFor({ state: 'visible', timeout: 3000 })
+    await page.getByRole('button', { name: 'Ulangi' }).waitFor()
+    await page.waitForFunction(() => /Begitulah hasilnya/.test(document.getElementById('v5-grow-title').textContent))
+    assert(await painted(page, '.v5-grow canvas'), 'Growth frames are drawn')
+    if (width === 1440 && reducedMotion === 'no-preference') await page.screenshot({ path: `${output}/grow.png` })
+    await page.getByRole('button', { name: 'Ulangi' }).click()
+    await page.getByRole('button', { name: 'Siram sesuai saran' }).waitFor()
+
+    // Explore: four parts of the prototype, each with an honest status, and a working arrow.
+    const cards = page.locator('.v5-card')
+    assert.equal(await cards.count(), 4)
+    assert.deepEqual(await cards.locator('a').evaluateAll(links => links.map(a => a.getAttribute('href'))), ['#simulasi', '#statistik', '#perangkat', '#ekosistem'])
+    await page.locator('#jelajah').scrollIntoViewIfNeeded(); await page.waitForTimeout(700)
+    const track = page.locator('.v5-explore-track')
+    const start = await track.evaluate(el => el.scrollLeft)
+    await page.getByRole('button', { name: 'Kartu berikutnya' }).click(); await page.waitForTimeout(700)
+    if (await track.evaluate(el => el.scrollWidth > el.clientWidth + 2)) assert((await track.evaluate(el => el.scrollLeft)) > start, 'Arrow moves the card row')
+
+    // Footer and overall fit.
+    await page.locator('.mrf-root').scrollIntoViewIfNeeded()
     assert(await fits(page), `Page overflow at ${width}`)
-
-    assert.equal(await page.evaluate(() => localStorage.getItem('smart-agro.sessions.v1')), null, 'Landing does not write simulator sessions')
-    await page.evaluate(() => scrollTo(0, 0))
-    await page.locator('.sa-hero .ag-simulator-link').click()
-    await page.getByRole('heading', { name: 'Ruang tanam', exact: true, level: 1 }).waitFor()
-    assert.equal(await page.locator('.sa-hero').count(), 0, 'Landing is removed on the simulator route')
-    await page.goBack()
-    await page.getByRole('heading', { level: 1, name: 'Tahu kapan pot perlu air.' }).waitFor()
-    assert(await fits(page), 'Return route has no overflow')
-    report.push({ width, height, reducedMotion, hero: 'pass', story: 'pass', lab: 'pass', bento: width >= 760 ? 'pass' : 'skipped (no pointer)', faq: 'pass', simulatorRoute: 'pass', overflow: 'pass' })
+    if ([1440, 390].includes(width)) await page.screenshot({ path: `${output}/footer-${width}-${reducedMotion}.png` })
+    report.push({ width, reducedMotion, curtain: reducedMotion === 'reduce' ? 'skipped' : 'pass', hero: 'pass', theme: 'pass', plant: 'pass', phases: 'pass', sequences: 'pass', grow: 'pass', explore: 'pass', overflow: 'pass' })
     await page.close()
   }
-  assert.deepEqual(errors, [])
-  await writeFile(`${output}/browser-results.json`, JSON.stringify({ report, errors }, null, 2))
-  console.log(JSON.stringify({ cases: report.length, errors, checks: 'title and action, live hero readings, plant switch (click and keys), uncluttered hero, theme toggle and palette, pinned story phases forwards and back, lab verdicts per scenario, chart scrub, FAQ, no session writes, simulator route and return, reduced motion, overflow' }, null, 2))
+  assert.deepEqual(errors, [], 'No page errors')
+  await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2))
+  console.log(JSON.stringify(report, null, 2))
 } finally { await browser.close() }

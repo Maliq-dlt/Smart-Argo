@@ -1,0 +1,19 @@
+/* Site curtain: loading screen for the first visit and for moving between the landing and the simulator. */
+.curtain { position: fixed; inset: 0; z-index: 300; pointer-events: none; }
+.curtain[data-state="covered"], .curtain[data-state="covering"] { pointer-events: auto; }
+.curtain-blocks { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.curtain-blocks i { display: block; margin: 0 -1px -1px 0; background: #22382b; }
+.curtain[data-state="open"] .curtain-blocks i { transform: scaleY(0); }
+.curtain[data-state="open"] .curtain-body { visibility: hidden; }
+.curtain-body { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 24px; color: #eef1e9; text-align: center; }
+.curtain-sprout { width: 92px; height: 92px; overflow: visible; }
+.curtain-line { fill: none; stroke: #c3df95; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.curtain-line.curtain-leaf { fill: #4b7a45; fill-opacity: 0; }
+.curtain-line.curtain-ground { stroke: rgb(238 241 233 / .4); }
+.curtain-word { margin: 8px 0 0; font-family: 'Fraunces', Georgia, serif; font-variation-settings: 'SOFT' 100; font-weight: 420; font-size: 34px; line-height: 1.1; letter-spacing: -.02em; }
+.curtain-label { margin: 0; font: 500 14px/1.4 'General Sans', 'Segoe UI', system-ui, sans-serif; color: rgb(238 241 233 / .72); }
+.curtain-bar { display: block; width: 160px; height: 2px; margin-top: 14px; overflow: hidden; border-radius: 2px; background: rgb(238 241 233 / .18); }
+.curtain-bar i { display: block; height: 100%; background: #c3df95; transform: scaleX(0); transform-origin: 0 50%; }
+.curtain-cancel { min-height: 44px; margin-top: 8px; padding: 0 16px; border: 0; background: transparent; color: #eef1e9; font: 500 14px 'General Sans', 'Segoe UI', system-ui, sans-serif; text-decoration: underline; cursor: pointer; }
+.curtain-cancel:focus-visible { outline: 2px solid #c3df95; outline-offset: 2px; border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) { .curtain { display: none; } }

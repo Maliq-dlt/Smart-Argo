@@ -7,6 +7,8 @@ import { careEvents, chartSegments } from '../src/lib/chartData.ts'
 import { clockDate, clockTime } from '../src/lib/sessionClock.ts'
 
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
+// The site curtain (loading screen) covers the first paint; interact only once it has lifted, like a visitor would.
+const curtainOpen = page => page.waitForFunction(() => { const c = document.querySelector('.curtain'); return !c || c.dataset.state === 'open' })
 const url = process.env.TEST_URL || 'http://127.0.0.1:4174/'
 const output = '.tmp/experience-upgrade'
 await mkdir(output, { recursive: true })
@@ -24,7 +26,7 @@ async function setup(width, theme, seed, hash = '#statistik') {
     if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ version: 1, activeId: seed.id, sessions: [seed] }))
     localStorage.setItem('smart-agro.theme', theme)
   }, { key: STORAGE_KEY, seed, theme })
-  await page.goto(url + hash)
+  await page.goto(url + hash); await curtainOpen(page)
   await page.locator('.app-shell').waitFor()
   await page.waitForFunction(() => !document.documentElement.hasAttribute('data-site-transition'))
   return page
@@ -156,7 +158,7 @@ try {
   for (const [width, reducedMotion] of [[1440, 'no-preference'], [820, 'no-preference'], [390, 'reduce'], [320, 'reduce']]) {
     const page = await browser.newPage({ viewport: { width, height: 1000 }, reducedMotion })
     page.on('pageerror', error => errors.push(error.message))
-    await page.goto(url)
+    await page.goto(url); await curtainOpen(page)
     const timeline = page.getByRole('group', { name: 'Perjalanan proyek Smart Agro', exact: true })
     await timeline.getByRole('button', { name: 'Konsep', exact: true }).focus()
     await page.keyboard.press('ArrowRight')

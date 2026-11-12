@@ -4,6 +4,8 @@ import {execFileSync} from 'node:child_process'
 import {createRequire} from 'node:module'
 import {mkdir,readFile,writeFile} from 'node:fs/promises'
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE||'playwright')
+// The site curtain (loading screen) covers the first paint; interact only once it has lifted, like a visitor would.
+const curtainOpen = page => page.waitForFunction(() => { const c = document.querySelector('.curtain'); return !c || c.dataset.state === 'open' })
 const config=JSON.parse(await readFile('.tmp/phase1/settings.json','utf8')),base='http://127.0.0.1:54321'
 const q=v=>"'"+String(v).replaceAll("'","''")+"'"
 const sql=input=>execFileSync('docker',['exec','-i','smart-agro-phase1-db-1','psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','postgres'],{input,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim()
@@ -20,7 +22,7 @@ async function waitEnergy(){await page.waitForFunction(()=>document.getElementBy
 async function login(email){await panel.getByLabel('Email',{exact:true}).fill(email);await panel.getByLabel('Kata sandi',{exact:true}).fill(password);await panel.getByRole('button',{name:'Masuk',exact:true}).click();await energy.waitFor();await waitEnergy()}
 async function logout(){await panel.getByRole('button',{name:'Keluar',exact:true}).click();await panel.getByRole('button',{name:'Masuk',exact:true}).waitFor();assert.equal(await energy.count(),0)}
 try{
- await page.goto(process.env.TEST_URL||'http://127.0.0.1:4178/#ekosistem');await login(operator.email)
+ await page.goto(process.env.TEST_URL||'http://127.0.0.1:4178/#ekosistem');await login(operator.email); await curtainOpen(page)
  await energy.getByText('Pengaturan meter oleh operator',{exact:true}).click()
  assert.equal(await energy.getByLabel('Kunci publik meter Ed25519 (base64)',{exact:true}).inputValue(),'')
  await energy.getByLabel('UUID perangkat untuk meter',{exact:true}).fill(device)

@@ -22,3 +22,8 @@ docs/diagram/miro-atlas-2026-10-22/
 __pycache__/
 *.py[cod]
 .uv-cache/
+
+# Catatan konteks agen lokal
+CLAUDE.md
+# Video/gambar mentah untuk diproses (Veo, Blender)
+media-src/

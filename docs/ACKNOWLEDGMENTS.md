@@ -1,6 +1,6 @@
 # Acknowledgments
 
-Current plant imagery: [specimen credits](../public/plants/CREDITS.md) and [landing imagery and component credits](../public/landing/CREDITS.md). The landing uses Fraunces under the included SIL Open Font License and General Sans under the [ITF Free Font License](../public/fonts/FONTSHARE-LICENSE.md). The simulator uses Nunito Sans under its included SIL Open Font License. Font files and licenses are in `public/fonts/`.
+Current plant imagery: [specimen credits](../public/plants/CREDITS.md) and [landing imagery and component credits](../public/landing/CREDITS.md). The landing uses Fraunces under the included SIL Open Font License and General Sans under the [ITF Free Font License](../public/fonts/FONTSHARE-LICENSE.md). The simulator uses Nunito Sans under its included SIL Open Font License. Font files and licenses are in `public/fonts/`. Landing smooth scrolling uses [Lenis](https://github.com/darkroomengineering/lenis) 1.3.27 (MIT).
 
 The notes below preserve attribution for earlier component adaptations and retired landing assets. The former flower carousel and Three.js assets are no longer shipped.
 

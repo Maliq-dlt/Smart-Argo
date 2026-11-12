@@ -4,6 +4,8 @@ import {execFileSync} from 'node:child_process'
 import {createRequire} from 'node:module'
 import {mkdir,readFile,writeFile} from 'node:fs/promises'
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE||'playwright')
+// The site curtain (loading screen) covers the first paint; interact only once it has lifted, like a visitor would.
+const curtainOpen = page => page.waitForFunction(() => { const c = document.querySelector('.curtain'); return !c || c.dataset.state === 'open' })
 const config=JSON.parse(await readFile('.tmp/phase1/settings.json','utf8')),base='http://127.0.0.1:54321'
 const sql=input=>execFileSync('docker',['exec','-i','smart-agro-phase1-db-1','psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','postgres'],{input,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim()
 const q=v=>"'"+String(v).replaceAll("'","''")+"'"
@@ -18,7 +20,7 @@ async function login(email){await panel.getByLabel('Email',{exact:true}).fill(em
 async function logout(){await panel.getByRole('button',{name:'Keluar',exact:true}).click();await panel.getByRole('button',{name:'Masuk',exact:true}).waitFor();assert.equal(await knowledge.count(),0)}
 const profile={pot_id:'synthetic-browser-target',crop:'Synthetic browser crop',media:'Test medium',phase:'Test phase',validated:false,ph_validated:false,needs_water:[30,35,40],drained:[70,75,80],next_visit_h:6,hot_c:35,ph_range:[5.5,7]}
 try{
- await page.goto(process.env.TEST_URL||'http://127.0.0.1:4178/#ekosistem')
+ await page.goto(process.env.TEST_URL||'http://127.0.0.1:4178/#ekosistem'); await curtainOpen(page)
  await login(author)
  assert.equal(await knowledge.getByRole('button',{name:'Simpan tinjauan',exact:true}).count(),0)
  const json=knowledge.getByLabel('Parameter Profile (JSON dari pengamatan Anda)',{exact:true})

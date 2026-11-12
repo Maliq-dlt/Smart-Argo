@@ -5,6 +5,8 @@ import { createJourney, plantSeed, advanceSimulation, waterSimulation, recordFer
 import { createSession, STORAGE_KEY } from '../src/lib/sessionStore.ts'
 
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
+// The site curtain (loading screen) covers the first paint; interact only once it has lifted, like a visitor would.
+const curtainOpen = page => page.waitForFunction(() => { const c = document.querySelector('.curtain'); return !c || c.dataset.state === 'open' })
 const url = new URL('#statistik', process.env.TEST_URL || 'http://127.0.0.1:4174/').href
 const output = '.tmp/dashboard-assistance'
 await mkdir(output, { recursive: true })
@@ -26,7 +28,7 @@ const setup = async (width, theme, reducedMotion, seed = session) => {
     localStorage.setItem(key, JSON.stringify({ version: 1, activeId: seed.id, sessions: [seed] }))
     localStorage.setItem('smart-agro.theme', theme)
   }, { key: STORAGE_KEY, seed, theme })
-  await page.goto(url)
+  await page.goto(url); await curtainOpen(page)
   await page.getByRole('heading', { name: 'Dashboard', exact: true, level: 1 }).waitFor()
   await page.waitForFunction(() => !document.documentElement.hasAttribute('data-site-transition'))
   return page
