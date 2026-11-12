@@ -18,7 +18,7 @@ try {
     const gate = new Promise(resolve => { release = resolve })
     await page.route(appChunk, async route => { await gate; await route.continue() })
     await page.goto(url)
-    await page.getByRole('heading', { name: /Kenali Cabai/ }).waitFor()
+    await page.getByRole('heading', { name: /Tahu kapan pot perlu air/ }).waitFor()
     await page.evaluate(() => {
       window.transitionFrames = []; window.sampleTransition = true
       const sample = () => {
@@ -28,11 +28,12 @@ try {
       }
       requestAnimationFrame(sample)
     })
-    await page.locator('.ag-simulator-link').focus(); await page.keyboard.press('Enter')
+    await page.locator('.sa-hero .ag-simulator-link').waitFor({ state: 'visible' }); await page.waitForTimeout(1200)
+    await page.locator('.sa-hero .ag-simulator-link').focus(); await page.keyboard.press('Enter')
     await page.locator('.site-pending').waitFor()
     await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('.site-pending')).opacity) === 1)
     assert.match(await page.getByRole('status').innerText(), /Menyiapkan ruang tanam/)
-    assert(await page.getByRole('heading', { name: /Kenali Cabai/ }).isVisible(), 'Cold navigation keeps landing visible')
+    assert(await page.getByRole('heading', { name: /Tahu kapan pot perlu air/ }).isVisible(), 'Cold navigation keeps landing visible')
     assert.equal(await page.locator('.site-loading, .site-initial-loading, .app-shell').count(), 0, 'No intermediate full-screen loader or premature app')
     if (width === 1440 && reducedMotion === 'no-preference') await page.screenshot({ path: `${output}/pending.png` })
     release()
@@ -53,10 +54,10 @@ try {
     await page.waitForFunction(() => getComputedStyle(document.getElementById('main')).opacity === '1')
     if (width === 1440 && reducedMotion === 'no-preference') await page.screenshot({ path: `${output}/dashboard.png` })
     await page.getByRole('link', { name: 'Smart Agro · Beranda', exact: true }).click()
-    await page.getByRole('heading', { name: /Kenali Cabai/ }).waitFor(); await settled(page)
+    await page.getByRole('heading', { name: /Tahu kapan pot perlu air/ }).waitFor(); await settled(page)
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'landing-main')
     for (let i = 0; i < 3; i++) {
-      await page.locator('.ag-simulator-link').click(); await page.goBack()
+      await page.locator('.sa-hero .ag-simulator-link').click(); await page.goBack()
       await page.waitForFunction(() => location.hash !== '#simulasi' && !!document.getElementById('landing-main')); await settled(page)
       assert.equal(await page.locator('.app-shell').count(), 0, 'Rapid Back keeps latest destination')
     }
@@ -69,7 +70,7 @@ try {
   let releaseCancelled
   const cancellationGate = new Promise(resolve => { releaseCancelled = resolve })
   await cancelled.route(appChunk, async route => { await cancellationGate; await route.continue() })
-  await cancelled.goto(url); await cancelled.locator('.ag-simulator-link').click()
+  await cancelled.goto(url); await cancelled.locator('.sa-hero .ag-simulator-link').click()
   await cancelled.locator('.site-pending').waitFor(); await cancelled.getByRole('button', { name: 'Batal', exact: true }).click()
   releaseCancelled(); await settled(cancelled); await cancelled.waitForTimeout(500)
   assert.equal(await cancelled.locator('.app-shell').count(), 0)
@@ -77,13 +78,13 @@ try {
   await cancelled.close()
   const failed = await browser.newPage({ reducedMotion: 'reduce' })
   await failed.route(appChunk, route => route.abort())
-  await failed.goto(url); await failed.locator('.ag-simulator-link').click(); await failed.getByRole('alert').waitFor()
+  await failed.goto(url); await failed.locator('.sa-hero .ag-simulator-link').click(); await failed.getByRole('alert').waitFor()
   assert.match(await failed.getByRole('alert').innerText(), /Simulator belum dapat dibuka/)
   await failed.getByRole('link', { name: 'Kembali ke beranda', exact: true }).click()
-  await failed.getByRole('heading', { name: /Kenali Cabai/ }).waitFor(); await failed.close()
+  await failed.getByRole('heading', { name: /Tahu kapan pot perlu air/ }).waitFor(); await failed.close()
   const fallback = await browser.newPage()
   await fallback.addInitScript(() => { document.startViewTransition = undefined })
-  await fallback.goto(url); await fallback.locator('.ag-simulator-link').click()
+  await fallback.goto(url); await fallback.locator('.sa-hero .ag-simulator-link').click()
   await fallback.getByRole('heading', { name: 'Ruang tanam', exact: true, level: 1 }).waitFor(); await settled(fallback)
   assert.equal(await fallback.locator('.site-page-fallback').count(), 1)
   assert.equal(await fallback.locator('.site-loading, .site-initial-loading').count(), 0)

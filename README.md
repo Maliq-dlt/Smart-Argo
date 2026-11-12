@@ -50,7 +50,7 @@ Local assessment mode automatically confirms new registrations. It sends no veri
 
 ## Explore the app
 
-1. **Choose a plant.** Select cabai or bawang, lock the specimen, and scroll through five chapters. GSAP changes its scale, angle, and composition; keyboard controls and reduced motion remain available.
+1. **Meet the pot.** The hero shows a chili plant with live sensor callouts (simulated, one reading per 1.7 s); switch to bawang merah to see the profile limits change. Scroll on: a pinned story drops the probe into the root zone and runs the 2.5-hour scenario to the engine's advice. The *Lab siram* lets you pick one of four built-in scenarios and shows the rule engine's verdict. Reduced motion keeps every reading without the movement.
 2. **Try a care decision.** Compare drying and persistently wet observations, then open **Coba simulator**. Plant a seed, change scenarios, advance time, water, or record a fertilizer reminder.
 3. **Read the history.** Open Dashboard or Terminal for sensor trends, decision evidence, and the journal. Export a session before clearing browser storage.
 4. **Open Ekosistem.** Register in **Akun & kepemilikan produk online**. Browser-local ecosystem demos and online account records use separate data stores.
@@ -62,7 +62,7 @@ Local assessment mode automatically confirms new registrations. It sends no veri
 
 | Area | Current behavior |
 | --- | --- |
-| Plant story | Cabai/bawang selection, locked specimen, reversible GSAP scroll composition, reduced motion. |
+| Plant story | Cabai/bawang hero, simulated sensor callouts, GSAP root-zone story, scenario lab and reduced motion. |
 | Simulator | Deterministic rules, timestamped readings, reproducible scenarios, planting/watering effects, reminders, session import/export and comparisons. |
 | Accounts and ownership | Email/password Auth, private owner reads, session-bound activation challenges, Ed25519 verification, transactional claims and RLS. |
 | Device telemetry | Signed v2 envelopes, sensor quality, sequence/replay protection, bounded history, explicit stale/missing readings. |
