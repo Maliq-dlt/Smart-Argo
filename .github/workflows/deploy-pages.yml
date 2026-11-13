@@ -1,0 +1,45 @@
+name: Deploy Cloudflare Pages
+on:
+  workflow_run:
+    workflows: [Checks]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NPM_CONFIG_CACHE: ${{ github.workspace }}/.cache/npm
+      WRANGLER_LOG_PATH: ${{ github.workspace }}/.tmp/cloudflare.log
+    environment:
+      name: cloudflare-production
+      url: https://smart-agro-demo.pages.dev
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - run: npm ci --cache .cache/npm
+      - run: npm run build:cloud
+      - name: Check that this is still the latest main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: test "$RELEASE_SHA" = "$(gh api repos/${{ github.repository }}/commits/main --jq .sha)"
+      - name: Publish production site
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ea31880cad9f6306dc15a017d97a881e
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: npx --yes wrangler@4.158.0 pages deploy dist --project-name=smart-agro-demo --branch=main --commit-hash="$RELEASE_SHA"
+      - name: Verify public frontend and Supabase integration
+        run: node tests/cloud-smoke.mjs

@@ -4,7 +4,7 @@
 
 **Observe the pot. Understand the evidence. Choose the next step.**
 
-A root-zone plant-care simulator with a local IoT backend: signed telemetry, product ownership, rule-based explanations, and traceable records.
+A root-zone plant-care simulator with a Supabase IoT backend: signed telemetry, product ownership, rule-based explanations, and traceable records.
 
 [Live demo](https://smart-agro-demo.pages.dev/) · [Get started](#get-started) · [What works](#what-works) · [Architecture](#architecture) · [Changelog](CHANGELOG.md)
 
@@ -12,7 +12,7 @@ A root-zone plant-care simulator with a local IoT backend: signed telemetry, pro
 
 </div>
 
-The interface is in Indonesian. The **[public demo](https://smart-agro-demo.pages.dev/)** (Cloudflare Pages) runs the landing story, the simulator, the dashboard, and the browser-local ecosystem demo with no installation; data stays in the visitor's browser. Accounts, device telemetry, transfers, rewards, and AI wording need the backend below.
+The interface is in Indonesian. The **[public demo](https://smart-agro-demo.pages.dev/)** serves the frontend from Cloudflare Pages and connects accounts, ownership, telemetry, transfers and rewards to hosted Supabase. The landing is public; the simulator and dashboard require sign-in. Simulator sessions stay in the browser, while account and product records use the backend. Hosted explanations use the rule engine; optional AI wording requires a server-side provider.
 
 ## Get started
 
@@ -105,11 +105,20 @@ For static hosting, run `npm run build` and publish `dist/`. Set `VITE_SUPABASE_
 
 `npm run build:cloud` builds against the hosted Supabase project in `.env.cloud` (public URL and publishable key only). That build sets `VITE_SIGN_IN_REQUIRED=true`, so the entry gate has no guest option; local builds keep it. The hosted functions accept one origin, set as the `APP_ORIGIN` secret, and have no AI key: a router on your machine is unreachable from the cloud, so explanations come from the rule engine.
 
+### Production deployment
+
+Pushes to `main` run the application and Docker checks. Once both pass, [Deploy Cloudflare Pages](.github/workflows/deploy-pages.yml) checks out that exact commit, runs `npm run build:cloud`, and publishes `dist/` to `smart-agro-demo.pages.dev`. The Pages project uses Direct Upload through GitHub Actions. Deployment requires the repository secret `CLOUDFLARE_API_TOKEN`, scoped to Pages Write on the configured account. No Supabase administrator credential is used by the frontend deployment.
+
+Supabase Auth uses `https://smart-agro-demo.pages.dev` as its Site URL and permits redirects to that origin. The Edge Functions use the same origin through the server-side `APP_ORIGIN` secret. If the production domain changes, update both settings before publishing. Local redirect URLs remain available for development; the hosted functions accept only the production origin.
+
+If building locally for production, run `npm run build:cloud`; `.env.local` points to the local backend and is ignored by Git. Do not publish a local `npm run build` result as the hosted app.
+
 ## Verification
 
 ```sh
 npm run lint && npm run typecheck && npm test && npm run build
 npm run test:backend       # needs npm run backend:local; synthetic fixtures only, never a shared database
+npm run build:cloud && node tests/cloud-smoke.mjs  # read-only check of the public deployment after publishing
 ```
 
 Browser checks use an existing Playwright install with Google Chrome (`PLAYWRIGHT_MODULE`, `TEST_URL`); see the header of each `tests/*-browser.*` file. Only Chrome has been tested.
