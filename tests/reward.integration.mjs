@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {randomUUID,randomBytes,generateKeyPairSync,sign} from 'node:crypto'
+import {randomUUID,randomBytes,generateKeyPairSync,sign,createHmac} from 'node:crypto'
 import {readFile} from 'node:fs/promises'
 import {execFileSync} from 'node:child_process'
+import {enableTotp} from './totp.mjs'
 // Database marketplace integration. Privileged, signed synthetic energy fixtures do not establish physical meter calibration.
 const base='http://127.0.0.1:54321',config=JSON.parse(await readFile('.tmp/phase1/settings.json','utf8'))
 const q=v=>"'"+String(v).replaceAll("'","''")+"'"
@@ -13,6 +14,9 @@ const run=randomUUID().slice(0,8),password=randomBytes(20).toString('base64url')
 async function account(label,roles=['owner']){const r=await api('/auth/v1/signup',null,{email:`rewards-${run}-${label}@example.test`,password});assert.equal(r.status,200);const a=await rpc('ensure_my_account',r.data.access_token);assert.equal(a.data.ok,true);sql(`UPDATE account SET access_roles=ARRAY[${roles.map(q).join(',')}]::text[] WHERE id=${q(a.data.account.id)}`);return{token:r.data.access_token,id:a.data.account.id}}
 async function evidenceOwner(owner,operator){const product=randomUUID(),device=randomUUID(),ownership=randomUUID(),meter=randomUUID(),keys=generateKeyPairSync('ed25519'),publicKey=Buffer.from(keys.publicKey.export({format:'jwk'}).x,'base64url').toString('base64');sql(`INSERT INTO product(id,serial_public,variant,issuer_signature) VALUES(${q(product)},${q('REWARD-'+device)},'single_pot','synthetic DB test'); INSERT INTO device(id,product_id,public_key) VALUES(${q(device)},${q(product)},${q(publicKey)}); INSERT INTO ownership(id,product_id,account_id,start_at) VALUES(${q(ownership)},${q(product)},${q(owner.id)},clock_timestamp()-interval '1 day'); INSERT INTO energy_meter(id,device_id,public_key,calibration_ref,eligible_load_ref,valid_from,valid_until,max_power_w,created_by) VALUES(${q(meter)},${q(device)},${q(publicKey)},'Synthetic software fixture; no physical calibration','Synthetic declared eligible-load fixture; not hardware evidence',clock_timestamp()-interval '2 days',clock_timestamp()+interval '1 day',10000,${q(operator.id)});`);return{device,ownership,meter,keys,next:0}}
 function window(fixture,solar,load,quality='verified_meter'){const id=randomUUID(),boot=randomUUID(),sequence=fixture.next++,start=new Date(Math.floor(Date.now()/900000)*900000-900000*(30-sequence)),end=new Date(start.getTime()+900000);const payload=JSON.stringify({domain:'smart-agro.energy.v1',schema_version:1,source:'meter',meter_id:fixture.meter,device_id:fixture.device,boot_id:boot,sequence,start_at:start.toISOString(),end_at:end.toISOString(),clock_status:'synced',solar_start_wh:0,solar_end_wh:solar,load_start_wh:0,load_end_wh:load,battery_soc_pct:null}),signature=sign(null,Buffer.from(payload),fixture.keys.privateKey).toString('base64');sql(`INSERT INTO energy_window(id,device_id,boot_id,start_at,end_at,solar_harvest_wh,load_wh,evidence_quality,meter_id,ownership_id,sequence,payload,payload_sha256,signature,solar_start_wh,solar_end_wh,load_start_wh,load_end_wh) VALUES(${q(id)},${q(fixture.device)},${q(boot)},${q(start.toISOString())},${q(end.toISOString())},${solar},${load},${q(quality)},${q(fixture.meter)},${q(fixture.ownership)},${sequence},${q(payload)},encode(digest(${q(payload)},'sha256'),'hex'),${q(signature)},0,${solar},0,${load});`);return id}
+// Redemption is exchange-style: 2FA on, 24 h after the last security change, and a TOTP code from the last five minutes.
+async function secure(owner){owner.token=(await enableTotp(base,config.anon,owner.token)).token;sql(`UPDATE security_event SET created_at=created_at-interval '25 hours' WHERE kind='mfa_enabled' AND user_id=(SELECT auth_user_id FROM account WHERE id=${q(owner.id)})`)}
+function forge(token,patch){const [head,body]=token.split('.');assert.equal(JSON.parse(Buffer.from(head,'base64url')).alg,'HS256');const data=head+'.'+Buffer.from(JSON.stringify({...JSON.parse(Buffer.from(body,'base64url')),...patch})).toString('base64url');return data+'.'+createHmac('sha256',config.secret).update(data).digest('base64url')}
 const credit=(window,owner)=>service('credit_energy_reward',{p_window_id:window,p_account_id:owner.id})
 await test('Phase 4: explicit policy and atomic marketplace (synthetic DB evidence)',async t=>{
  const operator=await account('operator',['owner','operator']),alice=await account('alice'),bob=await account('bob'),capOwner=await account('cap')
@@ -20,6 +24,7 @@ await test('Phase 4: explicit policy and atomic marketplace (synthetic DB eviden
  const setPolicy=(version,wh,cap,enabled=true)=>rpc('operator_set_reward_policy',operator.token,{p_version:version,p_wh_per_point:wh,p_daily_cap:cap,p_enabled:enabled})
  const catalog=(title,cost,stock,id=null,availability='available')=>rpc('operator_upsert_catalog',operator.token,{p_id:id,p_title:title,p_point_cost:cost,p_stock_total:stock,p_availability:availability})
  const reserve=(owner,item,request=randomUUID())=>rpc('reserve_my_reward',owner.token,{p_item_id:item,p_request_id:request})
+ await secure(alice);await secure(bob)
  const af=await evidenceOwner(alice,operator),bf=await evidenceOwner(bob,operator),cf=await evidenceOwner(capOwner,operator)
  let scarce,common,firstWinner
  try{
@@ -88,6 +93,25 @@ await test('Phase 4: explicit policy and atomic marketplace (synthetic DB eviden
   assert.equal(sql(`SELECT count(*) FROM ledger_entry WHERE redemption_id=${q(another.redemption_id)} AND reversal_of IS NOT NULL`),'1')
   assert.equal(sql(`SELECT sum(signed_points) FROM ledger_entry WHERE redemption_id=${q(another.redemption_id)}`),'0')
   assert.equal(sql(`SELECT stock_total FROM catalog_item WHERE id=${q(item)}`),stock)
+ })
+ await t.test('redemption gate: 2FA required, security hold, fresh code, daily limit',async()=>{
+  const item=(await catalog('Synthetic gate item '+run,1,20)).data.item_id,carol=await account('carol')
+  assert.equal((await reserve(carol,item)).data.code,'mfa_required')
+  const aal1=carol.token;carol.token=(await enableTotp(base,config.anon,carol.token)).token
+  assert.equal((await rpc('reward_workspace',aal1)).data.code,'unauthorized')
+  const held=(await reserve(carol,item)).data;assert.equal(held.code,'security_hold');assert.ok(Date.parse(held.until)>Date.now()+23*3600e3)
+  const ws=(await rpc('security_workspace',carol.token)).data;assert.equal(ws.mfa_enabled,true);assert.ok(ws.hold_until);assert.ok(ws.events.some(e=>e.kind==='mfa_enabled'))
+  sql(`UPDATE security_event SET created_at=created_at-interval '25 hours' WHERE kind='mfa_enabled' AND user_id=(SELECT auth_user_id FROM account WHERE id=${q(carol.id)})`)
+  const claims=JSON.parse(Buffer.from(carol.token.split('.')[1],'base64url'))
+  assert.equal((await reserve({token:forge(carol.token,{amr:claims.amr.map(m=>m.method==='totp'?{...m,timestamp:m.timestamp-600}:m)})},item)).data.code,'step_up_required')
+  assert.equal((await reserve(carol,item)).data.code,'insufficient_points')
+  const changed=await api('/auth/v1/user',carol.token,{password:randomBytes(20).toString('base64url')},'PUT');assert.equal(changed.status,200)
+  assert.equal((await reserve(carol,item)).data.code,'security_hold')
+  assert.ok((await api('/rest/v1/security_event',bob.token,undefined,'GET')).status>=400)
+  const used=Number(sql(`SELECT count(*) FROM redemption WHERE account_id=${q(alice.id)} AND created_at>now()-interval '24 hours'`)),ids=[]
+  for(let i=used;i<10;i++){const r=(await reserve(alice,item)).data;assert.equal(r.ok,true,JSON.stringify(r));ids.push(r.redemption_id)}
+  assert.equal((await reserve(alice,item)).data.code,'limit_reached')
+  for(const id of ids)await rpc('cancel_my_redemption',alice.token,{p_id:id})
  })
  await t.test('owner RLS, audit immutability and revoked session access',async()=>{
   const w=(await rpc('reward_workspace',alice.token)).data;assert.equal(w.ok,true);assert.deepEqual(w.fulfillment_queue,[])

@@ -1,6 +1,14 @@
 # Acknowledgments
 
-Current plant imagery: [specimen credits](../public/plants/CREDITS.md) and [landing imagery and component credits](../public/landing/CREDITS.md). The landing uses Fraunces under the included SIL Open Font License and General Sans under the [ITF Free Font License](../public/fonts/FONTSHARE-LICENSE.md). The simulator uses Nunito Sans under its included SIL Open Font License. Font files and licenses are in `public/fonts/`. Landing smooth scrolling uses [Lenis](https://github.com/darkroomengineering/lenis) 1.3.27 (MIT).
+Landing imagery and component credits: [public/landing/CREDITS.md](../public/landing/CREDITS.md). Typography: Fraunces under the included SIL Open Font License and General Sans under the [ITF Free Font License](../public/fonts/FONTSHARE-LICENSE.md); files and licenses are in `public/fonts/`. Smooth scrolling on the landing uses [Lenis](https://github.com/darkroomengineering/lenis) 1.3.27 (MIT). Icons: [Phosphor Icons](https://phosphoricons.com/) via `@phosphor-icons/react` 2.1.10 (MIT).
+
+## Dashboard (2026-11-12)
+
+Composition after the Dribbble shot "Smart Plant Monitoring Dashboard" by [Oripio](https://dribbble.com/shots/26065126) (plant at the centre with leader lines to readings, a round lens, a column of three cards). Only the composition is taken; no artwork, text, or asset is copied. Patterns from 21st.dev, adapted without copying code: rail-panel-sidebar by dhxwhy (rail with sliding active marker), r-select by edwinvakayil (animated Radix select), waveform-player by ruixen.ui (sample bars on the session clock).
+
+## QR and record proof (2026-11-13)
+
+QR reading uses [barcode-detector](https://github.com/Sec-ant/barcode-detector) 3.2.3 and [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) (MIT, ZXing-C++ under Apache-2.0); the reader WASM is bundled with the site. QR generation uses [uqr](https://github.com/unjs/uqr) 0.1.3 (MIT). Wallet discovery follows EIP-6963 and EIP-1193; no wallet SDK is bundled.
 
 The notes below preserve attribution for earlier component adaptations and retired landing assets. The former flower carousel and Three.js assets are no longer shipped.
 
@@ -63,7 +71,7 @@ Search and source requests rotated through `21st_3` to `21st_7`, with sequential
 
 ## Product typography and FAQ
 
-[Nunito Sans](https://fonts.google.com/specimen/Nunito+Sans), Nunito Sans Project Authors, SIL Open Font License 1.1. Latin variable WOFF2 (400–700) sourced from Google Fonts and served locally at public/fonts/nunito-sans-latin.woff2. License preserved at public/fonts/OFL.txt. No external font requests from the application.
+Nunito Sans (SIL Open Font License 1.1) was the simulator font until 2026-11-12; it is no longer shipped.
 
 [Feature Accordion Section by ruixen.ui](https://21st.dev/@ruixen.ui/components/feature-accordion-section), demo 5553. Search through 21st_8; source retrieved through 21st_9. Its question/detail structure is adapted beside the simulator invitation. Real scope explanations replace demo AI, integration, counts and image claims. Native details/summary supplies keyboard behavior and single-open grouping without adding Next.js or an accordion dependency. Browsers without named-group support still expose every answer.
 
@@ -75,7 +83,7 @@ AgroMark (pot, leaves and roots) and matching favicon are original project SVG d
 
 ## Dashboard care annotations
 
-[Activity Timeline](https://21st.dev/@olewandowski1/components/timeline-3), olewandowski1, demo 28340. Metadata through 21st_3; source retrieved through 21st_7 after 21st_4, 21st_5 and 21st_6 reported exhausted quota. Consecutive code requests were spaced by 2.5 seconds. Adapted its ordered activity/time rows to real planting, watering and fertilizer records next to chart markers. Native details/summary and existing Lucide icons replace avatars, badges, registry utilities and team demo data. No new dependencies or remote assets are used by the app. Source snapshot is in .tmp/dashboard-assistance/activity-timeline-source.tsx.
+[Activity Timeline](https://21st.dev/@olewandowski1/components/timeline-3), olewandowski1, demo 28340. Metadata through 21st_3; source retrieved through 21st_7 after 21st_4, 21st_5 and 21st_6 reported exhausted quota. Consecutive code requests were spaced by 2.5 seconds. Adapted its ordered activity/time rows to real planting, watering and fertilizer records next to chart markers. Native details/summary and the project's icons (Lucide at the time, Phosphor since 2026-11-12) replace avatars, badges, registry utilities and team demo data. No new dependencies or remote assets are used by the app. Source snapshot is in .tmp/dashboard-assistance/activity-timeline-source.tsx.
 ## Continuous narrative (2026-10-02)
 
 [Corn Revolution, RESN / Pioneer](https://cornrevolution.resn.global/#), supplied by the user. Playwright captured ten main scroll checkpoints and 45 intermediate transition screenshots after loading, at 1440 × 900. Observed structure: hero specimen, genetic foundation, selection, seedling, field testing, and result. Object continuity, progressive camera focus, concise contextual text, and restrained progress navigation inform the Smart Agro root story. Its single local SVG pot opens to reveal roots and probes; the camera zooms with page scroll. Existing 21st.dev Sticky Scroll Reveal and Progress Indicator are adapted, without another source fetch or dependency. No reference branding, proprietary text, models, textures, audio, scripts, or claimed farming results are reused.

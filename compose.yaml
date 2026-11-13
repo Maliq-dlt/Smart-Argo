@@ -45,6 +45,13 @@ services:
       GOTRUE_EXTERNAL_EMAIL_ENABLED: 'true'
       GOTRUE_MAILER_AUTOCONFIRM: 'true'
       GOTRUE_RATE_LIMIT_EMAIL_SENT: 100
+      GOTRUE_PASSWORD_MIN_LENGTH: 10
+      # Google sign-in: GOOGLE_ENABLED=true, GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the ignored .env next to this file.
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: ${GOOGLE_ENABLED:-false}
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: http://127.0.0.1:8088/auth/v1/callback
+      GOTRUE_URI_ALLOW_LIST: http://127.0.0.1:8088/**
     volumes: [config:/run/smart-agro:ro]
     healthcheck:
       test: [CMD, wget, -q, --spider, http://127.0.0.1:9999/health]
@@ -86,6 +93,11 @@ services:
         condition: service_completed_successfully
     environment:
       APP_ORIGIN: http://127.0.0.1:8088
+      # Optional AI wording via an OpenAI-compatible router on the host, e.g. 9router started with its default host:
+      # AI_BASE_URL=http://host.docker.internal:20128/v1 AI_API_KEY=... docker compose up -d
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
     volumes: [config:/run/smart-agro:ro]
     ports: [127.0.0.1:8088:54321]
     init: true

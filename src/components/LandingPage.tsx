@@ -1,7 +1,7 @@
+import { ArrowRight, Plant } from '@phosphor-icons/react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useReducedMotion } from 'framer-motion'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { ArrowRight, Sprout } from 'lucide-react'
 import Hero from './landing/v5/Hero'
 import { LeafReveal, Numbers, Problem, Product, RootZone } from './landing/v5/Story'
 import Grow from './landing/v5/Grow'
@@ -71,7 +71,7 @@ export default function LandingPage() {
   return <div ref={root} className="ag-landing sa v5">
     <a className="sa-skip" href="#masalah" onClick={jump('masalah')}>Lewati ke cerita</a>
     <header className={`sa-nav${scrolled ? ' is-scrolled' : ''}`}>
-      <a className="sa-logo" href="#landing-main" onClick={jump('landing-main')}><Sprout aria-hidden="true" />smart agro</a>
+      <a className="sa-logo" href="#landing-main" onClick={jump('landing-main')}><Plant aria-hidden="true" />smart agro</a>
       <nav aria-label="Bagian halaman">
         <a href="#masalah" onClick={jump('masalah')}>Masalah</a><a href="#kenalan" onClick={jump('kenalan')}>Cara kerja</a><a href="#rawat" onClick={jump('rawat')}>Coba rawat</a><a href="#jelajah" onClick={jump('jelajah')}>Jelajahi</a>
       </nav>
@@ -94,7 +94,7 @@ export default function LandingPage() {
       palette={theme === 'dark' ? darkMeadow : lightMeadow}
       name="Smart Agro"
       brandHref="#landing-main"
-      logo={<Sprout aria-hidden="true" />}
+      logo={<Plant aria-hidden="true" />}
       heading={'Rawat pot dengan *lebih tenang.*'}
       subheading="Semuanya berjalan di browsermu."
       cta={{ label: 'Coba simulator', href: '#simulasi' }}

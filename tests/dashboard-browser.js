@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { asGuest } from './entry-helpers.mjs'
 import { createJourney, plantSeed, advanceSimulation, waterSimulation, recordFertilizer } from '../src/lib/simulation.ts'
 import { createSession, STORAGE_KEY } from '../src/lib/sessionStore.ts'
 
@@ -16,11 +17,17 @@ session = advanceSimulation(session, 12)
 session = recordFertilizer(waterSimulation(session, 150))
 session = advanceSimulation(session, 16)
 const browser = await chromium.launch({ headless: true, channel: 'chrome' })
+asGuest(browser) // account entry is covered by the account checks
 const errors = [], report = []
 const active = page => page.evaluate(key => {
   const book = JSON.parse(localStorage.getItem(key))
   return book.sessions.find(session => session.id === book.activeId)
 }, STORAGE_KEY)
+// Chrome can leave parts of the tree on the old rem after an injected root font-size; force one full restyle, as a browser setting change does.
+const enlargeText = async page => {
+  await page.addStyleTag({ content: 'html { font-size: 200% !important; }' })
+  await page.evaluate(() => { document.body.style.display = 'none'; void document.body.offsetHeight; document.body.style.display = '' })
+}
 const setup = async (width, theme, reducedMotion, seed = session) => {
   const page = await browser.newPage({ viewport: { width, height: 1000 }, reducedMotion })
   page.on('pageerror', error => errors.push(error.message))
@@ -120,7 +127,7 @@ try {
   }
   for (const width of [1440, 375, 320]) {
     const page = await setup(width, 'light', 'reduce')
-    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' })
+    await enlargeText(page)
     const overflowing = await page.evaluate(() => [...document.querySelectorAll('#main button, #main a.button')].filter(element => {
       const bounds = element.getBoundingClientRect()
       return bounds.left < -1 || bounds.right > innerWidth + 1

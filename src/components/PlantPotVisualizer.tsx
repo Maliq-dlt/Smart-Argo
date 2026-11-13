@@ -1,6 +1,6 @@
+import { Info, Plant, Scan } from '@phosphor-icons/react'
 import { useState } from 'react'
 import PlantIllustration from './PlantIllustration'
-import { Sprout, Info, ScanLine } from 'lucide-react'
 import SegmentedControl from './ui/segmented-control'
 import { phaseAt } from '../lib/agronomyEngine'
 import { type SessionClock } from '../lib/sessionClock'
@@ -14,15 +14,15 @@ export default function PlantPotVisualizer({ careEffect, clock, running, rate, d
   const showSensors = view === 'roots'
   const period = scenePeriod(elapsed, clock)
   return <section className="panel plant-panel" aria-labelledby="plant-heading">
-    <div className="panel-heading"><h2 id="plant-heading"><Sprout />Ilustrasi fase tanaman</h2><span>{age} HST</span></div>
+    <div className="panel-heading"><h2 id="plant-heading"><Plant />Ilustrasi fase tanaman</h2><span>{age} HST</span></div>
     <div className="plant-scene-heading"><span className="scene-clock">{period} · {worldTime(elapsed, clock)}</span><span className="phase-label"><span className="status-dot" />{planted ? phaseAt(day, onion) : 'Belum ditanam'}</span></div>
     <div className="plant-canvas" data-period={period}>
       <SkyScene key={`${clock.startedAtMs}-${clock.offsetMinutes}`} worldClock={clock} elapsed={elapsed} running={running} rate={rate} />
       <PlantIllustration day={day} age={age} onion={onion} moisture={moisture} contact={contact} planted={planted} showSensors={showSensors} shellOpacity={showSensors ? 0 : 1} careEffect={careEffect} />
       {/* Spatial Product Showcase: https://21st.dev/@daiwiikharihar/components/spatial-product-showcase */}
       <div className="plant-view-switch"><SegmentedControl label="Tampilan pot" value={view} onValueChange={setView} options={[
-        { value: 'plant', label: <><Sprout aria-hidden="true" />Tanaman</> },
-        { value: 'roots', label: <><ScanLine aria-hidden="true" />Penampang</> },
+        { value: 'plant', label: <><Plant aria-hidden="true" />Tanaman</> },
+        { value: 'roots', label: <><Scan aria-hidden="true" />Penampang</> },
       ]} /></div>
     </div>
     <p className="panel-footnote"><Info />{journey ? 'Model latihan: waktu dan perawatan memengaruhi perkembangan visual. Bukan prediksi tanaman nyata.' : 'Fase tumbuh ilustratif. Bentuk tanaman bukan hasil prediksi sensor.'}</p>

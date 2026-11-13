@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { asGuest } from './entry-helpers.mjs'
 
 // PLAYWRIGHT_MODULE may point to an existing Playwright installation; no browser download.
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -9,6 +10,7 @@ const curtainOpen = page => page.waitForFunction(() => { const c = document.quer
 const url = process.env.TEST_URL || 'http://127.0.0.1:4173/#simulasi'
 await mkdir('.tmp/ui-check', { recursive: true })
 const browser = await chromium.launch({ headless: true, channel: 'chrome', args: ['--enable-unsafe-swiftshader'] })
+asGuest(browser) // account entry is covered by the account checks
 const errors = []
 const monitor = page => {
   page.on('pageerror', error => errors.push(error.message))
@@ -18,10 +20,15 @@ const active = page => page.evaluate(() => {
   const book = JSON.parse(localStorage.getItem('smart-agro.sessions.v1'))
   return book.sessions.find(session => session.id === book.activeId)
 })
+// Chrome can leave parts of the tree on the old rem after an injected root font-size; force one full restyle, as a browser setting change does.
+const enlargeText = async page => {
+  await page.addStyleTag({ content: 'html { font-size: 200% !important; }' })
+  await page.evaluate(() => { document.body.style.display = 'none'; void document.body.offsetHeight; document.body.style.display = '' })
+}
 const waitTheme = async (page, theme) => {
   await page.waitForFunction(theme => document.documentElement.dataset.theme === theme && document.querySelector('.theme-toggle').getAttribute('aria-busy') === 'false', theme)
   assert.equal(await page.locator('[data-theme-icon]').getAttribute('data-theme-icon'), theme)
-  assert.equal(await page.locator(`.theme-toggle .lucide-${theme === 'dark' ? 'moon' : 'sun'}`).count(), 1)
+  assert.equal(await page.locator('.theme-toggle svg').count(), 1)
   assert.equal(await page.evaluate(() => localStorage.getItem('smart-agro.theme')), theme)
 }
 const choose = async (page, label, name) => {
@@ -64,7 +71,7 @@ try {
   assert.equal(await page.getByText('Lanjutkan sesi', { exact: false }).count(), 0)
   assert.equal(await page.locator('.plant-mood').count(), 1)
   assert.equal(await page.locator('.plant-mood').getAttribute('data-mood'), 'ready')
-  assert.equal(await page.locator('.app-sidebar').evaluate(e => getComputedStyle(e).backdropFilter), 'none')
+  assert.equal(await page.locator('.app-rail').evaluate(e => getComputedStyle(e).backdropFilter), 'none')
   const plantButton = page.getByRole('button', { name: 'Tanam & mulai', exact: true })
   await plantButton.focus(); await page.keyboard.down('Space')
   await page.waitForFunction(() => Math.abs(new DOMMatrixReadOnly(getComputedStyle(document.querySelector('.plant-seed')).transform).a - .97) < .001)
@@ -155,6 +162,8 @@ try {
   await page.keyboard.press('Escape')
   await page.getByRole('dialog', { name: 'Tanaman & skenario', exact: true }).waitFor()
   assert.equal(await page.getByRole('dialog').count(), 1, 'Escape should close Select before Sheet')
+  // Like a keyboard user, press Escape again only once focus is back on the Select trigger (its exit animation releases the layer).
+  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'combobox')
   await page.keyboard.press('Escape')
   await page.waitForFunction(() => document.activeElement?.id === 'plant-settings')
   await page.getByRole('button', { name: 'Pengaturan waktu & sampel', exact: true }).click()
@@ -179,7 +188,7 @@ try {
   const dashboardSession = (await active(page)).data
   assert.equal(await page.locator('.dashboard-details').getAttribute('open'), null)
   assert.equal(await page.locator('.distribution-card').isVisible(), false, 'Secondary analysis starts collapsed')
-  assert.equal(await page.locator('.dashboard-summary > .panel').count(), 3)
+  assert.equal(await page.locator('.dash-side > .panel').count(), 3, 'Trend, care and clock cards beside the plant')
   assert.equal(await page.locator('.history-panel').count(), 1)
   await page.screenshot({ path: '.tmp/landing-dashboard-polish/dashboard-light.png', fullPage: true })
   await page.locator('.dashboard-details > summary').focus(); await page.keyboard.press('Space')
@@ -291,11 +300,11 @@ try {
   await enlarged.goto(new URL('#statistik', url).href); await curtainOpen(enlarged)
   await enlarged.getByRole('heading', { name: 'Dashboard', exact: true, level: 1 }).waitFor()
   await enlarged.evaluate(() => document.fonts.ready)
-  await enlarged.addStyleTag({ content: 'html { font-size: 200% !important; }' })
-  assert(await enlarged.locator('.sidebar-nav > a, .sidebar-nav > button').evaluateAll(links => links.every(link => {
-    const bounds = link.getBoundingClientRect(), sidebar = document.querySelector('.app-sidebar').getBoundingClientRect()
-    return bounds.left >= sidebar.left && bounds.right <= sidebar.right && link.scrollWidth <= link.clientWidth
-  })), 'Enlarged navigation must remain inside sidebar')
+  await enlargeText(enlarged)
+  assert(await enlarged.locator('.rail-nav > a').evaluateAll(links => links.every(link => {
+    const bounds = link.getBoundingClientRect(), rail = document.querySelector('.app-rail').getBoundingClientRect()
+    return bounds.left >= rail.left && bounds.right <= rail.right && link.scrollWidth <= link.clientWidth
+  })), 'Enlarged navigation must remain inside the rail')
   assert(await enlarged.locator('.dashboard-clock .button').evaluate(button => {
     const bounds = button.getBoundingClientRect(), card = button.closest('.dashboard-clock').getBoundingClientRect()
     return button.scrollWidth <= button.clientWidth && bounds.left >= card.left && bounds.right <= card.right

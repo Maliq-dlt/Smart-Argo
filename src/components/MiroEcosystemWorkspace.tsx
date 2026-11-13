@@ -1,20 +1,13 @@
-import ProductAccount from './ProductAccount'
+import { ArrowUpRight, ArrowsClockwise, BookBookmark, Check, LinkSimple, Medal, Plant, Plus, QrCode, Robot, ShieldCheck, Sun, Warning } from '@phosphor-icons/react'
+import ProductTelemetry from './ProductTelemetry'
+import ProductKnowledge from './ProductKnowledge'
+import ProductEnergy from './ProductEnergy'
+import ProductRewards from './ProductRewards'
+import { useAccount } from './accountContext'
+import ProductQrCode from './ProductQrCode'
+import QrScanner from './QrScanner'
+import { SelectField } from './ui/select'
 import { useEffect, useState } from 'react'
-import {
-  ShieldCheck,
-  QrCode,
-  Sprout,
-  Bot,
-  Sun,
-  Award,
-  BookOpenCheck,
-  Link2,
-  Check,
-  TriangleAlert,
-  RefreshCw,
-  Plus,
-  ArrowUpRight,
-} from 'lucide-react'
 import type { PotCase, Profile } from '../lib/agronomyEngine'
 import {
   type EcosystemState,
@@ -131,6 +124,8 @@ export default function MiroEcosystemWorkspace({
     }
   }, [eco])
 
+  const account = useAccount()
+  const online = account.signedIn && account.client ? { client: account.client, onSessionExpired: account.expire } : null
   const activeAccount = eco.accounts.find(a => a.id === eco.activeAccountId) ?? eco.accounts[0]
   const qrCheck = inspectPublicQr(eco, qrSerial)
   const currentUnit = eco.units[0]
@@ -161,13 +156,11 @@ export default function MiroEcosystemWorkspace({
 
   return (
     <div className="miro-ecosystem" aria-label="Ekosistem produk Smart Agro sesuai rancangan Miro">
-      <ProductAccount />
-      <p className="section-hint">Simulasi lokal: seluruh peran, AI, reward, dan blockchain di bawah adalah demonstrasi, bukan akun atau transaksi online.</p>
+      <p className="section-hint">{online ? 'Data akun Anda tampil paling atas di tiap tab. Sisanya simulasi rancangan Miro, bukan transaksi online.' : 'Simulasi lokal: seluruh peran, AI, reward, dan blockchain di bawah adalah demonstrasi, bukan akun atau transaksi online.'}</p>
       <section className="panel miro-statusbar" aria-label="Konteks akun dan ringkasan ekosistem">
         <div className="miro-account-bar">
           <div>
-            <span className="tag">TARGET MIRO · U02–U05 · E02–E04 · A04–A10</span>
-            <h2>Peran & Akun Aktif</h2>
+            <h2>Peran dan akun demo<small className="miro-code">U02–U05 · E02–E04 · A04–A10</small></h2>
             <p className="section-hint">
               Pilih peran untuk menguji otorisasi pemilik, kontributor, kurator agronomi, dan operator program.
             </p>
@@ -175,20 +168,7 @@ export default function MiroEcosystemWorkspace({
           <div className="miro-account-controls">
             <label className="miro-field-inline">
               <span>Akun aktif</span>
-              <select
-                aria-label="Pilih akun aktif"
-                value={activeAccount.id}
-                onChange={e => {
-                  setEco(prev => ({ ...prev, activeAccountId: e.target.value }))
-                  setFeedback(null)
-                }}
-              >
-                {eco.accounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.displayName} ({acc.roles.join(', ')})
-                  </option>
-                ))}
-              </select>
+              <SelectField label="Pilih akun aktif" value={activeAccount.id} onValueChange={value => { setEco(prev => ({ ...prev, activeAccountId: value })); setFeedback(null) }} options={eco.accounts.map(acc => ({ value: acc.id, label: `${acc.displayName} (${acc.roles.join(', ')})` }))} />
             </label>
             <button
               type="button"
@@ -198,7 +178,7 @@ export default function MiroEcosystemWorkspace({
                 notifyOk('Data ekosistem direset ke kondisi awal.')
               }}
             >
-              <RefreshCw /> Reset demo
+              <ArrowsClockwise /> Reset demo
             </button>
           </div>
         </div>
@@ -231,7 +211,7 @@ export default function MiroEcosystemWorkspace({
           className={`miro-feedback ${feedback.kind === 'error' ? 'is-error' : 'is-ok'}`}
           role={feedback.kind === 'error' ? 'alert' : 'status'}
         >
-          {feedback.kind === 'error' ? <TriangleAlert /> : <Check />}
+          {feedback.kind === 'error' ? <Warning /> : <Check />}
           <span>{feedback.text}</span>
         </div>
       )}
@@ -239,17 +219,17 @@ export default function MiroEcosystemWorkspace({
       <nav className="miro-tabs" aria-label="Modul ekosistem Miro">
         {(
           [
-            ['identity', '1. QR & Kepemilikan (U03/A04)', QrCode],
-            ['units', '2. Unit Pot/Kebun & Sensor (U02/E02)', Sprout],
-            ['mascot', '3. Maskot 2D & AI Snapshot (A05)', Bot],
-            ['energy', '4. Energi Surya & Reward (U04/E03/A10)', Sun],
-            ['community', '5. Kurasi & Blockchain (U05/E04/A08)', BookOpenCheck],
+            ['identity', 'QR & kepemilikan', QrCode],
+            ['units', 'Unit & sensor', Plant],
+            ['mascot', 'Maskot & AI', Robot],
+            ['energy', 'Energi & reward', Sun],
+            ['community', 'Kurasi & blockchain', BookBookmark],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
             key={id}
             type="button"
-            className={`button ${tab === id ? 'primary' : ''}`}
+            className={tab === id ? 'is-active' : undefined}
             aria-pressed={tab === id}
             onClick={() => {
               setTab(id)
@@ -267,25 +247,23 @@ export default function MiroEcosystemWorkspace({
           <section className="panel miro-card" aria-labelledby="qr-verify-heading">
             <div className="panel-heading">
               <h2 id="qr-verify-heading">
-                <QrCode /> Pemeriksaan QR Publik & Aktivasi Sekali Pakai (ID-01 · ID-02 · A04)
+                <QrCode weight="duotone" aria-hidden="true" />Periksa QR dan aktivasi sekali pakai<small className="miro-code">ID-01 · ID-02 · A04</small>
               </h2>
               <span className="tag">{qrCheck.verifiedRegistry ? 'TERDAFTAR' : 'PERIKSA'}</span>
             </div>
             <div className="miro-card-body">
-              <label className="miro-field">
-                <span>Nomor seri QR publik</span>
-                <select
-                  aria-label="Pilih nomor seri QR publik"
-                  value={qrSerial}
-                  onChange={e => setQrSerial(e.target.value)}
-                >
-                  {eco.products.map(p => (
-                    <option key={p.id} value={p.serialPublic}>
-                      {p.serialPublic} · {p.variant === 'single_pot' ? 'Kit 1 Pot' : 'Kit 1 Kebun'} ({p.registryStatus})
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="miro-qr-pick">
+                <label className="miro-field">
+                  <span>Nomor seri QR publik</span>
+                  <SelectField label="Pilih nomor seri QR publik" value={qrSerial} onValueChange={setQrSerial} options={eco.products.map(p => ({ value: p.serialPublic, label: `${p.serialPublic} · ${p.variant === 'single_pot' ? 'Kit 1 pot' : 'Kit 1 kebun'} (${p.registryStatus})` }))} />
+                </label>
+                <QrScanner onSerial={(serial, warning) => {
+                  if (!eco.products.some(p => p.serialPublic === serial)) { notifyErr(new Error(`QR terbaca (${serial}), tetapi seri itu tidak ada di registri demo.`)); return }
+                  setQrSerial(serial)
+                  notifyOk(warning ? `QR ${serial} terbaca. ${warning}` : `QR ${serial} terbaca dari kamera atau foto.`)
+                }} />
+              </div>
+              {qrCheck.found && <ProductQrCode serial={qrCheck.serialPublic} />}
               <div className="miro-callout">
                 <strong>Status Registri: {qrCheck.registryStatus.toUpperCase()}</strong>
                 <p>{qrCheck.physicalNotice}</p>
@@ -331,7 +309,7 @@ export default function MiroEcosystemWorkspace({
                     }
                   }}
                 >
-                  <ShieldCheck /> Klaim dengan Nonce & Kode Tersegel
+                  <ShieldCheck weight="duotone" aria-hidden="true" />Klaim dengan Nonce & Kode Tersegel
                 </button>
                 <button
                   type="button"
@@ -362,7 +340,7 @@ export default function MiroEcosystemWorkspace({
           <section className="panel miro-card" aria-labelledby="operator-registry-heading">
             <div className="panel-heading">
               <h2 id="operator-registry-heading">
-                <ShieldCheck /> Registri Penerbit & Pencabutan Operator (ID-04 · ID-05)
+                <ShieldCheck weight="duotone" aria-hidden="true" />Registri penerbit dan pencabutan<small className="miro-code">ID-04 · ID-05</small>
               </h2>
               <span className="tag">PERAN: OPERATOR</span>
             </div>
@@ -377,14 +355,7 @@ export default function MiroEcosystemWorkspace({
                 </label>
                 <label className="miro-field">
                   <span>Varian produk</span>
-                  <select
-                    aria-label="Varian produk baru"
-                    value={newVariant}
-                    onChange={e => setNewVariant(e.target.value as 'single_pot' | 'garden')}
-                  >
-                    <option value="single_pot">Satu Produk, Satu Pot</option>
-                    <option value="garden">Satu Produk, Satu Kebun</option>
-                  </select>
+                  <SelectField label="Varian produk baru" value={newVariant} onValueChange={value => setNewVariant(value as 'single_pot' | 'garden')} options={[{ value: 'single_pot', label: 'Satu produk, satu pot' }, { value: 'garden', label: 'Satu produk, satu kebun' }]} />
                 </label>
               </div>
               <label className="miro-field">
@@ -440,12 +411,13 @@ export default function MiroEcosystemWorkspace({
         </div>
       )}
 
+      {online && tab === 'units' && <div className="online-panel"><ProductTelemetry {...online} products={account.products} /></div>}
       {tab === 'units' && (
         <div className="miro-grid">
           <section className="panel miro-card" aria-labelledby="units-variant-heading">
             <div className="panel-heading">
               <h2 id="units-variant-heading">
-                <Sprout /> Varian Produk: Kit Satu Pot vs Kit Satu Kebun (APP-02 · E02)
+                <Plant weight="duotone" aria-hidden="true" />Kit satu pot dan kit satu kebun<small className="miro-code">APP-02 · E02</small>
               </h2>
               <span className="tag">{eco.units.length} UNIT AKTIF</span>
             </div>
@@ -455,17 +427,7 @@ export default function MiroEcosystemWorkspace({
               </p>
               <label className="miro-field">
                 <span>Pilih produk milik akun</span>
-                <select
-                  aria-label="Pilih produk untuk tambah unit"
-                  value={selectedProductId}
-                  onChange={e => setSelectedProductId(e.target.value)}
-                >
-                  {eco.products.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.serialPublic} ({p.variant === 'single_pot' ? '1 Pot — Maks 1 Unit' : '1 Kebun — Multi-Zona'})
-                    </option>
-                  ))}
-                </select>
+                <SelectField label="Pilih produk untuk tambah unit" value={selectedProductId} onValueChange={setSelectedProductId} options={eco.products.map(p => ({ value: p.id, label: `${p.serialPublic} · ${p.variant === 'single_pot' ? '1 pot, maks. 1 unit' : '1 kebun, multi-zona'}` }))} />
               </label>
               <label className="miro-field">
                 <span>Label lokasi pot / zona kebun baru</span>
@@ -515,7 +477,7 @@ export default function MiroEcosystemWorkspace({
           <section className="panel miro-card" aria-labelledby="measurement-ingest-heading">
             <div className="panel-heading">
               <h2 id="measurement-ingest-heading">
-                Ingestion Pengukuran & Deduplikasi Paket (APP-03 · E02)
+                Ingest pengukuran dan deduplikasi paket<small className="miro-code">APP-03 · E02</small>
               </h2>
               <span className="tag">{eco.measurements.length} SAMPEL</span>
             </div>
@@ -534,27 +496,11 @@ export default function MiroEcosystemWorkspace({
                 </label>
                 <label className="miro-field">
                   <span>Sensor</span>
-                  <select
-                    aria-label="Jenis sensor"
-                    value={sensorKind}
-                    onChange={e => setSensorKind(e.target.value as typeof sensorKind)}
-                  >
-                    <option value="moisture">Kelembapan (0–100)</option>
-                    <option value="soil_temperature">Suhu Tanah (-20–60 °C)</option>
-                    <option value="soil_ph">pH Tanah (0–14)</option>
-                  </select>
+                  <SelectField label="Jenis sensor" value={sensorKind} onValueChange={value => setSensorKind(value as typeof sensorKind)} options={[{ value: 'moisture', label: 'Kelembapan (0–100)' }, { value: 'soil_temperature', label: 'Suhu tanah (−20–60 °C)' }, { value: 'soil_ph', label: 'pH tanah (0–14)' }]} />
                 </label>
                 <label className="miro-field">
                   <span>Status kualitas</span>
-                  <select
-                    aria-label="Status kualitas sensor"
-                    value={sensorStatus}
-                    onChange={e => setSensorStatus(e.target.value as typeof sensorStatus)}
-                  >
-                    <option value="ok">ok (nilai valid)</option>
-                    <option value="error">error (wajib null)</option>
-                    <option value="not_measured">not_measured (wajib null)</option>
-                  </select>
+                  <SelectField label="Status kualitas sensor" value={sensorStatus} onValueChange={value => setSensorStatus(value as typeof sensorStatus)} options={[{ value: 'ok', label: 'ok · nilai valid' }, { value: 'error', label: 'error · nilai wajib kosong' }, { value: 'not_measured', label: 'not_measured · nilai wajib kosong' }]} />
                 </label>
               </div>
               <label className="miro-field">
@@ -624,7 +570,7 @@ export default function MiroEcosystemWorkspace({
           <section className="panel miro-card" aria-labelledby="mascot-state-heading">
             <div className="panel-heading">
               <h2 id="mascot-state-heading">
-                <Bot /> Maskot 2D Deterministik & Bukti Aturan (APP-05 · A05)
+                <Robot weight="duotone" aria-hidden="true" />Maskot 2D dan bukti aturan<small className="miro-code">APP-05 · A05</small>
               </h2>
               <span className="tag">{mascotEval.decision.decision}</span>
             </div>
@@ -646,17 +592,7 @@ export default function MiroEcosystemWorkspace({
               </label>
               <label className="miro-field">
                 <span>Mode pengujian layanan AI (Skenario penerimaan A05)</span>
-                <select
-                  aria-label="Mode pengujian layanan AI"
-                  value={aiMode}
-                  onChange={e => setAiMode(e.target.value as typeof aiMode)}
-                >
-                  <option value="verified">Normal — AI merangkum bukti aturan secara konsisten</option>
-                  <option value="stale_contradiction">
-                    Uji Skenario 7 — Sensor usang (&gt;5 mnt) tetapi AI menjawab optimistis (Wajib Ditolak)
-                  </option>
-                  <option value="timeout">Uji Timeout — Layanan AI lambat/gagal (Wajib Fallback ke Aturan)</option>
-                </select>
+                <SelectField label="Mode pengujian layanan AI" value={aiMode} onValueChange={value => setAiMode(value as typeof aiMode)} options={[{ value: 'verified', label: 'Normal · AI merangkum bukti aturan' }, { value: 'stale_contradiction', label: 'Uji sensor usang · jawaban optimistis wajib ditolak' }, { value: 'timeout', label: 'Uji timeout · kembali ke aturan' }]} />
               </label>
               <button
                 type="button"
@@ -695,7 +631,7 @@ export default function MiroEcosystemWorkspace({
 
           <section className="panel miro-card" aria-labelledby="ai-history-heading">
             <div className="panel-heading">
-              <h2 id="ai-history-heading">Riwayat AI Snapshot Terbekukan (E02 · AI_SNAPSHOT)</h2>
+              <h2 id="ai-history-heading">Riwayat snapshot AI<small className="miro-code">E02 · AI_SNAPSHOT</small></h2>
               <span className="tag">{eco.aiSnapshots.length} SNAPSHOT</span>
             </div>
             <div className="miro-card-body">
@@ -727,12 +663,13 @@ export default function MiroEcosystemWorkspace({
         </div>
       )}
 
+      {online && tab === 'energy' && <div className="online-panel"><ProductEnergy {...online} /><ProductRewards {...online} /></div>}
       {tab === 'energy' && (
         <div className="miro-grid">
           <section className="panel miro-card" aria-labelledby="solar-sizing-heading">
             <div className="panel-heading">
               <h2 id="solar-sizing-heading">
-                <Sun /> Kalkulator Energi Panel Surya, Baterai & Kebijakan Daya (A10)
+                <Sun weight="duotone" aria-hidden="true" />Energi surya dan baterai<small className="miro-code">A10</small>
               </h2>
               <span className="tag">{sizing.powerPolicy.toUpperCase()}</span>
             </div>
@@ -815,25 +752,14 @@ export default function MiroEcosystemWorkspace({
           <section className="panel miro-card" aria-labelledby="reward-ledger-heading">
             <div className="panel-heading">
               <h2 id="reward-ledger-heading">
-                <Award /> Hadiah Berkebun, Ledger & Penukaran Katalog Atomik (U04 · E03 · A06)
+                <Medal weight="duotone" aria-hidden="true" />Hadiah, ledger, dan penukaran<small className="miro-code">U04 · E03 · A06</small>
               </h2>
               <span className="tag">{pointSummary.availablePoints} POIN RESMI</span>
             </div>
             <div className="miro-card-body">
               <label className="miro-field">
                 <span>Sumber bukti klaim energi & perawatan</span>
-                <select
-                  aria-label="Sumber bukti klaim hadiah"
-                  value={energySourceMode}
-                  onChange={e => setEnergySourceMode(e.target.value as typeof energySourceMode)}
-                >
-                  <option value="verified_meter">
-                    Meter & Perangkat Terverifikasi (Menambah Saldo Poin Resmi di Ledger)
-                  </option>
-                  <option value="simulated">
-                    Data Simulasi / Tanpa Meter (Ditolak Ledger Resmi · Hanya Masuk Saldo Demo)
-                  </option>
-                </select>
+                <SelectField label="Sumber bukti klaim hadiah" value={energySourceMode} onValueChange={value => setEnergySourceMode(value as typeof energySourceMode)} options={[{ value: 'verified_meter', label: 'Meter terverifikasi · menambah poin resmi' }, { value: 'simulated', label: 'Data simulasi tanpa meter · hanya saldo demo' }]} />
               </label>
               <div className="miro-actions-row">
                 <button
@@ -895,7 +821,7 @@ export default function MiroEcosystemWorkspace({
                 </button>
               </div>
 
-              <h3 className="miro-subheading">Katalog Penukaran Produk (RW-03 · RW-05)</h3>
+              <h3 className="miro-subheading">Katalog penukaran<small className="miro-code">RW-03 · RW-05</small></h3>
               <ul className="miro-list">
                 {eco.catalogItems.map(item => {
                   const availableStock = item.stockTotal - item.stockReserved
@@ -937,7 +863,7 @@ export default function MiroEcosystemWorkspace({
 
               {eco.redemptions.length > 0 && (
                 <>
-                  <h3 className="miro-subheading">Pesanan & Reservasi Aktif</h3>
+                  <h3 className="miro-subheading">Pesanan dan reservasi aktif</h3>
                   <ul className="miro-list">
                     {eco.redemptions.map(red => {
                       const item = eco.catalogItems.find(c => c.id === red.catalogItemId)
@@ -1002,12 +928,13 @@ export default function MiroEcosystemWorkspace({
         </div>
       )}
 
+      {online && tab === 'community' && <div className="online-panel"><ProductKnowledge {...online} /></div>}
       {tab === 'community' && (
         <div className="miro-grid">
           <section className="panel miro-card" aria-labelledby="community-curation-heading">
             <div className="panel-heading">
               <h2 id="community-curation-heading">
-                <BookOpenCheck /> Kontribusi Ahli & Kurasi Profil Tanaman (U05 · E04 · A07)
+                <BookBookmark weight="duotone" aria-hidden="true" />Kontribusi dan kurasi profil<small className="miro-code">U05 · E04 · A07</small>
               </h2>
               <span className="tag">{eco.profileVersions.length} VERSI TERBIT</span>
             </div>
@@ -1061,7 +988,7 @@ export default function MiroEcosystemWorkspace({
 
               {eco.contributions.length > 0 && (
                 <>
-                  <h3 className="miro-subheading">Antrean Tinjauan Kurator (KB-04)</h3>
+                  <h3 className="miro-subheading">Antrean tinjauan kurator<small className="miro-code">KB-04</small></h3>
                   <label className="miro-field">
                     <span>Catatan keputusan kurator</span>
                     <input type="text" value={reviewReason} onChange={e => setReviewReason(e.target.value)} />
@@ -1109,7 +1036,7 @@ export default function MiroEcosystemWorkspace({
                 </>
               )}
 
-              <h3 className="miro-subheading">Katalog Versi Profil Terbit (KB-01)</h3>
+              <h3 className="miro-subheading">Versi profil terbit<small className="miro-code">KB-01</small></h3>
               <ul className="miro-list">
                 {eco.profileVersions.map(ver => (
                   <li key={ver.id}>
@@ -1140,7 +1067,7 @@ export default function MiroEcosystemWorkspace({
           <section className="panel miro-card" aria-labelledby="blockchain-outbox-heading">
             <div className="panel-heading">
               <h2 id="blockchain-outbox-heading">
-                <Link2 /> Outbox & Verifikasi Komitmen Blockchain (A08)
+                <LinkSimple weight="duotone" aria-hidden="true" />Outbox dan komitmen blockchain<small className="miro-code">A08</small>
               </h2>
               <span className="tag">BASE SEPOLIA · {eco.outboxJobs.length} JOB</span>
             </div>

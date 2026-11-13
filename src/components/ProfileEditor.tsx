@@ -1,7 +1,8 @@
+import { Check, X } from '@phosphor-icons/react'
 import { DialogTitle, DialogDescription } from './ui/dialog'
 import type { Profile } from '../lib/agronomyEngine'
 import { useState } from 'react'
-import { Check, X } from 'lucide-react'
+
 
 export default function ProfileEditor({ profile, onApply, onClose }: { profile: Profile; onApply: (p: Profile) => void; onClose: () => void }) {
   const [error, setError] = useState('')

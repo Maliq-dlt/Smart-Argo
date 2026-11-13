@@ -37,7 +37,7 @@ docker compose --env-file .tmp/phase1/compose.env -p smart-agro-phase1 -f supaba
 
 ### Hosted configuration and boundaries
 
-Apply all seven versioned migrations in filename order to the intended Supabase project; deploy `supabase/functions/product-claim`, `supabase/functions/telemetry-ingest`, `supabase/functions/unit-explanation`, and `supabase/functions/energy-ingest`. Set `APP_ORIGIN` on the function to the exact website origin. The function uses server-only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; the frontend uses `VITE_SUPABASE_URL` and the public `VITE_SUPABASE_ANON_KEY`. Never put a service key in a `VITE_` variable. The local bootstrap SQL and Compose are development-only and must not be applied to hosted Supabase. The function deliberately validates the bearer token through Auth, then verifies the server-stored Ed25519 challenge; gateway JWT checking is disabled in `supabase/config.toml` so validation is not tied to a legacy JWT signing scheme.
+Apply all versioned migrations in filename order to the intended Supabase project; deploy `supabase/functions/product-claim`, `supabase/functions/telemetry-ingest`, `supabase/functions/unit-explanation`, and `supabase/functions/energy-ingest`. Set `APP_ORIGIN` on the function to the exact website origin. The function uses server-only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; the frontend uses `VITE_SUPABASE_URL` and the public `VITE_SUPABASE_ANON_KEY`. Never put a service key in a `VITE_` variable. The local bootstrap SQL and Compose are development-only and must not be applied to hosted Supabase. The function deliberately validates the bearer token through Auth, then verifies the server-stored Ed25519 challenge; gateway JWT checking is disabled in `supabase/config.toml` so validation is not tied to a legacy JWT signing scheme.
 
 Product provisioning must place a genuine raw 32-byte Ed25519 public key encoded as standard base64 in `device.public_key`, the SHA256 of a random sealed code in `activation.secret_hash`, and issuer/registry information in `product`. Keep private keys in the device/provisioning environment and sealed codes outside public QR/URLs/logs. The UI accepts a product serial, or reads the `serial` query parameter from a QR URL; camera pairing is not part of this phase. Sign the exact UTF-8 challenge returned by the server and supply the 64-byte signature as standard base64. No device key is generated or held by the browser.
 
@@ -92,6 +92,20 @@ Use the same existing Playwright/Chrome and repository-local temporary environme
 ## Phase 5 — External commitments
 
 Configure an actual contract and worker only when the preceding durable events are trustworthy. Verify transaction receipts and byte-level artifact hashes; retain pending/failed state on timeouts. Do not describe a locally generated hash or simulated block as a confirmed blockchain transaction.
+
+### User-signed record proofs (implemented 13 November 2026)
+
+The simulator's **Berkas → Bukti blockchain** freezes the active session as exact UTF-8 JSON, hashes it with SHA-256, and asks the user's own browser wallet (EIP-6963/1193) for one zero-value transaction to their own address on Base Sepolia (84532) or Sepolia (11155111). The data is `0x53414731` ("SAG1") followed by the hash. Chain ID, transaction, block and status go into a separate `.bukti.json`. Verification recomputes the file hash and checks chain ID, sender, recipient, zero value, data and a successful receipt through the network's public JSON-RPC node; pending, failed, missing and mismatched states never show as verified. Server outbox commitments for claims and transfers remain unsent: no contract or worker is configured.
+
+Verified in Chrome against an injected test wallet and an intercepted RPC that share one in-memory chain (`tests/chain-proof-browser.mjs`): add and switch network, record, proof download, verify, one-byte tampering, wallet refusal, and no wallet, at 1440/390/1024 px. No live testnet transaction was sent.
+
+## Product completion — 13 November 2026
+
+- **ID-01:** `product_public_status(serial)` is callable without an account and returns registry status, variant and whether the product is claimed, never the owner. The account panel shows it after typing or scanning a QR (camera or photo; ZXing WASM bundled). Registry status is not proof of physical authenticity; issuer signatures are stored but not cryptographically verified.
+- **ID-03:** `create_transfer_offer` requires a session created within ten minutes (the UI asks for the password again) and returns a one-time 128-bit code, stored as SHA-256, valid 24 hours and five wrong attempts. `accept_transfer` ends the old ownership and starts the new one in one transaction with an `ownership_transfer` outbox commitment; retries are idempotent and concurrent recipients yield one owner.
+- **UC-11:** the explanation handler optionally calls an OpenAI-compatible chat endpoint (`AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`; locally 9router with `ag/gemini-3.8-flash-low`). The prompt carries the rule result and recent readings only, never owner, unit, device or account identifiers. Replies must be JSON within length bounds, without dose amounts, links or markup. Accepted text is stored as `ai_explained` with model and prompt version; failures, refusals and rejected text are stored as `rule_fallback` with that status. The database enforces the same rule.
+
+Verification on 13 November 2026: `npm test` 83/83; `npm run test:backend` 67/67 (adds `ai-explanation.integration.mjs` against a local OpenAI-compatible stub and `transfer.integration.mjs`); lint, typecheck and build pass. Chrome checks pass for account (including public status and a transfer code), knowledge, energy, rewards, QR (photo, fake camera, refused camera), record proof, simulator UI, dashboard, route transitions and landing. A call through a real 9router key was not run in this verification.
 
 ## Local assessment containers — 8 November 2026
 

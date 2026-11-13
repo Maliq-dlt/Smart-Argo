@@ -6,10 +6,11 @@ import { createEnergyIngestHandler } from '../supabase/functions/energy-ingest/h
 import { createUnitExplanationHandler } from '../supabase/functions/unit-explanation/handler.ts'
 import { createTelemetryIngestHandler } from '../supabase/functions/telemetry-ingest/handler.ts'
 import { createProductClaimHandler } from '../supabase/functions/product-claim/handler.ts'
+import { explainerFromEnv } from '../src/lib/aiExplanation.ts'
 
-export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:54324', restUrl='http://127.0.0.1:54325', host='127.0.0.1', extraOrigins=[], staticRoot=''}) {
+export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:54324', restUrl='http://127.0.0.1:54325', host='127.0.0.1', extraOrigins=[], staticRoot='', port=54321, explainer=explainerFromEnv(name => process.env[name])}) {
   const config = {url:'http://127.0.0.1:54321', serviceKey:settings.service, appOrigin}
-  const handlers = {'/functions/v1/product-claim':createProductClaimHandler(config), '/functions/v1/telemetry-ingest':createTelemetryIngestHandler(config), '/functions/v1/unit-explanation':createUnitExplanationHandler(config), '/functions/v1/energy-ingest':createEnergyIngestHandler(config)}
+  const handlers = {'/functions/v1/product-claim':createProductClaimHandler(config), '/functions/v1/telemetry-ingest':createTelemetryIngestHandler(config), '/functions/v1/unit-explanation':createUnitExplanationHandler({...config, explainer}), '/functions/v1/energy-ingest':createEnergyIngestHandler(config)}
   const allowedOrigins = new Set([appOrigin, ...extraOrigins])
   const server = createServer(async (req,res) => {
     const path = new URL(req.url,config.url).pathname
@@ -41,7 +42,7 @@ export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:543
         let resolved
         try {resolved = await realpath(file)} catch {res.writeHead(404);res.end();return}
         if (!resolved.startsWith(staticRoot+sep) || !(await stat(resolved)).isFile()) {res.writeHead(404);res.end();return}
-        const types = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.webp':'image/webp','.png':'image/png','.woff2':'font/woff2','.txt':'text/plain; charset=utf-8','.ico':'image/x-icon'}
+        const types = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.webp':'image/webp','.png':'image/png','.woff2':'font/woff2','.wasm':'application/wasm','.md':'text/markdown; charset=utf-8','.mp4':'video/mp4','.avif':'image/avif','.txt':'text/plain; charset=utf-8','.ico':'image/x-icon'}
         res.writeHead(200, {'Content-Type':types[extname(file)] || 'application/octet-stream','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin'})
         res.end(req.method === 'HEAD' ? undefined : await readFile(resolved));return
       }
@@ -59,9 +60,11 @@ export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:543
         if (!upstream) {res.writeHead(404);res.end();return}
         const headers={}
         for (const k of ['authorization','apikey','content-type','prefer']) if (req.headers[k]) headers[k]=req.headers[k]
-        result=await fetch(upstream,{method:req.method,headers,...(body.length?{body}:{}),signal:AbortSignal.timeout(15000)})
+        // manual: OAuth (/authorize -> Google, /callback -> app) must reach the browser as a redirect, not be followed here.
+        result=await fetch(upstream,{method:req.method,headers,redirect:'manual',...(body.length?{body}:{}),signal:AbortSignal.timeout(15000)})
       }
       res.statusCode=result.status
+      if (result.headers.get('location')) res.setHeader('Location',result.headers.get('location'))
       res.setHeader('Content-Type',result.headers.get('content-type') || 'application/json')
       res.end(Buffer.from(await result.arrayBuffer()))
     } catch {
@@ -71,7 +74,7 @@ export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:543
   })
   server.requestTimeout=15000
   server.headersTimeout=10000
-  server.listen(54321,host,()=>console.log('Smart Agro gateway ready on port 54321'))
+  server.listen(port,host,()=>console.log(`Smart Agro gateway ready on port ${port}${explainer ? ' (AI explanations on)' : ''}`))
   return server
 }
 

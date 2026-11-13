@@ -1,7 +1,8 @@
+import { ArrowDown, ArrowRight } from '@phosphor-icons/react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { ArrowDown, ArrowRight } from 'lucide-react'
+
 import { charReveal, motionOk, pixelTrail, stairCover, stairGrid } from './effects'
 import { whenRevealed } from '../../../lib/curtainSignal'
 
@@ -13,7 +14,7 @@ export default function Hero({ onExplore }: { onExplore: () => void }) {
 
   useLayoutEffect(() => {
     const root = wrap.current!, section = stage.current!, clip = video.current!
-    const stopTrail = pixelTrail(section, trail.current!)
+    const stopTrail = pixelTrail(section, trail.current!, clip)
     // Tell the loading curtain once the first video frame can be shown.
     const ready = () => window.dispatchEvent(new Event('smartagro:ready'))
     if (clip.readyState >= 2) ready(); else clip.addEventListener('loadeddata', ready, { once: true })

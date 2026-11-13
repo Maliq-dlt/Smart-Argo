@@ -1,5 +1,6 @@
+import { ArrowElbowDownRight, Check, CheckCircle, Copy, TerminalWindow } from '@phosphor-icons/react'
 import * as Tabs from '@radix-ui/react-tabs'
-import { Check, Copy, Terminal, CircleCheck, CornerDownRight } from 'lucide-react'
+
 import { useEffect, useId, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { RULES, type Decision, type PotCase } from '../lib/agronomyEngine'
@@ -19,7 +20,7 @@ export default function TerminalSimulator({ clock, data, decision, logs }: { clo
     catch { setCopyError('Salin gagal. Gunakan tombol Ekspor sesi.') }
   }
   return <section className="terminal-panel" aria-labelledby="terminal-heading">
-    <div className="terminal-heading"><h2 id="terminal-heading"><Terminal />Konsol simulasi</h2><span>ESP32</span></div>
+    <div className="terminal-heading"><h2 id="terminal-heading"><TerminalWindow />Konsol simulasi</h2><span>ESP32</span></div>
     <Tabs.Root value={tab} onValueChange={setTab} className="terminal-tabs">
       <Tabs.List className="tab-list" aria-label="Tampilan konsol">
         {[['serial', 'Log sesi'], ['json', 'JSON'], ['trace', 'Jejak aturan']].map(([value, label]) => <Tabs.Trigger key={value} value={value}>
@@ -36,7 +37,7 @@ export default function TerminalSimulator({ clock, data, decision, logs }: { clo
           {logs.map(log => <div key={log.id} className={`log-line ${log.kind}`}><time>{logClock(clock, log.time)}</time><span><b>{log.kind.toUpperCase()}</b> {log.message}</span></div>)}
           <div ref={logEnd} />
         </div>
-        <div className="terminal-prompt"><CornerDownRight /><span>Menunggu sampel berikutnya</span><i /></div>
+        <div className="terminal-prompt"><ArrowElbowDownRight /><span>Menunggu sampel berikutnya</span><i /></div>
       </Tabs.Content>
       <Tabs.Content value="json" className="terminal-content">
         <div className="terminal-meta"><span>Kontrak input + keputusan</span><button onClick={copy} className="copy-button" aria-label="Salin JSON">{copied ? <Check /> : <Copy />}{copied ? 'Tersalin' : 'Salin'}</button></div>
@@ -46,7 +47,7 @@ export default function TerminalSimulator({ clock, data, decision, logs }: { clo
       <Tabs.Content value="trace" className="terminal-content">
         <div className="terminal-meta">Aturan pertama yang cocok menentukan tindakan.</div>
         <ol className="rule-list">{RULES.map(([code, label, detail], i) => <li key={code} className={i === current ? 'matched' : i > current ? 'skipped' : ''}>
-          <span className="rule-number">{i < current ? <CircleCheck size={13} /> : String(i + 1).padStart(2, '0')}</span>
+          <span className="rule-number">{i < current ? <CheckCircle size={13} /> : String(i + 1).padStart(2, '0')}</span>
           <div><strong>{label}</strong><small>{i === current ? decision.reason : detail}</small><em>{i === current ? 'TERPILIH' : i > current ? 'TIDAK DIEVALUASI' : 'TIDAK MEMICU'}</em></div>
         </li>)}</ol>
       </Tabs.Content>

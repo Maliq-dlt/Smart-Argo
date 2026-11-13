@@ -1,6 +1,7 @@
+import { Moon, Sun } from '@phosphor-icons/react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Moon, Sun } from 'lucide-react'
+
 
 export default function ThemeToggle() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {

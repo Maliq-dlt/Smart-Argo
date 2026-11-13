@@ -2,164 +2,123 @@
 
 # Smart Agro
 
-**Observe the plant. Understand the evidence. Choose the next step.**
+**Observe the pot. Understand the evidence. Choose the next step.**
 
-An interactive plant-care simulator and local IoT backend for traceable observations, product ownership, and evidence-based decisions.
+A root-zone plant-care simulator with a local IoT backend: signed telemetry, product ownership, rule-based explanations, and traceable records.
 
-[Live demo](https://smart-agro-demo.pages.dev/) · [Get started](#get-started) · [Explore the app](#explore-the-app) · [Architecture](#architecture) · [Contributing](CONTRIBUTING.md)
+[Live demo](https://smart-agro-demo.pages.dev/) · [Get started](#get-started) · [What works](#what-works) · [Architecture](#architecture) · [Changelog](CHANGELOG.md)
 
-![Smart Agro plant story](docs/images/landing.png)
+![Smart Agro landing](docs/images/landing.png)
 
 </div>
 
-Smart Agro connects a scroll-driven plant story with a working simulator and a separate authenticated product workspace. The interface is in Indonesian. The simulator runs offline in the browser; Docker adds PostgreSQL, authentication, signed telemetry ingestion, profile curation, and program rewards.
-
-**[Open the public demo](https://smart-agro-demo.pages.dev/)** — hosted on Cloudflare Pages. The plant story, simulator, dashboards, and browser-local ecosystem are available without installation. Data stays in the visitor's browser; online accounts, shared device telemetry, and server-side rewards require the backend described below.
-
-The demo uses direct uploads; pushing to GitHub does not automatically redeploy it.
+The interface is in Indonesian. The **[public demo](https://smart-agro-demo.pages.dev/)** (Cloudflare Pages) runs the landing story, the simulator, the dashboard, and the browser-local ecosystem demo with no installation; data stays in the visitor's browser. Accounts, device telemetry, transfers, rewards, and AI wording need the backend below.
 
 ## Get started
 
-Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) with Linux containers and Compose v2 or newer. Run from the repository root:
+With [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Linux containers, Compose v2):
 
 ```sh
 git clone https://github.com/Maliq-dlt/Smart-Argo.git
 cd Smart-Argo
-docker compose up --build -d --wait
+docker compose up --build -d --wait     # open http://127.0.0.1:8088
+docker compose --profile tools run --rm verify   # check services, auth and access rules
+docker compose stop                      # data and generated keys persist in named volumes
 ```
 
-Open **[http://127.0.0.1:8088](http://127.0.0.1:8088)**. No host Node.js, Python, Supabase account, or manual `.env` setup is required. The first build downloads images and dependencies.
+No host Node.js, Supabase account, or `.env` file is needed. Only port `8088` is published, on loopback. Sign-up is auto-confirmed in this local mode; no email is sent.
 
-```sh
-# Check actual services, compiled assets, authentication and access controls
-docker compose --profile tools run --rm verify
+## What works
 
-# Inspect services
-docker compose ps -a
+| Area | Behavior |
+| --- | --- |
+| Landing | Scroll story with pre-rendered device sequences (GSAP), Lenis smooth scroll, a loading curtain, and an interactive grow sequence. Reduced motion is supported throughout. |
+| Simulator and dashboard | Deterministic rule engine with evidence, timestamped synthetic readings, watering/fertilizer logs, session import/export and comparison, light and dark themes. |
+| Record proof | Freeze a session as exact JSON bytes, record its SHA-256 through the user's own wallet as a zero-value self-transfer on Base Sepolia or Sepolia, and verify a file against its separate proof file through the public node. |
+| Product QR | Public QR holds only the serial. Scan by camera or photo (ZXing WebAssembly, self-hosted), print as SVG/PNG, and check the public registry status before signing in. |
+| Accounts and ownership | A sign-in gate in front of the simulator (Google with PKCE, email and password, or guest), a profile page for account, security and products, optional authenticator-app 2FA, session-bound activation challenges with Ed25519 device proof, atomic claims, and re-authenticated one-time transfer codes. Row-level security on every table. |
+| Device telemetry | Signed v2 envelopes, per-sensor quality, replay and sequence protection, explicit stale/missing readings. |
+| Explanations | The rule engine decides; an optional OpenAI-compatible model (locally 9router, light Antigravity model) only rewords the result. Its text is checked (no doses, links, or markup) and labelled with model and prompt version; any failure falls back to the rule text, labelled as such. |
+| Knowledge, energy, rewards | Curated immutable profile versions, signed meter windows, a transactional points ledger with reservations and compensation. |
 
-# Stop while preserving data and generated keys
-docker compose stop
-
-# Resume
-docker compose up -d --wait
-```
-
-Database data and generated credentials persist in separate named volumes. `docker compose down` also preserves these volumes. Removing volumes erases the local installation; retain both when backing up or moving it. Only port `8088` is published, on loopback.
-
-Local assessment mode automatically confirms new registrations. It sends no verification email and does not establish mailbox ownership. This Compose setup is intended for local assessment and development.
-
-## Explore the app
-
-1. **Meet the pot.** The hero shows a chili plant with live sensor callouts (simulated, one reading per 1.7 s); switch to bawang merah to see the profile limits change. Scroll on: a pinned story drops the probe into the root zone and runs the 2.5-hour scenario to the engine's advice. The *Lab siram* lets you pick one of four built-in scenarios and shows the rule engine's verdict. Reduced motion keeps every reading without the movement.
-2. **Try a care decision.** Compare drying and persistently wet observations, then open **Coba simulator**. Plant a seed, change scenarios, advance time, water, or record a fertilizer reminder.
-3. **Read the history.** Open Dashboard or Terminal for sensor trends, decision evidence, and the journal. Export a session before clearing browser storage.
-4. **Open Ekosistem.** Register in **Akun & kepemilikan produk online**. Browser-local ecosystem demos and online account records use separate data stores.
-5. **Exercise device workflows.** Activation requires a provisioned product, sealed activation code, and Ed25519 signature. Integration tests provision software fixtures and verify the protocol. A fresh database contains no fabricated devices or readings.
+Tests use generated keys and synthetic data. They do not prove calibration, field accuracy, physical-device integration, or energy savings. Points are internal program records, not money or tokens. Ownership and claim commitments sit in an outbox; no contract or worker sends them on-chain yet.
 
 ![Smart Agro dashboard](docs/images/dashboard.png)
-
-## What is implemented
-
-| Area | Current behavior |
-| --- | --- |
-| Plant story | Cabai/bawang hero, simulated sensor callouts, GSAP root-zone story, scenario lab and reduced motion. |
-| Simulator | Deterministic rules, timestamped readings, reproducible scenarios, planting/watering effects, reminders, session import/export and comparisons. |
-| Accounts and ownership | Email/password Auth, private owner reads, session-bound activation challenges, Ed25519 verification, transactional claims and RLS. |
-| Device telemetry | Signed v2 envelopes, sensor quality, sequence/replay protection, bounded history, explicit stale/missing readings. |
-| Community knowledge | Contributions, curator review, immutable profile versions, evidence/scope, no self-approval. |
-| Explanations | Deterministic rule evidence and saved explanations. Generative AI is not configured. |
-| Energy and rewards | Signed meter evidence, server policies, transactional ledger/reservations and program redemptions. |
-| Audit outbox | Atomic pending jobs and verifiable commitments. No blockchain network or contract is configured. |
-
-Tests use generated keys and synthetic observations. They do not establish calibration, field accuracy, actuator operation, actual energy savings, or physical-device integration. Rewards are internal program records, not money or cryptocurrency. Plant images are 2.5D cutouts rather than freely rotatable 3D models.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Browser[Browser] -->|localhost:8088| App[Node gateway + Vite build]
-    App --> Auth[Supabase Auth]
-    App --> REST[PostgREST]
-    App --> Handlers[Signed API handlers]
-    Handlers --> App
+    Browser -->|:8088| Gateway[Node gateway + static build]
+    Gateway --> Auth[Supabase Auth]
+    Gateway --> REST[PostgREST]
+    Gateway --> Handlers[Signed handlers: claim, telemetry, explanation, energy]
+    Handlers -.optional.-> AI[OpenAI-compatible model]
     Auth --> DB[(PostgreSQL 17)]
     REST --> DB
+    Browser -.own wallet.-> Chain[Public testnet]
 ```
 
-The gateway serves compiled web assets and same-origin APIs. Four TypeScript handlers verify product claims, plant telemetry, rule explanations, and energy evidence. Auth and PostgREST reach PostgreSQL on the private Compose network. Initialization generates credentials once; versioned migrations run transactionally before the app becomes ready.
-
-The browser receives only its API origin and public anonymous key through `runtime-config.js`. Database passwords, JWT signing material and service-role keys stay on the backend. The runtime uses an unprivileged Node user, without `node_modules` or frontend build tools.
+The browser receives only the API origin and the public anon key. Database passwords, JWT secrets, the service-role key, and the AI key stay on the server.
 
 ```text
-src/components/        Landing, simulator, dashboards, product workspace
-src/lib/               Rules, sessions, protocol clients and validation
-supabase/functions/    Request handlers and signature verification
+src/components/        Landing, simulator, dashboard, product workspace
+src/lib/               Rules, sessions, protocol clients, validation, proofs
+supabase/functions/    Request handlers (Deno on Supabase, Node in the gateway)
 supabase/migrations/   Schema, RLS and transactional operations
-scripts/               Shared gateway, local launcher, Python reference
-tests/                Unit, integration, container and browser checks
-docs/                 Protocols, implementation evidence and diagrams
+scripts/               Gateway, local launcher, Python reference
+tests/                 Unit, integration, container and browser checks
 ```
 
-Stack: React 18, TypeScript, Vite, Tailwind CSS, Radix UI, GSAP, Framer Motion, Node.js, PostgreSQL, Supabase Auth and PostgREST. Scrolling uses native browser scrolling with GSAP ScrollTrigger/ScrollTo; Lenis is not used.
+Stack: React 18, TypeScript, Vite 6, Tailwind CSS 4, Radix UI, GSAP, Lenis, Framer Motion, Phosphor Icons, PostgreSQL 17, Supabase Auth and PostgREST.
 
 ## Local development
 
-Use Node.js **22.18+**, npm, and Python **3.10+** for parity tests.
+Node.js **22.18+**:
 
 ```sh
-npm ci --cache .cache/npm
-npm run dev
+npm ci
+npm run dev                # http://127.0.0.1:5173, simulator works without a backend
+npm run backend:local      # separate terminal; Docker stack on ports 54321/54324/54325
 ```
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The simulator needs no backend. For online features, run `npm run backend:local` in another terminal first, then start/restart Vite. This separate developer stack uses ports `54321`, `54324`, `54325` and the `smart-agro-phase1` Compose project.
+The launcher writes `.env.local` only if absent. For AI explanations, create `.tmp/phase1/ai.env` (ignored by Git) before starting the backend:
 
-The launcher creates `.env.local` only if absent. It preserves existing configuration; public local values are also written to `.tmp/phase1/browser.env`. Keep generated environment files and `.tmp/` out of Git. See [implementation phases](docs/IMPLEMENTATION_PHASES.md) for provisioning and hosted Supabase setup.
+```sh
+AI_BASE_URL=http://127.0.0.1:20128/v1   # 9router, or any OpenAI-compatible endpoint (HTTPS unless local)
+AI_API_KEY=<a key made for this app in the router dashboard>
+AI_MODEL=ag/gemini-3.8-flash-low        # default
+```
 
-For static hosting, run `npm run build` and publish `dist/`. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` at build time for online features. Static hosting does not include the Docker backend. Never put service-role keys in a `VITE_` variable.
+For Docker, pass the same variables to `docker compose up` with `AI_BASE_URL=http://host.docker.internal:20128/v1`. A hosted deployment cannot reach a router on your machine; without AI variables, explanations stay rule-based.
+
+Google sign-in is optional. In Google Cloud Console, create an OAuth client of type *Web application* with the authorized redirect URI `http://127.0.0.1:54321/auth/v1/callback` (Docker: `http://127.0.0.1:8088/auth/v1/callback`). Put the credentials in `.tmp/phase1/google.env`, or for Docker in `.env` next to `compose.yaml` together with `GOOGLE_ENABLED=true`. Both files are ignored by Git. Then restart the backend:
+
+```sh
+GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=<secret>
+```
+
+Without them, the sign-in card offers email and password only. Accounts created through Google have no password: they confirm a transfer with an authenticator code or by signing in with Google again.
+
+For static hosting, run `npm run build` and publish `dist/`. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` at build time for online features. Never put a service-role or AI key in a `VITE_` variable.
+
+`npm run build:cloud` builds against the hosted Supabase project in `.env.cloud` (public URL and publishable key only). That build sets `VITE_SIGN_IN_REQUIRED=true`, so the entry gate has no guest option; local builds keep it. The hosted functions accept one origin, set as the `APP_ORIGIN` secret, and have no AI key: a router on your machine is unreachable from the cloud, so explanations come from the rule engine.
 
 ## Verification
 
 ```sh
-npm run lint
-npm run typecheck
-npm test
-npm run build
-python scripts/reference/simulasi_pot.py --self-test
+npm run lint && npm run typecheck && npm test && npm run build
+npm run test:backend       # needs npm run backend:local; synthetic fixtures only, never a shared database
 ```
 
-Unit checks include decision/evidence parity with the bundled Python reference across 110 cases. Backend integration checks cover ownership, denied access, replay/concurrency, rollback, curation, explanations, signed energy and reward accounting:
-
-```sh
-# Start npm run backend:local in a separate terminal first
-npm run test:backend
-```
-
-These tests target the isolated developer stack. They create synthetic accounts/products and briefly install rollback-test triggers. Do not run them against a shared or production database.
-
-Browser checks use an existing Playwright installation and Google Chrome. PowerShell example against Docker:
-
-```powershell
-$env:PLAYWRIGHT_MODULE = 'C:/path/to/node_modules/playwright'
-$env:TEST_URL = 'http://127.0.0.1:8088/'
-$env:TEMP = Join-Path (Get-Location) '.tmp'
-$env:TMP = $env:TEMP
-New-Item -ItemType Directory -Force $env:TEMP | Out-Null
-node tests/landing-browser.mjs
-node tests/dashboard-browser.js
-node tests/route-transition-browser.js
-$env:TEST_URL = 'http://127.0.0.1:8088/#simulasi'
-node tests/ui-browser.js
-```
-
-Evidence is saved under ignored `.tmp/`. Account/energy/reward browser suites require the developer backend and their software fixtures. Chrome viewport emulation does not substitute for Safari, Firefox or physical-device testing.
+Browser checks use an existing Playwright install with Google Chrome (`PLAYWRIGHT_MODULE`, `TEST_URL`); see the header of each `tests/*-browser.*` file. Only Chrome has been tested.
 
 ## Documentation
 
 - [Implementation phases and verification boundaries](docs/IMPLEMENTATION_PHASES.md)
-- [Signed telemetry v2](docs/telemetry-v2.md) · [Simulator telemetry v1](docs/telemetry-v1.md)
-- [Profile curation and evidence explanations](docs/profile-curation.md)
-- [Energy evidence and program rewards](docs/energy-rewards.md)
+- [Signed telemetry v2](docs/telemetry-v2.md) · [Profile curation](docs/profile-curation.md) · [Energy and rewards](docs/energy-rewards.md)
 - [System diagrams and specification](docs/diagram/README.md)
-- [Contributing](CONTRIBUTING.md) · [Third-party credits](docs/ACKNOWLEDGMENTS.md) · [Plant credits](public/plants/CREDITS.md)
+- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Credits](docs/ACKNOWLEDGMENTS.md)
 
-Font licenses accompany the local assets. The repository does not currently declare a project-wide open-source license.
+Font licenses accompany the local font files. The repository does not declare a project-wide open-source license.

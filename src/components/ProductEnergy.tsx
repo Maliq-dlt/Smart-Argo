@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react'
 import type {ProductAccountClient} from '../lib/productAccountClient'
 import {parseEnergyWorkspace,type EnergyWorkspace} from '../lib/productEnergyClient'
+import { SelectField } from './ui/select'
 const empty:EnergyWorkspace={roles:[],meters:[],windows:[]}
 const utc=(v:string)=>new Date(v).toLocaleString('id-ID',{timeZone:'UTC'})+' UTC'
 const reason:Record<string,string>={credited:'Dikreditkan',policy_disabled:'Program belum aktif',below_threshold:'Di bawah ambang poin',daily_cap:'Batas poin harian tercapai'}
@@ -32,8 +33,8 @@ export default function ProductEnergy({client,onSessionExpired}:{client:ProductA
      <label className="miro-field"><span>Mulai berlaku meter</span><input type="datetime-local" required value={from} onChange={e=>setFrom(e.target.value)}/></label><label className="miro-field"><span>Akhir berlaku meter</span><input type="datetime-local" required value={until} onChange={e=>setUntil(e.target.value)}/></label></div>
     <label className="miro-field"><span>Batas daya meter (W)</span><input type="number" required min="0.001" max="100000" step="any" value={power} onChange={e=>setPower(e.target.value)}/></label><button className="button" type="submit">Daftarkan meter</button>
    </fieldset></form>
-   <form onSubmit={e=>{e.preventDefault();void run(async()=>{await client.rpc('operator_revoke_energy_meter',{p_meter_id:meter,p_reason:revokeReason.trim()});setMeter('');setRevokeReason('');setMessage('Meter dicabut; bukti lama tetap tersimpan.')})}}><fieldset className="product-account-form" disabled={pending}><legend>Cabut registrasi meter</legend>
-    <label className="miro-field"><span id="energy-revoke-label">Meter untuk dicabut</span><select required aria-labelledby="energy-revoke-label" value={meter} onChange={e=>setMeter(e.target.value)}><option value="">Pilih meter aktif</option>{workspace.meters.filter(m=>m.status==='active').map(m=><option key={m.id} value={m.id}>{m.device_id} · {m.id}</option>)}</select></label><label className="miro-field"><span>Alasan pencabutan meter</span><textarea aria-label="Alasan pencabutan meter" required maxLength={1000} value={revokeReason} onChange={e=>setRevokeReason(e.target.value)}/></label><button className="button" type="submit">Cabut meter</button>
+   <form onSubmit={e=>{e.preventDefault();void run(async()=>{if(!workspace.meters.some(m=>m.id===meter&&m.status==='active'))throw new Error('Pilih meter aktif.');await client.rpc('operator_revoke_energy_meter',{p_meter_id:meter,p_reason:revokeReason.trim()});setMeter('');setRevokeReason('');setMessage('Meter dicabut; bukti lama tetap tersimpan.')})}}><fieldset className="product-account-form" disabled={pending}><legend>Cabut registrasi meter</legend>
+    <label className="miro-field"><span id="energy-revoke-label">Meter untuk dicabut</span><SelectField label="Meter untuk dicabut" placeholder="Pilih meter aktif" value={meter} onValueChange={v=>setMeter(v)} options={[...workspace.meters.filter(m=>m.status==='active').map(m=>({value:m.id,label:`${m.device_id} · ${m.id}`}))]} /></label><label className="miro-field"><span>Alasan pencabutan meter</span><textarea aria-label="Alasan pencabutan meter" required maxLength={1000} value={revokeReason} onChange={e=>setRevokeReason(e.target.value)}/></label><button className="button" type="submit">Cabut meter</button>
    </fieldset></form>
   </details>}
  </div></section>

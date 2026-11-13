@@ -1,7 +1,7 @@
-import { explainDeviceEvidence, parseExplanationContext } from '../../../src/lib/deviceExplanation.ts'
+import { explainDeviceEvidence, parseExplanationContext, withAi, type Explainer } from '../../../src/lib/deviceExplanation.ts'
 type Json = Record<string, unknown>
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-export function createUnitExplanationHandler(config: {url:string;serviceKey:string;appOrigin:string}) {
+export function createUnitExplanationHandler(config: {url:string;serviceKey:string;appOrigin:string;explainer?:Explainer}) {
   const base=new URL(config.url), origin=new URL(config.appOrigin).origin
   if (base.protocol!=='https:' && !(base.protocol==='http:' && ['localhost','127.0.0.1'].includes(base.hostname))) throw new Error('HTTPS required')
   return async (request:Request):Promise<Response>=>{
@@ -37,7 +37,9 @@ export function createUnitExplanationHandler(config: {url:string;serviceKey:stri
       }
       const context=await rpc('unit_explanation_context',{p_unit_id:body.unit_id,p_device_id:body.device_id})
       if(!context.ok)return reply(context.code==='unauthorized'?401:403,context)
-      const result=explainDeviceEvidence(parseExplanationContext(context),body.question as string)
+      const evidence=parseExplanationContext(context),rules=explainDeviceEvidence(evidence,body.question as string)
+      // The optional AI step words the rule result; any failure keeps the rule explanation, labelled as such.
+      const result=config.explainer?withAi(rules,await config.explainer(rules,evidence,body.question as string)):rules
       const saved=await rpc('save_unit_explanation',{p_auth_user_id:user.id,p_session_id:claims.session_id,p_context:context,p_result:result,p_request_id:body.request_id,p_question:body.question},`Bearer ${config.serviceKey}`)
       return reply(saved.ok?200:saved.code==='unauthorized'?401:saved.code==='unit_unavailable'?403:saved.code==='rate_limited'?429:409,saved)
     } catch { return reply(503,{ok:false,code:'service_unavailable',message:'Penjelasan belum dapat disimpan. Bacaan tetap tersedia; coba kembali dengan identitas permintaan yang sama.'}) }

@@ -1,7 +1,8 @@
+import { ArrowCounterClockwise, Drop } from '@phosphor-icons/react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import type { SplitText } from 'gsap/SplitText'
-import { Droplet, RotateCcw } from 'lucide-react'
+
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { charReveal, motionOk } from './effects'
 import { FrameSequence } from './frameSequence'
@@ -73,8 +74,8 @@ export default function Grow() {
       <div className="v5-drops" aria-hidden="true">{stages.map((s, i) => <i key={s.label} className={i < step ? 'is-full' : ''} />)}</div>
       <p className="v5-grow-stage" aria-live="polite">{step === 0 ? 'Tunas' : stages[step - 1].label}</p>
       {done
-        ? <button type="button" className="sa-btn sa-btn-ghost" onClick={reset}><RotateCcw aria-hidden="true" />Ulangi</button>
-        : <button type="button" className="sa-btn sa-btn-dark" onClick={water} aria-disabled={busy}><Droplet aria-hidden="true" />Siram sesuai saran</button>}
+        ? <button type="button" className="sa-btn sa-btn-ghost" onClick={reset}><ArrowCounterClockwise aria-hidden="true" />Ulangi</button>
+        : <button type="button" className="sa-btn sa-btn-dark" onClick={water} aria-disabled={busy}><Drop aria-hidden="true" />Siram sesuai saran</button>}
       <small>Ilustrasi pertumbuhan, bukan data sensor.</small>
     </div>
   </section>

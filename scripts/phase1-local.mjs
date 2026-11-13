@@ -36,6 +36,8 @@ async function ready(url) {
   }
   throw new Error(`Service did not become ready: ${url}`)
 }
+// Optional Google sign-in: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in this ignored file (see README).
+try { process.loadEnvFile('.tmp/phase1/google.env'); process.env.GOOGLE_ENABLED = String(Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)) } catch (error) { if (error.code !== 'ENOENT') throw error }
 console.log('Starting local PostgreSQL, Supabase Auth and PostgREST...')
 docker(['up', '-d', '--wait', '--wait-timeout', '120'])
 await ready('http://127.0.0.1:54324/health')
@@ -52,5 +54,7 @@ await ready('http://127.0.0.1:54325/')
 const browserEnv = `VITE_SUPABASE_URL=http://127.0.0.1:54321\nVITE_SUPABASE_ANON_KEY=${settings.anon}\n`
 await writeFile('.tmp/phase1/browser.env', browserEnv)
 try { await access('.env.local') } catch { await writeFile('.env.local', browserEnv) }
-const server = startGateway({settings, appOrigin:'http://127.0.0.1:5173', extraOrigins:['http://127.0.0.1:4178']})
+// Optional AI explanations: AI_BASE_URL, AI_API_KEY and AI_MODEL in this ignored file (see README).
+try { process.loadEnvFile('.tmp/phase1/ai.env') } catch (error) { if (error.code !== 'ENOENT') throw error }
+const server = startGateway({settings, appOrigin:'http://127.0.0.1:5173', extraOrigins:['http://127.0.0.1:4173','http://127.0.0.1:4178']})
 process.on('SIGINT',()=>server.close(()=>process.exit(0)))

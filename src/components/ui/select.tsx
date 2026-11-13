@@ -1,6 +1,7 @@
+import { CaretDown, CaretUp, Check } from '@phosphor-icons/react'
 import type { ComponentProps } from 'react'
 import * as SelectPrimitive from '@radix-ui/react-select'
-import { Check, ChevronDown, ChevronUp } from 'lucide-react'
+
 
 // shadcn/Radix composition, styled with the app's existing tokens.
 export const Select = SelectPrimitive.Root
@@ -9,15 +10,15 @@ export const SelectValue = SelectPrimitive.Value
 
 export function SelectTrigger({ className = '', children, ...props }: ComponentProps<typeof SelectPrimitive.Trigger>) {
   return <SelectPrimitive.Trigger className={`ui-select-trigger ${className}`} {...props}>
-    {children}<SelectPrimitive.Icon asChild><ChevronDown /></SelectPrimitive.Icon>
+    {children}<SelectPrimitive.Icon asChild><CaretDown /></SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 }
 
 export function SelectContent({ children, ...props }: ComponentProps<typeof SelectPrimitive.Content>) {
   return <SelectPrimitive.Portal><SelectPrimitive.Content className="ui-select-content" position="popper" sideOffset={6} collisionPadding={12} {...props} data-lenis-prevent>
-    <SelectPrimitive.ScrollUpButton className="ui-select-scroll"><ChevronUp /></SelectPrimitive.ScrollUpButton>
+    <SelectPrimitive.ScrollUpButton className="ui-select-scroll"><CaretUp /></SelectPrimitive.ScrollUpButton>
     <SelectPrimitive.Viewport>{children}</SelectPrimitive.Viewport>
-    <SelectPrimitive.ScrollDownButton className="ui-select-scroll"><ChevronDown /></SelectPrimitive.ScrollDownButton>
+    <SelectPrimitive.ScrollDownButton className="ui-select-scroll"><CaretDown /></SelectPrimitive.ScrollDownButton>
   </SelectPrimitive.Content></SelectPrimitive.Portal>
 }
 
@@ -34,6 +35,6 @@ export function SelectField({ label, value, onValueChange, options, placeholder 
 }) {
   return <Select value={String(value)} onValueChange={onValueChange} disabled={props.disabled}>
     <SelectTrigger aria-label={label} id={props.id}><SelectValue placeholder={placeholder} /></SelectTrigger>
-    <SelectContent><SelectGroup>{options.map(option => <SelectItem key={option.value} value={String(option.value)}>{option.label}</SelectItem>)}</SelectGroup></SelectContent>
+    <SelectContent><SelectGroup>{options.map(option => <SelectItem key={option.value} value={String(option.value)} data-value={String(option.value)}>{option.label}</SelectItem>)}</SelectGroup></SelectContent>
   </Select>
 }

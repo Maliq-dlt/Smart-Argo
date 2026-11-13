@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { asGuest } from './entry-helpers.mjs'
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const url = process.env.TEST_URL || 'http://127.0.0.1:4173/'
 const output = '.tmp/landing-v5'
 await mkdir(output, { recursive: true })
 const browser = await chromium.launch({ headless: true, channel: 'chrome' })
+asGuest(browser) // account entry is covered by the account checks
 const errors = [], report = []
 const fits = page => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
 /** Scroll so that `fraction` of a sticky wrapper's travel has passed, then let the scrub settle. */
@@ -52,6 +54,32 @@ try {
     await page.locator('.sa-nav .theme-toggle').click()
     await page.waitForFunction(previous => document.documentElement.dataset.theme === previous, before)
     if ([1440, 390].includes(width)) await page.screenshot({ path: `${output}/hero-${width}-${reducedMotion}.png` })
+
+    // Cursor trail: squares light up over the video's centre on desktop, then stop once the blocks close over the hero.
+    const trailPixels = () => page.evaluate(() => {
+      const c = document.querySelector('.v5-trail')
+      if (!c.width) return 0
+      const d = c.getContext('2d').getImageData(c.width * .3, c.height * .3, c.width * .4, c.height * .4).data
+      let n = 0
+      for (let i = 3; i < d.length; i += 16) if (d[i]) n++
+      return n
+    })
+    const sweep = async () => { for (let i = 0; i <= 12; i++) await page.mouse.move(width * (.35 + i * .025), height * .5) }
+    // The theme reveal's overlay takes the pointer until it ends.
+    await page.waitForFunction(() => document.documentElement.dataset.themeTransition === undefined)
+    await sweep()
+    const trail = width >= 1024 && reducedMotion === 'no-preference'
+    if (trail) {
+      assert(await trailPixels() > 0, 'Trail squares appear over the centre of the video')
+      if (width === 1440) await page.screenshot({ path: `${output}/hero-trail-${width}.png` })
+      await page.waitForTimeout(600)
+      assert(await trailPixels() > 0, 'Trail squares hold as a mosaic before fading')
+      await page.waitForTimeout(1200)
+      assert.equal(await trailPixels(), 0, 'Trail squares fade out')
+      await scrollPin(page, '.v5-hero-wrap', .6)
+      await sweep()
+      assert.equal(await trailPixels(), 0, 'No trail once the blocks close over the hero')
+    } else assert.equal(await trailPixels(), 0, 'No trail on touch-sized screens or with reduced motion')
 
     // Problem: the drawing is a real illustration, not a placeholder shape.
     assert(await page.locator('.v5-plant .v5-leaf-shape').count() >= 16, 'Plant has its leaves')

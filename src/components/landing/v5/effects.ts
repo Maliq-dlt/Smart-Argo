@@ -41,43 +41,81 @@ export function stairCover(blocks: HTMLElement[], cols: number, rows: number, tr
   return tl
 }
 
-/** A grid of 5vw squares lights up under the cursor and fades, coloured by column. Desktop, fine pointer only. */
-export function pixelTrail(section: HTMLElement, canvas: HTMLCanvasElement) {
+/* Cursor trail over the hero video, after the Farm Minerals promo. A grid of 5vw squares lights up under the pointer in
+ * two layers: the square first flashes in the sage gradient (coloured by column), then dissolves into a coarse mosaic
+ * of the video beneath it, tinted toward the same gradient, which keeps playing until the square fades. Desktop with a
+ * fine pointer only, and it stops spawning once the block transition has begun to cover the hero. */
+const TILES = 6 // mosaic tiles across one square
+const STOPS: [number, number[]][] = [[0, [195, 223, 149]], [.45, [111, 150, 86]], [1, [47, 90, 60]]]
+const IN = 70, SOLID = 160, DISSOLVE = 260, HOLD = 520, OUT = 520 // ms
+export function pixelTrail(section: HTMLElement, canvas: HTMLCanvasElement, video: HTMLVideoElement) {
   if (!matchMedia('(pointer: fine) and (min-width: 768px) and (prefers-reduced-motion: no-preference)').matches) return () => {}
   const ctx = canvas.getContext('2d')!
-  const stops: [number, number[]][] = [[0, [195, 223, 149]], [.45, [111, 150, 86]], [1, [47, 90, 60]]]
+  const mosaic = document.createElement('canvas'), mctx = mosaic.getContext('2d')!
   const colorAt = (x: number) => {
     let i = 0
-    while (i < stops.length - 2 && x > stops[i + 1][0]) i++
-    const [p0, c0] = stops[i], [p1, c1] = stops[i + 1], t = (x - p0) / (p1 - p0)
-    return c0.map((v, k) => Math.round(v + (c1[k] - v) * t))
+    while (i < STOPS.length - 2 && x > STOPS[i + 1][0]) i++
+    const [p0, c0] = STOPS[i], [p1, c1] = STOPS[i + 1], t = (x - p0) / (p1 - p0)
+    return `rgb(${c0.map((v, k) => Math.round(v + (c1[k] - v) * t)).join(' ')})`
   }
   const lit = new Map<number, number>()
-  let cell = 0, cols = 0, dpr = 1, raf = 0
+  let cell = 1, cols = 1, dpr = 1, raf = 0, tint: CanvasGradient | null = null
   const size = () => {
     const r = section.getBoundingClientRect()
     dpr = Math.min(2, window.devicePixelRatio || 1)
     canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr)
     cell = r.width * .05; cols = Math.ceil(r.width / cell)
+    mosaic.width = cols * TILES; mosaic.height = Math.ceil(r.height / cell) * TILES
+    tint = mctx.createLinearGradient(0, 0, mosaic.width, 0)
+    STOPS.forEach(([at]) => tint!.addColorStop(at, colorAt(at)))
+    ctx.imageSmoothingEnabled = false // resizing a canvas resets its state
   }
-  const frame = (now: number) => {
+  // The video as it is shown (object-fit: cover, zoomed by the scroll), shrunk to TILES per square, with more contrast,
+  // then soft-lit by the gradient: the mosaic keeps the video's light and shade but leans lime on the left, moss on the right.
+  // One small draw of the whole frame per animation frame; each square then copies its own tiles.
+  const paintMosaic = () => {
+    mctx.globalCompositeOperation = 'source-over'
+    const vw = video.videoWidth, vh = video.videoHeight
+    if (video.readyState >= 2 && vw && vh) {
+      const sr = section.getBoundingClientRect(), vr = video.getBoundingClientRect(), k = TILES / cell
+      const s = Math.max(vr.width / vw, vr.height / vh), w = vw * s, h = vh * s
+      mctx.filter = 'contrast(1.25) saturate(1.3)'
+      mctx.drawImage(video, (vr.left - sr.left + (vr.width - w) / 2) * k, (vr.top - sr.top + (vr.height - h) / 2) * k, w * k, h * k)
+      mctx.filter = 'none'
+    } else { mctx.fillStyle = '#a7b29c'; mctx.fillRect(0, 0, mosaic.width, mosaic.height) }
+    mctx.globalCompositeOperation = 'soft-light'
+    mctx.fillStyle = tint!
+    mctx.fillRect(0, 0, mosaic.width, mosaic.height)
+  }
+  const frame = () => {
+    // Timestamps come from performance.now(): a rAF timestamp can precede the pointer event that lit a square.
+    const now = performance.now()
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if (!lit.size) { raf = 0; return }
+    paintMosaic()
+    const side = cell * dpr - dpr
     for (const [index, born] of lit) {
-      const age = now - born
-      // 100 ms in, 200 ms hold, 300 ms out.
-      const alpha = age < 100 ? age / 100 : age < 300 ? 1 : 1 - (age - 300) / 300
-      if (alpha <= 0) { lit.delete(index); continue }
-      const col = index % cols, row = Math.floor(index / cols), [r, g, b] = colorAt(col / Math.max(1, cols - 1))
-      ctx.fillStyle = `rgb(${r} ${g} ${b} / ${alpha})`
-      ctx.fillRect(col * cell * dpr, row * cell * dpr, cell * dpr - dpr, cell * dpr - dpr)
+      const age = Math.max(0, now - born)
+      if (age >= SOLID + DISSOLVE + HOLD + OUT) { lit.delete(index); continue }
+      const col = index % cols, row = Math.floor(index / cols), x = col * cell * dpr, y = row * cell * dpr
+      const fade = age < IN ? age / IN : Math.min(1, 1 - (age - SOLID - DISSOLVE - HOLD) / OUT)
+      const solid = age < SOLID ? 1 : Math.max(0, 1 - (age - SOLID) / DISSOLVE)
+      ctx.globalAlpha = fade
+      ctx.drawImage(mosaic, col * TILES, row * TILES, TILES, TILES, x, y, side, side)
+      if (solid > 0) { ctx.globalAlpha = fade * solid; ctx.fillStyle = colorAt(col / Math.max(1, cols - 1)); ctx.fillRect(x, y, side, side) }
     }
-    raf = lit.size ? requestAnimationFrame(frame) : 0
+    ctx.globalAlpha = 1
+    raf = requestAnimationFrame(frame)
   }
+  const wrap = section.parentElement
   const move = (e: PointerEvent) => {
+    // Past the first third of the sticky scroll the blocks are closing over the hero: no new squares.
+    if (wrap && -wrap.getBoundingClientRect().top > (wrap.offsetHeight - section.offsetHeight) / 3) return
     const r = section.getBoundingClientRect(), col = Math.floor((e.clientX - r.left) / cell), row = Math.floor((e.clientY - r.top) / cell)
-    if (col < 0 || row < 0 || col >= cols) return
+    if (col < 0 || row < 0 || col >= cols || e.clientY > r.bottom) return
     const index = row * cols + col, now = performance.now(), born = lit.get(index)
-    lit.set(index, born !== undefined && now - born < 300 ? now - 100 : now)
+    // Passing over a square that is still lit keeps it in its mosaic phase instead of restarting the flash.
+    lit.set(index, born !== undefined && now - born < SOLID + DISSOLVE + HOLD ? Math.max(born, now - SOLID - DISSOLVE) : now)
     if (!raf) raf = requestAnimationFrame(frame)
   }
   size()

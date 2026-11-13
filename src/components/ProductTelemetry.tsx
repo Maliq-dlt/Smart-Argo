@@ -2,6 +2,7 @@ import ProductExplanation from './ProductExplanation'
 import { useEffect, useRef, useState } from 'react'
 import type { OwnedProduct } from '../lib/productAccountClient'
 import { parseDeviceUnits, parseDeviceReadings, parsePublishedProfiles, type DeviceUnit, type DeviceReading, type PublishedProfile, type TelemetryClient } from '../lib/deviceTelemetryClient'
+import { SelectField } from './ui/select'
 
 const names = { moisture: 'Indeks kelembapan', soil_temperature: 'Suhu tanah', soil_ph: 'pH tanah' }
 const states = { ok: 'Dilaporkan OK', error: 'Galat', not_measured: 'Tidak diukur' }
@@ -60,10 +61,7 @@ export default function ProductTelemetry({ client, products, onSessionExpired }:
       <p>Status laporan perangkat, bukan kalibrasi. Riwayat berikut khusus perangkat dan terpisah dari simulator.</p>
       {message && <p role={error ? 'alert' : 'status'}>{message}</p>}
       {pending && <p role="status">Memuat data perangkat…</p>}
-      <label className="miro-field"><span id="telemetry-unit-label">Unit & perangkat milik saya</span><select aria-labelledby="telemetry-unit-label" disabled={pending} value={selected} onChange={e => void refresh(e.target.value)}>
-        <option value="">Pilih unit & perangkat</option>
-        {units.map(u => <option key={`${u.unit_id}:${u.device_id}`} value={`${u.unit_id}:${u.device_id}`}>{u.serial_public} · {u.location_label} · {u.device_id} · {u.device_status}</option>)}
-      </select></label>
+      <label className="miro-field"><span id="telemetry-unit-label">Unit & perangkat milik saya</span><SelectField label="Unit & perangkat milik saya" placeholder="Pilih unit & perangkat" value={selected} disabled={pending} onValueChange={v=>void refresh(v)} options={[...units.map(u=>({value:`${u.unit_id}:${u.device_id}`,label:`${u.serial_public} · ${u.location_label} · ${u.device_id} · ${u.device_status}`}))]} /></label>
       {!pending && !units.length && <p>Belum ada unit perangkat. Buat unit setelah produk dimiliki dan profil diterbitkan.</p>}
       <button className="button" disabled={pending || !selected} onClick={() => void refresh(selected)}>Muat ulang bacaan</button>
       {active && <p>Perangkat terpilih: {active.device_status}. Bacaan mencakup seluruh perangkat pada unit {active.location_label}.</p>}
@@ -88,8 +86,8 @@ export default function ProductTelemetry({ client, products, onSessionExpired }:
           } catch(err) { failure(err,request) } finally { if (generation.current===request) setPending(false) }
         })()
       }}><fieldset className="product-account-form" disabled={pending || !profiles.length || !products.length}><legend>Buat unit dari profil terbit</legend>
-        <label className="miro-field"><span id="telemetry-product-label">Produk</span><select aria-labelledby="telemetry-product-label" required value={selectedProduct} onChange={e => setProduct(e.target.value)}><option value="">Pilih produk</option>{products.map(p => <option key={p.product_id} value={p.product_id}>{p.serial_public}</option>)}</select></label>
-        <label className="miro-field"><span id="telemetry-profile-label">Profil tanaman</span><select aria-labelledby="telemetry-profile-label" required value={profile} onChange={e => setProfile(e.target.value)}><option value="">Pilih profil</option>{profiles.map(p => <option key={p.id} value={p.id}>{p.species_variety} · v{p.version} · Bukti: {p.evidence_level}</option>)}</select></label>
+        <label className="miro-field"><span id="telemetry-product-label">Produk</span><SelectField label="Produk" placeholder="Pilih produk" value={selectedProduct} onValueChange={v=>setProduct(v)} options={[...products.map(p=>({value:p.product_id,label:`${p.serial_public}`}))]} /></label>
+        <label className="miro-field"><span id="telemetry-profile-label">Profil tanaman</span><SelectField label="Profil tanaman" placeholder="Pilih profil" value={profile} onValueChange={v=>setProfile(v)} options={[...profiles.map(p=>({value:p.id,label:`${p.species_variety} · v${p.version} · Bukti: ${p.evidence_level}`}))]} /></label>
         <label className="miro-field"><span>Label lokasi unit</span><input required maxLength={120} value={label} onChange={e => setLabel(e.target.value)} /></label>
         <button className="button" type="submit">Buat unit</button>
       </fieldset></form>

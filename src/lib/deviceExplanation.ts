@@ -1,5 +1,6 @@
 import { evaluate, parseCase, type DecisionCode, type Profile } from './agronomyEngine.ts'
 import { parseTelemetryV2, type TelemetryPacketV2 } from './telemetry.ts'
+import { moodFor } from './mascot.ts'
 
 type Packet = TelemetryPacketV2 & { packet_id: string; received_at: string }
 export interface ExplanationContext {
@@ -8,10 +9,23 @@ export interface ExplanationContext {
   profile: { parameters: unknown; species_variety: string; evidence_level: string; provenance_status: string } | null
   packets: Packet[]
 }
+/** AI wording on top of the rule result. The rule decision, action and reason never come from the model. */
+export interface AiText { model: string; prompt_version: string; explanation: string; answer: string | null }
+export type AiStatus = 'not_configured' | 'ok' | 'failed' | 'refused' | 'rejected'
 export interface DeviceExplanation {
   decision: DecisionCode | 'DATA_BELUM_ADA' | 'PROFIL_BELUM_LAYAK'
   action: string; reason: string; mascot_state: 'bingung_menunggu' | 'tenang_senang' | 'sedih_perhatian' | 'waspada_marah'
-  explanation: string; source_mode: 'rule_fallback'; rule_version: 'agronomy-v1.telemetry-v1'; ai_status: 'not_configured'
+  explanation: string; source_mode: 'rule_fallback' | 'ai_explained'; rule_version: 'agronomy-v1.telemetry-v1'; ai_status: AiStatus
+  ai?: AiText
+}
+export type AiOutcome = { status: 'ok'; model: string; prompt_version: string; explanation: string; answer: string | null } | { status: 'failed' | 'refused' | 'rejected'; reason: string }
+/** Optional generative step, injected by the server that holds the API key (see aiExplanation.ts). */
+export type Explainer = (result: DeviceExplanation, context: ExplanationContext, question: string) => Promise<AiOutcome>
+
+/** Only a checked model answer is labelled AI; any failure keeps the rule explanation and says why. */
+export function withAi(result: DeviceExplanation, outcome: AiOutcome): DeviceExplanation {
+  if (outcome.status !== 'ok') return { ...result, source_mode: 'rule_fallback', ai_status: outcome.status }
+  return { ...result, source_mode: 'ai_explained', ai_status: 'ok', ai: { model: outcome.model, prompt_version: outcome.prompt_version, explanation: outcome.explanation, answer: outcome.answer } }
 }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 function record(v: unknown): v is Record<string, unknown> { return !!v && typeof v === 'object' && !Array.isArray(v) }
@@ -30,7 +44,7 @@ export function explainDeviceEvidence(context: ExplanationContext, question = ''
   const now=Date.parse(context.evaluated_at), last=context.packets.at(-1)
   const result = (decision: DeviceExplanation['decision'], action: string, reason: string, mascot_state: DeviceExplanation['mascot_state']='bingung_menunggu'): DeviceExplanation => ({
     decision,action,reason,mascot_state,source_mode:'rule_fallback',rule_version:'agronomy-v1.telemetry-v1',ai_status:'not_configured',
-    explanation:`${action}. ${reason} ${last?.sensors.soil_ph.status!=='ok' ? 'pH terakhir tidak tersedia sebagai angka valid; tidak diganti nol atau nilai lama. ' : ''}${question.trim() ? 'Pertanyaan dicatat sebagai konteks; jawaban ini dibatasi bukti sensor dan aturan. ' : ''}Penjelasan aturan; layanan AI generatif belum dikonfigurasi. Bukan diagnosis kesehatan tanaman atau perintah aktuator.`,
+    explanation:`${action}. ${reason} ${last?.sensors.soil_ph.status!=='ok' ? 'pH terakhir tidak tersedia sebagai angka valid; tidak diganti nol atau nilai lama. ' : ''}${question.trim() ? 'Pertanyaan dicatat sebagai konteks; jawaban ini dibatasi bukti sensor dan aturan. ' : ''}Penjelasan aturan. Bukan diagnosis kesehatan tanaman atau perintah aktuator.`,
   })
   if (!last) return result('DATA_BELUM_ADA','Tunggu bacaan perangkat','Belum ada paket perangkat pada periode kepemilikan ini dalam 24 jam terakhir.')
   if (context.device_status!=='active' || context.registry_status!=='active') return result('PULIHKAN_DATA','Periksa status perangkat','Perangkat atau registri tidak aktif; rekomendasi ditahan.')
@@ -55,16 +69,25 @@ export function explainDeviceEvidence(context: ExplanationContext, question = ''
     // A currently unavailable pH cannot be inferred from an older number.
     if (last.sensors.soil_ph.status!=='ok') input.profile={...input.profile,ph_validated:false}
     const decision=evaluate(input)
-    const mascot = ['KALIBRASI_LOKAL','PULIHKAN_DATA','PERIKSA_SENSOR'].includes(decision.decision) ? 'bingung_menunggu' : decision.decision==='AMATI' ? 'tenang_senang' : ['PERIKSA_MEDIA_KERING','PERIKSA_SIRAMAN','PERIKSA_SEBELUM_PERGI'].includes(decision.decision) ? 'sedih_perhatian' : 'waspada_marah'
+    const mascot = ({ unknown:'bingung_menunggu', calm:'tenang_senang', care:'sedih_perhatian', alert:'waspada_marah' } as const)[moodFor(decision.decision)]
     return result(decision.decision,decision.action,decision.reason,mascot)
   } catch { return result('PROFIL_BELUM_LAYAK','Periksa profil dan bukti','Parameter profil atau rangkaian sampel tidak memenuhi kontrak mesin aturan.') }
 }
 
+const AI_STATUS=['not_configured','ok','failed','refused','rejected']
+/** Older snapshots say `not_configured`; an AI snapshot must carry the model, prompt version and bounded text. */
+function validAi(d:Record<string,unknown>){
+ if(!AI_STATUS.includes(String(d.ai_status)))return false
+ if(d.source_mode==='rule_fallback')return d.ai_status!=='ok'&&d.ai===undefined
+ const ai=d.ai
+ return d.source_mode==='ai_explained'&&d.ai_status==='ok'&&record(ai)&&typeof ai.model==='string'&&/^[A-Za-z0-9][A-Za-z0-9./:_-]{0,79}$/.test(ai.model)&&typeof ai.prompt_version==='string'&&ai.prompt_version.length<=64
+  &&typeof ai.explanation==='string'&&ai.explanation.length>0&&ai.explanation.length<=2000&&(ai.answer===null||(typeof ai.answer==='string'&&ai.answer.length<=1000))
+}
 export interface ExplanationSnapshot { id:string;created_at:string;context_sha256:string;profile_version_id:string;decision_payload:DeviceExplanation;evidence_ref:ExplanationContext & {question:string} }
 export function parseExplanationSnapshot(value:unknown):ExplanationSnapshot {
   if(!record(value)||typeof value.id!=='string'||!uuid.test(value.id)||typeof value.created_at!=='string'||!Number.isFinite(Date.parse(value.created_at))||typeof value.context_sha256!=='string'||!/^([0-9a-f]{64})$/.test(value.context_sha256)||typeof value.profile_version_id!=='string'||!uuid.test(value.profile_version_id)||!record(value.decision_payload))throw new Error('Penjelasan tersimpan tidak valid.')
   const d=value.decision_payload
-  if(!['DATA_BELUM_ADA','PROFIL_BELUM_LAYAK','KALIBRASI_LOKAL','PULIHKAN_DATA','PERIKSA_SENSOR','PERIKSA_SIRAMAN','PERIKSA_DRAINASE','PERIKSA_MEDIA_KERING','PERIKSA_PANAS','UKUR_ULANG_PH','PERIKSA_SEBELUM_PERGI','AMATI'].includes(String(d.decision))||!['bingung_menunggu','tenang_senang','sedih_perhatian','waspada_marah'].includes(String(d.mascot_state))||d.source_mode!=='rule_fallback'||d.rule_version!=='agronomy-v1.telemetry-v1'||d.ai_status!=='not_configured'||!['action','reason','explanation'].every(k=>typeof d[k]==='string'&&(d[k] as string).length>0&&(d[k] as string).length<=8000))throw new Error('Hasil penjelasan tidak valid.')
+  if(!['DATA_BELUM_ADA','PROFIL_BELUM_LAYAK','KALIBRASI_LOKAL','PULIHKAN_DATA','PERIKSA_SENSOR','PERIKSA_SIRAMAN','PERIKSA_DRAINASE','PERIKSA_MEDIA_KERING','PERIKSA_PANAS','UKUR_ULANG_PH','PERIKSA_SEBELUM_PERGI','AMATI'].includes(String(d.decision))||!['bingung_menunggu','tenang_senang','sedih_perhatian','waspada_marah'].includes(String(d.mascot_state))||!validAi(d)||d.rule_version!=='agronomy-v1.telemetry-v1'||!['action','reason','explanation'].every(k=>typeof d[k]==='string'&&(d[k] as string).length>0&&(d[k] as string).length<=8000))throw new Error('Hasil penjelasan tidak valid.')
   const context=parseExplanationContext(value.evidence_ref)
   if(!record(value.evidence_ref)||typeof value.evidence_ref.question!=='string'||value.evidence_ref.question.length>500)throw new Error('Konteks pertanyaan tidak valid.')
   if(value.profile_version_id!==context.profile_version_id)throw new Error('Versi bukti penjelasan tidak sesuai.')

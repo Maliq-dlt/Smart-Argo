@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { asGuest } from './entry-helpers.mjs'
 
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const url = new URL('/', process.env.TEST_URL || 'http://127.0.0.1:4174/').href
@@ -8,6 +9,7 @@ const appChunk = /\/(?:assets\/App-[^/]+\.js|src\/App\.tsx)(?:\?.*)?$/
 const output = '.tmp/route-transition'
 await mkdir(output, { recursive: true })
 const browser = await chromium.launch({ headless: true, channel: 'chrome', args: ['--enable-unsafe-swiftshader'] })
+asGuest(browser) // account entry is covered by the account checks
 const report = [], errors = []
 // Settled: the curtain is open (or absent with reduced motion) and no pending notice is shown.
 const settled = page => page.waitForFunction(() => {
@@ -66,7 +68,6 @@ try {
       assert(swap > 0 && frames[swap].curtain === 'covered', 'The page swaps behind the closed curtain')
       assert(frames.slice(swap).some(frame => frame.curtain === 'open'), 'The curtain lifts afterwards')
     } else assert(frames.every(frame => frame.curtain === null), 'Reduced motion has no curtain')
-    if (width === 375) await page.getByRole('button', { name: 'Buka navigasi', exact: true }).click()
     await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
     await page.getByRole('heading', { name: 'Dashboard', exact: true, level: 1 }).waitFor()
     await page.waitForFunction(() => getComputedStyle(document.getElementById('main')).opacity === '1')

@@ -1,6 +1,7 @@
+import { Copy } from '@phosphor-icons/react'
 import { SelectField } from './ui/select'
 import { useState } from 'react'
-import { Copy } from 'lucide-react'
+
 import { evaluate } from '../lib/agronomyEngine'
 import { clockTime, clockDate, utcLabel } from '../lib/sessionClock'
 import { type Session } from '../lib/sessionStore'

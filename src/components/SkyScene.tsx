@@ -1,6 +1,6 @@
+import { Cloud, Moon, Sun } from '@phosphor-icons/react'
 import { useEffect } from 'react'
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'framer-motion'
-import { Cloud, Moon, Sun } from 'lucide-react'
 import type { SessionClock } from '../lib/sessionClock'
 import { skyAt, sampleIntervalMs } from '../lib/simulation'
 
@@ -23,9 +23,9 @@ export default function SkyScene({ worldClock, elapsed, running, rate }: { world
     <div className="sky-day-layer" /><motion.div className="sky-night-layer" style={{ opacity: nightOpacity }} />
     <motion.div className="sky-stars" style={{ opacity: nightOpacity }}>· ˚ · ✦ · ˚ ·</motion.div>
     <div className="sky-orbit">
-      <motion.span className="orb sun-orb" style={{ left: sunX, y: sunY, opacity: sunOpacity }}><Sun /></motion.span>
-      <motion.span className="orb moon-orb" style={{ left: moonX, y: moonY, opacity: moonOpacity }}><Moon /></motion.span>
+      <motion.span className="orb sun-orb" style={{ left: sunX, y: sunY, opacity: sunOpacity }}><Sun weight="fill" /></motion.span>
+      <motion.span className="orb moon-orb" style={{ left: moonX, y: moonY, opacity: moonOpacity }}><Moon weight="fill" /></motion.span>
     </div>
-    <Cloud className="scene-cloud cloud-one" /><Cloud className="scene-cloud cloud-two" /><Cloud className="scene-cloud cloud-three" />
+    <Cloud weight="fill" className="scene-cloud cloud-one" /><Cloud weight="fill" className="scene-cloud cloud-two" /><Cloud weight="fill" className="scene-cloud cloud-three" />
   </div>
 }

@@ -1,6 +1,7 @@
+import { ArrowLeft, ArrowRight, ArrowUpRight } from '@phosphor-icons/react'
 import { useLayoutEffect, useRef } from 'react'
 import { gsap } from 'gsap'
-import { ArrowLeft, ArrowRight, ArrowUpRight } from 'lucide-react'
+
 import { motionOk, revealHeadings } from './effects'
 
 /* A row of cards that runs off the right edge, after the "Formats & Availability" row on the Farm Minerals

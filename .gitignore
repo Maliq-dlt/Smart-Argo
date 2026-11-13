@@ -9,6 +9,7 @@ tests/playback-browser.js
 *.log
 .DS_Store
 .env*
+!.env.cloud
 
 .serena/
 
@@ -25,5 +26,8 @@ __pycache__/
 
 # Catatan konteks agen lokal
 CLAUDE.md
+HANDOFF.md
 # Video/gambar mentah untuk diproses (Veo, Blender)
 media-src/
+.playwright-mcp/
+supabase/.temp/
