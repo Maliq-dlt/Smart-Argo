@@ -90,8 +90,9 @@ export default function AccountSignIn({ mood, google, mfaStep, onGoogle, onPassw
           <button className="button signin-guest" type="button" disabled={mood === 'busy'} onClick={onGuest}>Coba tanpa akun</button>
           <small className="signin-note">Data tamu hanya tersimpan di browser ini.</small>
         </>}
+        {google === null && <small className="signin-note">Memuat pilihan masuk…</small>}
         {google !== null && <details className="signin-email" open={!google || undefined}>
-          <summary><span>{google ? 'Pakai email dan kata sandi' : 'Masuk atau daftar dengan email'}</span><CaretDown aria-hidden="true" /></summary>
+          <summary><span>Masuk atau daftar dengan email</span><CaretDown aria-hidden="true" /></summary>
           <form onSubmit={event => { event.preventDefault(); submitPassword(false) }}>
             <fieldset className="signin-fields" disabled={mood === 'busy'}>
               <legend className="sr-only">Masuk atau daftar akun</legend>

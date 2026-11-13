@@ -15,9 +15,14 @@ Notable changes to Smart Agro. Dates are UTC+7.
 - Hosted backend on Supabase cloud (project `smart-agro`, ap-southeast-1): the same migrations, four edge functions and Auth settings (Google, passwords of 10+ characters, TOTP, email confirmation). `npm run build:cloud` builds against it from `.env.cloud`; that build requires sign-in and offers no guest visit.
 
 ### Changed
+- Email sign-up runs PKCE: the confirmation link signs the visitor in through `?code=` (verifier kept in this browser), and expired links return to the gate with the reason.
+- The sign-in card always labels the email section "Masuk atau daftar dengan email" and shows a loading line until Auth reports whether Google is available.
 - The ecosystem page no longer starts with the long online account panel. The summary and module tabs come first, and signed-in data sits at the top of the matching tab (telemetry, knowledge, energy and rewards).
 - Auth requires passwords of at least 10 characters.
 - The local gateway passes Auth redirects through, and allows the preview origin `127.0.0.1:4173`.
+
+### Security
+- Ownership transfer offers wait out the same 24-hour hold as redemptions after a password or 2FA change (migration `20261113020000_transfer_security_hold`).
 
 ## [1.11.0] - 2026-11-13
 

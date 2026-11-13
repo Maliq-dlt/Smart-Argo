@@ -46,6 +46,11 @@ await test('ID-01 and ID-03: public status, re-authenticated one-time transfer',
     const e = await account('e'), own = randomUUID()
     sql(`INSERT INTO product(id,serial_public,variant,issuer_signature) VALUES(${q(own)},${q(serial + '-G')},'single_pot','software-test'); INSERT INTO ownership(product_id,account_id) VALUES(${q(own)},${q(e.id)});`)
     const { factor, secret, token } = await enableTotp(base, config.anon, e.token)
+    // Turning 2FA on is a security change: like redemptions, transfers wait 24 hours, so an intruder cannot change keys and move the pot at once.
+    const hold = await rpc('create_transfer_offer', token, { p_product_id: own })
+    assert.equal(hold.code, 'security_hold')
+    assert(new Date(hold.until) > new Date(Date.now() + 23 * 3600e3), 'Hold lasts about a day')
+    sql(`UPDATE security_event SET created_at = created_at - interval '25 hours' WHERE user_id = ${q(JSON.parse(Buffer.from(token.split('.')[1], 'base64url')).sub)}`)
     sql(`UPDATE auth.sessions SET created_at = now() - interval '1 hour' WHERE id = ${q(session(token))}`)
     const verify = async () => { const ch = (await api(`/auth/v1/factors/${factor}/challenge`, token, {})).data; return (await api(`/auth/v1/factors/${factor}/verify`, token, { challenge_id: ch.id, code: totp(secret) })).data }
     // Verify, age that code's claim, then refresh: the newly signed JWT carries the old `amr` timestamp.

@@ -42,6 +42,9 @@ const endpoint = (typeof runtime?.url === 'string' ? runtime.url : env?.VITE_SUP
 const anonKey = (typeof runtime?.anonKey === 'string' ? runtime.anonKey : env?.VITE_SUPABASE_ANON_KEY) ?? ''
 const storageKey = `smart-agro.account:${endpoint}`
 const pkceKey = `smart-agro.pkce:${endpoint}`
+// The sign-up verifier outlives the tab: the confirmation link usually opens in a new one.
+const signupPkceKey = `smart-agro.pkce-signup:${endpoint}`
+const local = { get: (key: string) => { try { return localStorage.getItem(key) } catch { return null } }, drop: (key: string) => { try { localStorage.removeItem(key) } catch { /* storage blocked */ } } }
 export const productAccountConfigured = Boolean(endpoint && anonKey && (() => {
   try { const u = new URL(endpoint); return u.protocol === 'https:' || (u.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(u.hostname)) } catch { return false }
 })())
@@ -93,10 +96,19 @@ export class ProductAccountClient {
     } catch { this.clear(); throw new Error('Sesi berakhir atau tidak dapat diverifikasi. Silakan masuk kembali.') }
   }
 
-  async authenticate(email: string, password: string, signup: boolean): Promise<'ok' | 'mfa' | 'confirm'> {
+  /** Sign-up runs PKCE, so the confirmation link returns to `returnTo` with ?code= and never puts tokens in the URL. */
+  async authenticate(email: string, password: string, signup: boolean, returnTo?: string): Promise<'ok' | 'mfa' | 'confirm'> {
     this.pending = null
-    const value = await this.request(signup ? '/auth/v1/signup' : '/auth/v1/token?grant_type=password', { email, password })
+    if (!signup) {
+      const value = await this.request('/auth/v1/token?grant_type=password', { email, password })
+      return value.access_token ? this.begin(value) : 'confirm'
+    }
+    const verifier = pkceVerifier()
+    try { localStorage.setItem(signupPkceKey, verifier) } catch { /* storage blocked: the link still confirms, then sign in by password */ }
+    const query = returnTo ? `?${new URLSearchParams({ redirect_to: returnTo })}` : ''
+    const value = await this.request(`/auth/v1/signup${query}`, { email, password, code_challenge: await pkceChallenge(verifier), code_challenge_method: 's256' })
     if (!value.access_token) return 'confirm'
+    local.drop(signupPkceKey)
     return this.begin(value)
   }
 
@@ -114,11 +126,12 @@ export class ProductAccountClient {
     location.assign(`${endpoint}/auth/v1/authorize?${query}`)
   }
 
-  /** Finishes a Google return; the verifier is single-use and only lives in this tab. */
-  async completeGoogle(code: string): Promise<'ok' | 'mfa'> {
-    const verifier = sessionStorage.getItem(pkceKey)
+  /** Finishes a PKCE return: Google (verifier in this tab) or an email confirmation link (verifier in this browser). Single-use. */
+  async completeReturn(code: string): Promise<'ok' | 'mfa'> {
+    const verifier = sessionStorage.getItem(pkceKey) ?? local.get(signupPkceKey)
     sessionStorage.removeItem(pkceKey)
-    if (!verifier) throw new Error('Proses masuk Google tidak dimulai dari tab ini. Coba lagi.')
+    local.drop(signupPkceKey)
+    if (!verifier) throw new Error('Proses masuk tidak dimulai di browser ini. Jika Anda baru mengonfirmasi email, silakan masuk dengan email dan kata sandi.')
     this.pending = null
     return this.begin(await this.request('/auth/v1/token?grant_type=pkce', { auth_code: code, code_verifier: verifier }))
   }

@@ -5,6 +5,7 @@ import { SelectField } from './ui/select'
 
 const ERRORS: Record<string, string> = {
   reauth_required: 'Kata sandi perlu dikonfirmasi ulang.', not_owner: 'Produk ini bukan milik akun Anda atau sudah dicabut.',
+  security_hold: 'Transfer ditahan 24 jam setelah kata sandi atau 2FA diubah, untuk melindungi pot Anda.',
   invalid_code: 'Kode transfer salah. Setelah lima kali salah, kode tidak berlaku.', transfer_unavailable: 'Tidak ada transfer terbuka untuk seri ini, atau kodenya kedaluwarsa.',
   self_transfer: 'Produk ini sudah milik Anda.', unauthorized: 'Sesi berakhir. Masuk kembali.',
 }

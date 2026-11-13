@@ -7,11 +7,13 @@ import { ProductAccountClient, productAccountConfigured, oauthReturn, parseOwned
 let handoff: { client: ProductAccountClient; result: Promise<'ok' | 'mfa' | null> } | null = null
 function googleHandoff(client: ProductAccountClient) {
   handoff ??= { client, result: (async () => {
-    const back = oauthReturn(location.search) ?? oauthReturn(location.hash.split('?')[1] ?? '')
+    // Auth reports a failed link (expired, already used) in the fragment: #error=…&error_description=…
+    const fragmentError = location.hash.includes('error=') ? oauthReturn(location.hash.slice(1)) : null
+    const back = oauthReturn(location.search) ?? oauthReturn(location.hash.split('?')[1] ?? '') ?? fragmentError
     if (!back) return null
-    history.replaceState(null, '', location.pathname + location.hash.split('?')[0])
-    if ('error' in back) throw new Error(`Masuk dengan Google tidak selesai: ${back.error}`)
-    return client.completeGoogle(back.code)
+    history.replaceState(null, '', location.pathname + (fragmentError ? '#masuk' : location.hash.split('?')[0]))
+    if ('error' in back) throw new Error(fragmentError ? `Tautan email tidak berlaku: ${back.error}` : `Masuk dengan Google tidak selesai: ${back.error}`)
+    return client.completeReturn(back.code)
   })() }
   return handoff.client === client ? handoff.result : Promise.resolve(null)
 }

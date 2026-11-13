@@ -46,7 +46,7 @@ export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
         onGoogle={() => void run(() => client.startGoogle(back()))}
         onGuest={onGuest}
         onPassword={(email, password, signup) => run(async () => {
-          const result = await client.authenticate(email, password, signup)
+          const result = await client.authenticate(email, password, signup, back())
           if (result === 'mfa') { setMfaStep(true); return }
           if (result === 'confirm') { setNotice({ error: false, text: 'Periksa email untuk konfirmasi akun, lalu masuk kembali.' }); return }
           await opened(signup ? 'Akun siap digunakan. Aktifkan 2FA di Profil sebelum menukar poin.' : 'Berhasil masuk.')
