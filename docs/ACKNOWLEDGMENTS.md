@@ -1,5 +1,9 @@
 # Acknowledgments
 
+## Development assistance
+
+[OpenAI Codex](https://openai.com/codex/) assisted with the Supabase production-origin configuration, Cloudflare Pages deployment workflow, release checks, and deployment documentation in [commit d059896](https://github.com/Maliq-dlt/Smart-Argo/commit/d059896f27ec989678af479a40d78d1f76d32aa2).
+
 Landing imagery and component credits: [public/landing/CREDITS.md](../public/landing/CREDITS.md). Typography: Fraunces under the included SIL Open Font License and General Sans under the [ITF Free Font License](../public/fonts/FONTSHARE-LICENSE.md); files and licenses are in `public/fonts/`. Smooth scrolling on the landing uses [Lenis](https://github.com/darkroomengineering/lenis) 1.3.27 (MIT). Icons: [Phosphor Icons](https://phosphoricons.com/) via `@phosphor-icons/react` 2.1.10 (MIT).
 
 ## Dashboard (2026-11-12)
