@@ -7,12 +7,19 @@ const env = Object.fromEntries((await readFile('.env.cloud', 'utf8')).split(/\r?
 const backend = new URL(env.VITE_SUPABASE_URL)
 assert.equal(backend.protocol, 'https:')
 assert.ok(env.VITE_SUPABASE_ANON_KEY.startsWith('sb_publishable_'))
-const page = await fetch(`${origin}/`, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
-assert.equal(page.status, 200)
-const html = await page.text()
 const built = await readFile('dist/index.html', 'utf8')
 const assets = [...built.matchAll(/(?:src|href)="(\.\/assets\/[^"?]+\.(?:js|css))"/g)].map(match => match[1])
 assert.ok(assets.length >= 2, 'Build must contain JS and CSS entry assets')
+// The CDN can keep serving the previous index.html for a short while after a publish (this run starts seconds after it),
+// so wait up to 90s for the new one before judging it.
+let html = '', status = 0
+for (let attempt = 0; attempt < 18; attempt++) {
+  const page = await fetch(`${origin}/`, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
+  status = page.status; html = await page.text()
+  if (status === 200 && assets.every(asset => html.includes(asset))) break
+  await new Promise(resolve => setTimeout(resolve, 5000))
+}
+assert.equal(status, 200)
 for (const asset of [...assets, './fonts/fraunces-soft.woff2', './fonts/general-sans-400.woff2']) {
   if (asset.startsWith('./assets/')) assert.ok(html.includes(asset), `Production must serve the current build: ${asset}`)
   const response = await fetch(new URL(asset, origin), { signal: AbortSignal.timeout(20000) })
