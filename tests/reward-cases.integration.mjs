@@ -95,6 +95,24 @@ await test('RW-04: held claims, appeals and operator decisions',async t=>{
   assert.equal(mine.decision_reason,'Meter mencatat mendung sepanjang jendela.');assert.equal(mine.status,'rejected')
   assert.equal(sql(`SELECT string_agg(action,',' ORDER BY id) FROM reward_case_event WHERE case_id=${q(appealCase)}`),'opened,assigned,rejected')
  })
+ await t.test('a redemption is refunded once: an upheld case and a compensation exclude each other',async()=>{
+  alice.token=(await enableTotp(base,config.anon,alice.token)).token // spending points is a value action: it needs a second factor
+  sql(`UPDATE security_event SET created_at=created_at-interval '25 hours' WHERE kind='mfa_enabled' AND user_id=(SELECT auth_user_id FROM account WHERE id=${q(alice.id)})`) // and waits out the 24h hold after enrolling
+  const item=(await rpc('operator_upsert_catalog',operator.token,{p_id:null,p_title:'Case guard item '+run,p_point_cost:10,p_stock_total:4,p_availability:'available'})).data.item_id
+  const redeem=async()=>{const r=(await rpc('reserve_my_reward',alice.token,{p_item_id:item,p_request_id:randomUUID()})).data;assert.equal(r.ok,true,JSON.stringify(r));assert.equal((await rpc('operator_fulfill_redemption',operator.token,{p_id:r.redemption_id,p_reference:'Synthetic fulfillment; no shipment sent'})).data.status,'fulfilled');return r.redemption_id}
+  const appeal=async redemption=>{const a=(await rpc('open_reward_appeal',alice.token,{p_request_id:randomUUID(),p_energy_window_id:null,p_redemption_id:redemption,p_statement:'Barang tidak diterima.'})).data;assert.equal(a.ok,true,JSON.stringify(a));assert.equal((await rpc('operator_take_reward_case',second.token,{p_case_id:a.case_id,p_request_id:randomUUID()})).data.status,'in_review');return a.case_id}
+  const decide=(caseId,points)=>rpc('operator_decide_reward_case',second.token,{p_case_id:caseId,p_request_id:randomUUID(),p_decision:'upheld',p_points:points,p_reason:'Barang tidak sampai.'})
+  const compensate=redemption=>rpc('operator_compensate_redemption',second.token,{p_id:redemption,p_reason:'Barang tidak sampai; poin dikembalikan.'})
+  const first=await redeem(),firstCase=await appeal(first)
+  assert.equal((await decide(firstCase,10)).data.credited_points,10)
+  assert.equal((await compensate(first)).data.code,'state_conflict','a credited case already refunded it')
+  assert.equal(sql(`SELECT status FROM redemption WHERE id=${q(first)}`),'fulfilled')
+  const second_=await redeem(),secondCase=await appeal(second_)
+  assert.equal((await compensate(second_)).data.status,'compensated')
+  assert.equal((await decide(secondCase,10)).data.code,'state_conflict','a compensated redemption cannot be credited again')
+  assert.equal(sql(`SELECT count(*) FROM ledger_entry WHERE idempotency_key=${q('case:'+secondCase)}`),'0')
+  assert.equal(sql(`SELECT status FROM reward_case WHERE id=${q(secondCase)}`),'in_review','the refused decision leaves the case open for a rejection')
+ })
  }finally{
   const restore=previous?{p_version:previous.version,p_wh_per_point:previous.wh_per_point,p_daily_cap:previous.daily_point_cap,p_enabled:true}:{p_version:null,p_wh_per_point:null,p_daily_cap:null,p_enabled:false}
   const done=(await rpc('operator_set_reward_policy',operator.token,restore)).data

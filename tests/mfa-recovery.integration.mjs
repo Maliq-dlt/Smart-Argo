@@ -35,7 +35,7 @@ await test('APP-01: recovery codes for a lost authenticator',async t=>{
   assert.equal((await rpc('consume_recovery_code',alice.token,{p_user_id:alice.user,p_code:codes[0]})).status>=400,true,'service role only')
  })
  await t.test('a password-only session cannot reach data until a code is spent',async()=>{
-  const pending=await signIn(alice)
+  let pending=await signIn(alice)
   assert.equal(JSON.parse(Buffer.from(pending.split('.')[1],'base64url')).aal,'aal1')
   assert.equal((await rpc('my_products',pending)).data.ok,false)
   const wrong=await recover(pending,'0000-0000-0000');assert.equal(wrong.status,400);assert.equal(wrong.data.code,'invalid_code')
@@ -46,7 +46,11 @@ await test('APP-01: recovery codes for a lost authenticator',async t=>{
   assert.equal((await rpc('my_products',alice.token)).data.ok,false,'the other session was signed out')
   assert.ok((await rpc('security_workspace',pending)).data.hold_until,'24-hour hold started')
   assert.equal(sql(`SELECT count(*) FROM security_event WHERE user_id=${q(alice.user)} AND kind='mfa_recovered'`),'1')
+  // A factor enrolled after recovery (the normal next step) must survive a replay of the spent code inside the retry window.
+  const fresh=await enableTotp(base,config.anon,pending);pending=fresh.token
+  assert.equal(sql(`SELECT count(*) FROM auth.mfa_factors WHERE user_id=${q(alice.user)}`),'1','new authenticator enrolled')
   const retry=await recover(pending,codes[0]);assert.equal(retry.status,200);assert.equal(retry.data.removed,0)
+  assert.equal(sql(`SELECT count(*) FROM auth.mfa_factors WHERE user_id=${q(alice.user)}`),'1','a replay never removes a factor enrolled after the first use')
   assert.equal(sql(`SELECT count(*) FILTER (WHERE used_at IS NULL) FROM mfa_recovery_code WHERE user_id=${q(alice.user)}`),'9')
  })
  await t.test('failures are rate limited per account',async()=>{
