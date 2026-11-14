@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { generateKeyPairSync, sign, randomBytes, randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
+import { enableTotp } from './totp.mjs'
 
 // Runs ONLY against the isolated loopback stack created by npm run backend:local.
 const url = 'http://127.0.0.1:54321'
@@ -56,6 +57,29 @@ await test('Phase 1: real Auth + PostgreSQL + PostgREST + Ed25519',async t=>{
     assert.equal((await api('/rest/v1/activation?select=secret_hash',first.token,undefined,'GET')).status,403)
     assert.equal((await api('/rest/v1/outbox_job?select=*',config.anon,undefined,'GET')).status,401)
     assert.equal((await rpc('claim_verified_product',first.token,{p_nonce_id:randomUUID(),p_auth_user_id:first.id,p_session_id:randomUUID(),p_public_key:'forged',p_sealed_code:'bad'})).status,403)
+  })
+  await t.test('MFA gates nonce issuance and pending claims; AAL2 can finish the original challenge',async()=>{
+    const owner=await signup('mfa-activation')
+    await rpc('ensure_my_account',owner.token)
+    const p=product('mfa-pending'),n=await challenge(p,owner.token)
+    const {token:aal2}=await enableTotp(url,config.anon,owner.token)
+    assert.equal((await rpc('issue_activation_nonce',owner.token,{p_serial:p.serial})).data.code,'mfa_required')
+    const denied=await claim(p,n,owner.token)
+    assert.equal(denied.status,403);assert.equal(denied.data.code,'mfa_required')
+    assert.equal(count('ownership',`product_id=${q(p.id)}`),0)
+    assert.equal(sql(`SELECT consumed_at IS NULL FROM activation_nonce WHERE id=${q(n.nonce_id)}`),'t')
+    const claims=JSON.parse(Buffer.from(owner.token.split('.')[1],'base64url'))
+    // Older trusted callers omit assurance: default AAL1 must never bypass a verified factor.
+    const legacy=await rpc('claim_verified_product',config.service,{p_nonce_id:n.nonce_id,p_auth_user_id:owner.id,p_session_id:claims.session_id,p_public_key:p.raw,p_sealed_code:p.code})
+    assert.equal(legacy.data.code,'mfa_required')
+    const ok=await claim(p,n,aal2)
+    assert.equal(ok.status,200);assert.equal(ok.data.ok,true)
+    const fresh=product('mfa-fresh'),freshNonce=await challenge(fresh,aal2)
+    assert.equal((await claim(fresh,freshNonce,aal2)).status,200)
+    const revoked=product('mfa-revoked'),pending=await challenge(revoked,aal2)
+    assert.equal((await api('/auth/v1/logout?scope=local',aal2,{})).status,204)
+    assert.ok((await claim(revoked,pending,aal2)).status>=400)
+    assert.equal(count('ownership',`product_id=${q(revoked.id)}`),0)
   })
   await t.test('invalid JWT, cross-account/session and forged signatures fail',async()=>{
     const p=product('proof'), n=await challenge(p,first.token)

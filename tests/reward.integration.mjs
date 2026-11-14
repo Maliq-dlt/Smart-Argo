@@ -20,6 +20,10 @@ function forge(token,patch){const [head,body]=token.split('.');assert.equal(JSON
 const credit=(window,owner)=>service('credit_energy_reward',{p_window_id:window,p_account_id:owner.id})
 await test('Phase 4: explicit policy and atomic marketplace (synthetic DB evidence)',async t=>{
  const operator=await account('operator',['owner','operator']),alice=await account('alice'),bob=await account('bob'),capOwner=await account('cap')
+ assert.equal((await rpc('operator_set_reward_policy',operator.token,{p_version:null,p_wh_per_point:null,p_daily_cap:null,p_enabled:false})).data.code,'mfa_required')
+ assert.equal((await rpc('reward_workspace',operator.token)).data.roles.includes('operator'),false)
+ const operatorAal1=operator.token
+ operator.token=(await enableTotp(base,config.anon,operator.token)).token
  const previous=(await rpc('reward_workspace',operator.token)).data.policy
  const setPolicy=(version,wh,cap,enabled=true)=>rpc('operator_set_reward_policy',operator.token,{p_version:version,p_wh_per_point:wh,p_daily_cap:cap,p_enabled:enabled})
  const catalog=(title,cost,stock,id=null,availability='available')=>rpc('operator_upsert_catalog',operator.token,{p_id:id,p_title:title,p_point_cost:cost,p_stock_total:stock,p_availability:availability})
@@ -28,6 +32,15 @@ await test('Phase 4: explicit policy and atomic marketplace (synthetic DB eviden
  const af=await evidenceOwner(alice,operator),bf=await evidenceOwner(bob,operator),cf=await evidenceOwner(capOwner,operator)
  let scarce,common,firstWinner
  try{
+ await t.test('operator writes require live second-factor assurance',async()=>{
+  const denied=await rpc('operator_set_reward_policy',operatorAal1,{p_version:null,p_wh_per_point:null,p_daily_cap:null,p_enabled:false})
+  assert.equal(denied.data.code,'unauthorized')
+  assert.equal((await rpc('reward_workspace',operatorAal1)).data.code,'unauthorized')
+  const claims=JSON.parse(Buffer.from(operator.token.split('.')[1],'base64url'))
+  const stale=forge(operator.token,{amr:claims.amr.map(m=>m.method==='totp'?{...m,timestamp:m.timestamp-600}:m)})
+  assert.equal((await rpc('operator_set_reward_policy',stale,{p_version:null,p_wh_per_point:null,p_daily_cap:null,p_enabled:false})).data.code,'step_up_required')
+  assert.equal((await rpc('operator_upsert_catalog',stale,{p_id:null,p_title:'Rejected stale operator',p_point_cost:1,p_stock_total:1,p_availability:'available'})).data.code,'step_up_required')
+ })
  await t.test('disabled policy never creates credit; zero outcome remains pinned after enable',async()=>{
   assert.equal((await setPolicy('',1,100,false)).data.ok,true)
   const w=window(af,100,100);assert.equal((await credit(w,alice)).data.reason,'policy_disabled')

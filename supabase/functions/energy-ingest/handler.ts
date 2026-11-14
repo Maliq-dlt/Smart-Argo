@@ -1,3 +1,4 @@
+import { canonicalRequestId } from '../_shared/observability.ts'
 import { parseEnergyPacket } from '../../../src/lib/energyTelemetry.ts'
 import { verifyDeviceSignature } from '../_shared/deviceSignature.ts'
 type Json = Record<string, unknown>
@@ -7,8 +8,9 @@ export function createEnergyIngestHandler(config: { url: string; serviceKey: str
   if (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) throw new Error('HTTPS required')
   const origin = new URL(config.appOrigin).origin
   return async (request: Request): Promise<Response> => {
+    const requestId = canonicalRequestId(request.headers.get('x-request-id'))
     const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', Vary: 'Origin',
-      'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type',
+      'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-request-id',
       'Access-Control-Allow-Methods': 'POST, OPTIONS' }
     const reply = (status: number, data: Json) => new Response(JSON.stringify(data), { status, headers })
     if (request.headers.get('origin') && request.headers.get('origin') !== origin) return reply(403, { ok: false, code: 'origin_denied', message: 'Origin not allowed.' })
@@ -38,6 +40,7 @@ export function createEnergyIngestHandler(config: { url: string; serviceKey: str
     try {
       const rpc = async (name: string, data: Json): Promise<Json> => {
         const response = await fetch(`${base.origin}/rest/v1/rpc/${name}`, { method: 'POST', headers: {
+          'x-request-id': requestId,
           'Content-Type': 'application/json', apikey: config.serviceKey, Authorization: `Bearer ${config.serviceKey}`,
         }, body: JSON.stringify(data), signal: AbortSignal.timeout(10000) })
         if (!response.ok) throw new Error('Database operation failed')

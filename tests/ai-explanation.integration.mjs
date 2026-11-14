@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { startGateway } from '../scripts/backend-gateway.mjs'
 import { createChatExplainer } from '../src/lib/aiExplanation.ts'
+import { explainDeviceEvidence, parseExplanationContext } from '../src/lib/deviceExplanation.ts'
 
 const main = 'http://127.0.0.1:54321', ai = 'http://127.0.0.1:54331', settings = JSON.parse(await readFile('.tmp/phase1/settings.json', 'utf8'))
 const q = v => "'" + String(v).replaceAll("'", "''") + "'"
@@ -20,8 +21,10 @@ let next = { status: 200, content: JSON.stringify({ explanation: 'Media pot terb
 const stub = createServer(async (req, res) => {
   let body = ''; for await (const part of req) body += part
   calls.push({ path: req.url, auth: req.headers.authorization, body: JSON.parse(body) })
-  res.writeHead(next.status, { 'Content-Type': 'application/json' })
-  res.end(JSON.stringify({ model: 'ag/gemini-3.8-flash-low', choices: [{ finish_reason: 'stop', message: { content: next.content } }] }))
+  const selected = next
+  if (selected.wait) await selected.wait
+  res.writeHead(selected.status, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify({ model: 'ag/gemini-3.8-flash-low', choices: [{ finish_reason: 'stop', message: { content: selected.content } }] }))
 })
 await new Promise(resolve => stub.listen(0, '127.0.0.1', resolve))
 const gateway = startGateway({ settings, appOrigin: 'http://127.0.0.1:5173', port: 54331, explainer: createChatExplainer({ baseUrl: `http://127.0.0.1:${stub.address().port}/v1`, apiKey: 'stub-key', timeoutMs: 5000 }) })
@@ -41,7 +44,7 @@ await test('AI wording is stored only when checked; the rule decision stays auth
     const payload = JSON.stringify({ domain: 'smart-agro.telemetry.v2', schema_version: 2, source: 'device', device_id: device, unit_id: unit, boot_id: boot, sequence, measured_at: new Date(Date.now() - (4 - sequence) * 60000).toISOString(), clock_status: 'synced', sensors: { moisture: { status: 'ok', value: 25 }, soil_temperature: { status: 'ok', value: 28 }, soil_ph: { status: 'not_measured', value: null } } })
     assert.equal((await api(main, '/functions/v1/telemetry-ingest', null, { payload, signature: sign(null, Buffer.from(payload), keys.privateKey).toString('base64') })).status, 200)
   }
-  const explain = question => api(ai, '/functions/v1/unit-explanation', token, { unit_id: unit, device_id: device, request_id: randomUUID(), question })
+  const explain = (question, request_id = randomUUID()) => api(ai, '/functions/v1/unit-explanation', token, { unit_id: unit, device_id: device, request_id, question })
 
   await t.test('checked AI text is stored with model and prompt version; no identifiers leave the server', async () => {
     const r = await explain('Apakah perlu disiram?')
@@ -63,6 +66,74 @@ await test('AI wording is stored only when checked; the rule decision stays auth
     next = { status: 500, content: '' }
     d = (await explain('')).data.snapshot.decision_payload
     assert.equal(d.source_mode, 'rule_fallback'); assert.equal(d.ai_status, 'failed')
+  })
+
+  await t.test('stored and in-flight duplicate requests do not invoke AI twice', async () => {
+    const request = randomUUID(), before = calls.length
+    let release
+    next = { status: 500, content: '', wait: new Promise(resolve => { release = resolve }) }
+    const first = explain('', request)
+    try {
+      for (let i = 0; calls.length === before && i < 100; i++) await new Promise(resolve => setTimeout(resolve, 20))
+      assert.equal(calls.length, before + 1, 'First request reached the provider')
+      const pending = await explain('', request)
+      assert.equal(pending.status, 409); assert.equal(pending.data.code, 'request_pending')
+      assert.equal(calls.length, before + 1, 'Pending duplicate must not call the provider')
+    } finally { release() }
+    const saved = await first
+    assert.equal(saved.status, 200)
+    const retry = await explain('', request)
+    assert.equal(retry.status, 200); assert.equal(retry.data.duplicate, true)
+    assert.equal(retry.data.snapshot.id, saved.data.snapshot.id)
+    assert.equal(calls.length, before + 1, 'Stored retry must not call the provider')
+    const conflict = await explain('different question', request)
+    assert.equal(conflict.status, 409); assert.equal(conflict.data.code, 'request_conflict')
+    assert.equal(calls.length, before + 1)
+    next = { status: 500, content: '' }
+  })
+
+  await t.test('expired workers cannot save; recovery is charged and authenticated callers cannot forge finalization', async () => {
+    const request = randomUUID(), reserve = () => api(main, '/rest/v1/rpc/reserve_unit_explanation', token, { p_unit_id: unit, p_device_id: device, p_request_id: request, p_question: '' })
+    const first = await reserve(); assert.equal(first.data.ok, true)
+    sql(`UPDATE explanation_attempt SET lease_until=clock_timestamp()-interval '1 second' WHERE id=${q(first.data.attempt_id)}`)
+    const retry = await reserve(); assert.equal(retry.data.ok, true); assert.notEqual(retry.data.attempt_id, first.data.attempt_id)
+    assert.equal(sql(`SELECT count(*) FROM explanation_attempt WHERE account_id=${q(account)} AND request_id=${q(request)}`), '2')
+    const context = (await api(main, '/rest/v1/rpc/unit_explanation_context', token, { p_unit_id: unit, p_device_id: device })).data
+    const session = JSON.parse(Buffer.from(token.split('.')[1], 'base64url')).session_id
+    const body = { p_attempt_id: first.data.attempt_id, p_auth_user_id: signup.data.user.id, p_session_id: session, p_aal: 'aal1', p_context: context, p_result: explainDeviceEvidence(parseExplanationContext(context), '') }
+    const old = await api(main, '/rest/v1/rpc/finish_unit_explanation', settings.service, body)
+    assert.equal(old.data.code, 'request_expired')
+    body.p_attempt_id = retry.data.attempt_id
+    assert.equal((await api(main, '/rest/v1/rpc/finish_unit_explanation', token, body)).status, 403)
+    assert.equal((await api(main, '/rest/v1/rpc/finish_unit_explanation', settings.service, body)).data.ok, true)
+    assert.equal(sql(`SELECT count(*) FROM ai_snapshot WHERE ownership_id=${q(context.ownership_id)} AND request_id=${q(request)}`), '1')
+    const privateAttempts = await fetch(main + '/rest/v1/explanation_attempt?select=id', { headers: { apikey: settings.anon, Authorization: `Bearer ${token}` } })
+    assert.equal(privateAttempts.status, 403)
+  })
+
+  await t.test('account-wide concurrency and failed/expired attempt quota stop inference before provider calls', async () => {
+    const before = calls.length
+    const reserve = request => api(main, '/rest/v1/rpc/reserve_unit_explanation', token, { p_unit_id: unit, p_device_id: device, p_request_id: request, p_question: '' })
+    const active = await Promise.all([reserve(randomUUID()), reserve(randomUUID()), reserve(randomUUID())])
+    assert.equal(active.filter(r => r.data.ok).length, 2)
+    assert.equal(active.filter(r => r.data.code === 'rate_limited').length, 1)
+    const blocked = await explain('')
+    assert.equal(blocked.status, 429); assert.equal(calls.length, before)
+    // Controlled crashed-work fixtures: expiry frees concurrency, never the minute budget.
+    sql(`UPDATE explanation_attempt SET lease_until=clock_timestamp()-interval '1 second' WHERE account_id=${q(account)} AND finished_at IS NULL`)
+    let count = Number(sql(`SELECT count(*) FROM explanation_attempt WHERE account_id=${q(account)} AND created_at>clock_timestamp()-interval '1 minute'`))
+    for (; count < 20; count++) {
+      const admitted = await reserve(randomUUID()); assert.equal(admitted.data.ok, true)
+      sql(`UPDATE explanation_attempt SET finished_at=clock_timestamp() WHERE id=${q(admitted.data.attempt_id)}`)
+    }
+    const rejected = await explain('')
+    assert.equal(rejected.status, 429); assert.equal(rejected.data.code, 'rate_limited'); assert.equal(calls.length, before)
+    assert.equal(sql(`SELECT count(*) FROM explanation_attempt WHERE account_id=${q(account)} AND created_at>clock_timestamp()-interval '1 minute'`), '20')
+    // Same account, second product: a separate ownership must not reset the provider budget.
+    const product2 = randomUUID(), device2 = randomUUID(), unit2 = randomUUID()
+    sql(`INSERT INTO product(id,serial_public,variant,issuer_signature) VALUES(${q(product2)},${q('AI-SECOND-'+run)},'single_pot','software-test'); INSERT INTO device(id,product_id,public_key) VALUES(${q(device2)},${q(product2)},${q(randomBytes(32).toString('base64'))}); INSERT INTO ownership(product_id,account_id) VALUES(${q(product2)},${q(account)}); INSERT INTO unit(id,product_id,profile_version_id,location_label) VALUES(${q(unit2)},${q(product2)},${q(version)},'Second synthetic unit');`)
+    const otherProduct = await api(main, '/rest/v1/rpc/reserve_unit_explanation', token, { p_unit_id: unit2, p_device_id: device2, p_request_id: randomUUID(), p_question: '' })
+    assert.equal(otherProduct.data.code, 'rate_limited')
   })
 
   await t.test('the database refuses an AI label without model and prompt version', async () => {

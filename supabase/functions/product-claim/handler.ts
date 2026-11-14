@@ -1,3 +1,4 @@
+import { canonicalRequestId } from '../_shared/observability.ts'
 import { verifyDeviceSignature } from '../_shared/deviceSignature.ts'
 type Config = { url: string; serviceKey: string; appOrigin: string }
 type Json = Record<string, unknown>
@@ -8,8 +9,9 @@ export function createProductClaimHandler(config: Config) {
   if (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) throw new Error('HTTPS required')
   const origin = new URL(config.appOrigin).origin
   return async (request: Request): Promise<Response> => {
+    const requestId = canonicalRequestId(request.headers.get('x-request-id'))
     const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Vary': 'Origin',
-      'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type',
+      'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-request-id',
       'Access-Control-Allow-Methods': 'POST, OPTIONS' }
     const reply = (status: number, data: Json) => new Response(JSON.stringify(data), { status, headers })
     if (request.headers.get('origin') && request.headers.get('origin') !== origin) return reply(403, { ok: false, code: 'origin_denied', message: 'Origin not allowed.' })
@@ -38,7 +40,7 @@ export function createProductClaimHandler(config: Config) {
       if (typeof body.nonce_id !== 'string' || !uuid.test(body.nonce_id) || typeof body.sealed_code !== 'string' || !body.sealed_code.trim() || body.sealed_code.length > 256 || typeof body.signature !== 'string' || body.signature.length !== 88) throw new Error('Invalid fields')
     } catch { return reply(400, { ok: false, code: 'invalid_request', message: 'Invalid activation request.' }) }
     try {
-      const auth = await fetch(`${base.origin}/auth/v1/user`, { headers: { Authorization: authorization, apikey: config.serviceKey }, signal: AbortSignal.timeout(10000) })
+      const auth = await fetch(`${base.origin}/auth/v1/user`, { headers: { 'x-request-id': requestId, Authorization: authorization, apikey: config.serviceKey }, signal: AbortSignal.timeout(10000) })
       if (!auth.ok) return reply(401, { ok: false, code: 'unauthorized', message: 'Session invalid or expired.' })
       const user: Json = await auth.json()
       // Decode only AFTER Auth validates the exact bearer token; unverified claims never grant access.
@@ -46,6 +48,7 @@ export function createProductClaimHandler(config: Config) {
       if (typeof user.id !== 'string' || !uuid.test(user.id) || payload.sub !== user.id || typeof payload.session_id !== 'string' || !uuid.test(payload.session_id) || user.is_anonymous === true) return reply(401, { ok: false, code: 'invalid_session', message: 'Authenticated account session required.' })
       const rpc = async (name: string, args: Json): Promise<Json> => {
         const result = await fetch(`${base.origin}/rest/v1/rpc/${name}`, { method: 'POST', headers: {
+          'x-request-id': requestId,
           Authorization: `Bearer ${config.serviceKey}`, apikey: config.serviceKey, 'Content-Type': 'application/json',
         }, body: JSON.stringify(args), signal: AbortSignal.timeout(10000) })
         if (!result.ok) throw new Error('Database operation failed')
@@ -59,8 +62,9 @@ export function createProductClaimHandler(config: Config) {
         await verifyDeviceSignature(proof.public_key, body.signature as string, proof.challenge)
       if (!valid) return reply(403, { ok: false, code: 'invalid_signature', message: 'Device signature invalid.' })
       const result = await rpc('claim_verified_product', { p_nonce_id: body.nonce_id, p_auth_user_id: user.id,
-        p_session_id: payload.session_id, p_public_key: proof.public_key, p_sealed_code: body.sealed_code })
-      const status = result.ok ? 200 : result.code === 'already_owned' || result.code === 'claim_conflict' ? 409 : 400
+        p_session_id: payload.session_id, p_public_key: proof.public_key, p_sealed_code: body.sealed_code,
+        p_aal: payload.aal === 'aal2' ? 'aal2' : 'aal1' })
+      const status = result.ok ? 200 : result.code === 'mfa_required' ? 403 : result.code === 'already_owned' || result.code === 'claim_conflict' ? 409 : 400
       return reply(status, result)
     } catch { return reply(503, { ok: false, code: 'service_unavailable', message: 'Activation temporarily unavailable. Retry the same challenge.' }) }
   }

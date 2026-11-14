@@ -1,5 +1,5 @@
 import { startGateway } from './backend-gateway.mjs'
-import { createHmac, randomBytes } from 'node:crypto'
+import { createHmac, randomBytes, generateKeyPairSync } from 'node:crypto'
 import { mkdir, readFile, writeFile, access, readdir } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -56,5 +56,15 @@ await writeFile('.tmp/phase1/browser.env', browserEnv)
 try { await access('.env.local') } catch { await writeFile('.env.local', browserEnv) }
 // Optional AI explanations: AI_BASE_URL, AI_API_KEY and AI_MODEL in this ignored file (see README).
 try { process.loadEnvFile('.tmp/phase1/ai.env') } catch (error) { if (error.code !== 'ENOENT') throw error }
-const server = startGateway({settings, appOrigin:'http://127.0.0.1:5173', extraOrigins:['http://127.0.0.1:4173','http://127.0.0.1:4178']})
+// Local issuer key for product manifests (ID-04). The private half exists only in this ignored file, for local
+// provisioning and tests; a real issuer keeps its private key offline and only the public key is configured.
+let issuer
+try { issuer = JSON.parse(await readFile('.tmp/phase1/issuer.json', 'utf8')) }
+catch (error) {
+  if (error.code !== 'ENOENT') throw error
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519')
+  issuer = { key_id: 'local-issuer-1', public_key: Buffer.from(publicKey.export({ format: 'jwk' }).x, 'base64url').toString('base64'), private_key_pem: privateKey.export({ format: 'pem', type: 'pkcs8' }) }
+  await writeFile('.tmp/phase1/issuer.json', JSON.stringify(issuer))
+}
+const server = startGateway({settings, appOrigin:'http://127.0.0.1:5173', extraOrigins:['http://127.0.0.1:4173','http://127.0.0.1:4178'], issuerKeys:{ [issuer.key_id]: issuer.public_key }})
 process.on('SIGINT',()=>server.close(()=>process.exit(0)))

@@ -13,3 +13,15 @@ verify_jwt = false
 # A registered meter signs energy evidence; no browser JWT or quality flag establishes trust.
 [functions.energy-ingest]
 verify_jwt = false
+
+# User token stays in caller context; live session/MFA and ownership are checked in the history RPC.
+[functions.history-export]
+verify_jwt = false
+
+# Issuer signature checked against pinned ISSUER_PUBLIC_KEYS; the operator's own token runs the gated RPC.
+[functions.product-provision]
+verify_jwt = false
+
+# The caller's aal1 token is validated by Auth inside the handler; the recovery code is the second proof.
+[functions.mfa-recovery]
+verify_jwt = false

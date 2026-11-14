@@ -22,15 +22,15 @@ for (const asset of [...assets, './fonts/fraunces-soft.woff2', './fonts/general-
 const settings = await fetch(new URL('/auth/v1/settings', backend), { headers: { apikey: env.VITE_SUPABASE_ANON_KEY, Origin: origin }, signal: AbortSignal.timeout(20000) })
 assert.equal(settings.status, 200)
 assert.equal((await settings.json()).external.google, true)
-for (const name of ['product-claim', 'telemetry-ingest', 'unit-explanation', 'energy-ingest']) {
+for (const name of ['product-claim', 'telemetry-ingest', 'unit-explanation', 'energy-ingest', 'history-export', 'mfa-recovery', 'product-provision']) {
   for (const [requestOrigin, expectedStatus] of [[origin, 204], ['https://untrusted.invalid', 403]]) {
     const response = await fetch(new URL(`/functions/v1/${name}`, backend), { method: 'OPTIONS', headers: { Origin: requestOrigin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'authorization,apikey,content-type' }, signal: AbortSignal.timeout(20000) })
     assert.equal(response.status, expectedStatus, `${name}: origin policy`)
     assert.equal(response.headers.get('access-control-allow-origin'), origin, `${name}: exact production origin`)
   }
 }
-for (const name of ['product-claim', 'unit-explanation']) {
+for (const name of ['product-claim', 'unit-explanation', 'history-export', 'mfa-recovery', 'product-provision']) {
   const response = await fetch(new URL(`/functions/v1/${name}`, backend), { method: 'POST', headers: { apikey: env.VITE_SUPABASE_ANON_KEY, Origin: origin, 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(20000) })
   assert.equal(response.status, 401, `${name}: unauthenticated requests must be rejected`)
 }
-console.log('Cloud smoke passed: current assets, fonts, hosted Auth, four CORS policies, and unauthenticated access rejection.')
+console.log('Cloud smoke passed: current assets, fonts, hosted Auth, seven CORS policies, and unauthenticated access rejection.')

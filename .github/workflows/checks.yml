@@ -24,6 +24,49 @@ jobs:
       - run: npm run build
       - run: python scripts/reference/simulasi_pot.py --self-test
       - run: git diff --check
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - run: npm ci --cache .cache/npm
+      - name: Verify backend against the isolated local stack
+        shell: bash
+        run: |
+          mkdir -p .tmp/phase1
+          node scripts/phase1-local.mjs > .tmp/phase1/ci-backend.log 2>&1 &
+          backend_pid=$!
+          trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in {1..240}; do
+            if ! kill -0 "$backend_pid" 2>/dev/null; then
+              echo 'Local backend exited before readiness.' >&2
+              exit 1
+            fi
+            if curl --fail --silent --max-time 3 http://127.0.0.1:54321/health > /dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo 'Local backend readiness timed out.' >&2
+            exit 1
+          fi
+          npm run test:backend
+          node scripts/database-backup.mjs backup .tmp/backups/ci.dump
+          node scripts/database-backup.mjs verify .tmp/backups/ci.dump
+          node scripts/database-backup.mjs restore .tmp/backups/ci.dump --target ci_restore_drill
+      - name: Stop the isolated local stack
+        if: always()
+        shell: bash
+        run: |
+          if [ -f .tmp/phase1/compose.env ]; then
+            docker compose --env-file .tmp/phase1/compose.env -p smart-agro-phase1 -f supabase/compose.phase1.yml down
+          fi
   containers:
     runs-on: ubuntu-latest
     timeout-minutes: 15

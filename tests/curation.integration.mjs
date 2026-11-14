@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { randomUUID,randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
+import { enableTotp } from './totp.mjs'
 const url='http://127.0.0.1:54321',config=JSON.parse(await readFile('.tmp/phase1/settings.json','utf8'))
 const q=v=>"'"+String(v).replaceAll("'","''")+"'"
 const sql=input=>execFileSync('docker',['exec','-i','smart-agro-phase1-db-1','psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','postgres'],{input,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim()
@@ -12,17 +13,18 @@ async function api(path,token,body,method='POST'){
 }
 const rpc=(name,token,body={})=>api('/rest/v1/rpc/'+name,token,body)
 const run=randomUUID().slice(0,8),password=randomBytes(20).toString('base64url')
-async function account(label,roles){
+async function account(label,roles,mfa=true){
  const r=await api('/auth/v1/signup',null,{email:`curation-${run}-${label}@example.test`,password});assert.equal(r.status,200)
  const a=await rpc('ensure_my_account',r.data.access_token);assert.equal(a.data.ok,true)
  sql(`UPDATE account SET access_roles=ARRAY[${roles.map(q).join(',')}]::text[] WHERE id=${q(a.data.account.id)}`)
- return {token:r.data.access_token,id:a.data.account.id}
+ const token=mfa && roles.some(role=>['curator','operator'].includes(role)) ? (await enableTotp(url,config.anon,r.data.access_token)).token : r.data.access_token
+ return {token,id:a.data.account.id}
 }
 // Explicit synthetic software fixture, never asserted as agronomically calibrated.
 const parameters={pot_id:'synthetic-test-target',crop:'Synthetic crop',media:'Test medium',phase:'Test phase',validated:false,ph_validated:false,needs_water:[30,35,40],drained:[70,75,80],next_visit_h:6,hot_c:35,ph_range:[5.5,7]}
 const submission=(overrides={})=>({p_profile_id:null,p_species:`Synthetic curation fixture ${run}`,p_scope:'Software integration test only; not field validated',p_source_license:'Synthetic test data; permission granted for software testing',p_evidence_ref:'tests/curation.integration.mjs',p_parameters:parameters,p_permission:true,...overrides})
 await test('Phase 3: permissioned profile curation against real Auth/PostgreSQL',async t=>{
- const author=await account('author',['owner','contributor','curator']),curator=await account('curator',['owner','curator']),owner=await account('owner',['owner']),other=await account('other',['contributor'])
+ const author=await account('author',['owner','contributor','curator']),curator=await account('curator',['owner','curator']),owner=await account('owner',['owner']),other=await account('other',['contributor']),weak=await account('weak',['owner','contributor','curator'],false)
  let contribution,profile,version
  await t.test('contributor role, sharing permission and exact numeric profile validation',async()=>{
   assert.equal((await rpc('submit_profile_contribution',owner.token,submission())).data.code,'forbidden')
@@ -32,6 +34,11 @@ await test('Phase 3: permissioned profile curation against real Auth/PostgreSQL'
  })
  const review=(who,decision='approved',revision=1)=>rpc('review_profile_contribution',who.token,{p_id:contribution,p_revision:revision,p_decision:decision,p_reason:'Synthetic integration review; no field validation',p_evidence_level:'Synthetic software fixture only'})
  await t.test('self-approval and unauthorized review fail; private queue isolated',async()=>{
+  assert.equal((await review(weak)).data.code,'mfa_required')
+  const scoped=(await rpc('knowledge_workspace',weak.token)).data
+  assert.equal(scoped.roles.includes('curator'),false);assert.equal(scoped.roles.includes('owner'),true);assert.equal(scoped.roles.includes('contributor'),true)
+  assert.equal(scoped.contributions.some(c=>c.id===contribution),false)
+  assert.deepEqual((await api('/rest/v1/contribution?id=eq.'+contribution,weak.token,undefined,'GET')).data,[])
   assert.equal((await review(author)).data.code,'self_review');assert.equal((await review(owner)).data.code,'forbidden')
   assert.equal((await rpc('knowledge_workspace',other.token)).data.contributions.some(c=>c.id===contribution),false)
   assert.equal((await rpc('knowledge_workspace',curator.token)).data.contributions.some(c=>c.id===contribution),true)

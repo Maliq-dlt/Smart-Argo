@@ -26,7 +26,10 @@ await test('ID-01 and ID-03: public status, re-authenticated one-time transfer',
 
   await t.test('anyone can read registry status and claim state, never the owner', async () => {
     const r = await rpc('product_public_status', null, { p_serial: ` ${serial.toLowerCase()} ` })
-    assert.deepEqual(r, { ok: true, serial_public: serial, variant: 'single_pot', registry_status: 'active', claimed: true })
+    // The issuer fields (20261114140000_product_manifest) are public by design and empty for a database-only product;
+    // the exact shape still proves no owner identity is exposed.
+    assert.deepEqual(r, { ok: true, serial_public: serial, variant: 'single_pot', registry_status: 'active', claimed: true,
+      manifest: null, issuer_key_id: null, issuer_signature: null, issuer_verified: false })
     assert.equal((await rpc('product_public_status', null, { p_serial: 'NOPE-' + run })).code, 'not_registered')
     assert((await api('/rest/v1/ownership_transfer', a.token, undefined, 'GET')).status >= 400, 'No direct table access')
   })
