@@ -113,6 +113,25 @@ await test('RW-04: held claims, appeals and operator decisions',async t=>{
   assert.equal(sql(`SELECT count(*) FROM ledger_entry WHERE idempotency_key=${q('case:'+secondCase)}`),'0')
   assert.equal(sql(`SELECT status FROM reward_case WHERE id=${q(secondCase)}`),'in_review','the refused decision leaves the case open for a rejection')
  })
+ await t.test('a subject is credited by at most one upheld case, even through a second appeal',async()=>{
+  const appealOn=async subject=>{const a=(await rpc('open_reward_appeal',alice.token,{p_request_id:randomUUID(),p_energy_window_id:subject.window??null,p_redemption_id:subject.redemption??null,p_statement:'Banding lanjutan.'})).data;assert.equal(a.ok,true,JSON.stringify(a));assert.equal((await rpc('operator_take_reward_case',second.token,{p_case_id:a.case_id,p_request_id:randomUUID()})).data.status,'in_review');return a.case_id}
+  const decideOn=(caseId,decision,points)=>rpc('operator_decide_reward_case',second.token,{p_case_id:caseId,p_request_id:randomUUID(),p_decision:decision,p_points:points,p_reason:'Peninjauan lanjutan.'})
+  assert.equal(sql(`SELECT count(*) FROM pg_indexes WHERE indexname IN ('reward_case_one_credit_per_redemption','reward_case_one_credit_per_window')`),'2','the database enforces it')
+  // energy window: the held window was already credited by its anomaly case (900 points)
+  const again=await appealOn({window:held})
+  assert.equal((await decideOn(again,'upheld',50)).data.code,'state_conflict','the window was already credited')
+  assert.equal(sql(`SELECT count(*) FROM ledger_entry WHERE idempotency_key=${q('case:'+again)}`),'0')
+  assert.equal((await decideOn(again,'rejected',null)).data.status,'rejected','the refused case can still be rejected')
+  // redemption: two upheld cases on one fulfilled redemption
+  const item=(await rpc('operator_upsert_catalog',operator.token,{p_id:null,p_title:'One credit item '+run,p_point_cost:10,p_stock_total:2,p_availability:'available'})).data.item_id
+  const r=(await rpc('reserve_my_reward',alice.token,{p_item_id:item,p_request_id:randomUUID()})).data;assert.equal(r.ok,true,JSON.stringify(r))
+  assert.equal((await rpc('operator_fulfill_redemption',operator.token,{p_id:r.redemption_id,p_reference:'Synthetic fulfillment; no shipment sent'})).data.status,'fulfilled')
+  const firstCase=await appealOn({redemption:r.redemption_id})
+  assert.equal((await decideOn(firstCase,'upheld',10)).data.credited_points,10)
+  const secondCase=await appealOn({redemption:r.redemption_id})
+  assert.equal((await decideOn(secondCase,'upheld',10)).data.code,'state_conflict','a second upheld case cannot refund it again')
+  assert.equal(sql(`SELECT count(*) FROM ledger_entry WHERE idempotency_key IN (${q('case:'+firstCase)},${q('case:'+secondCase)})`),'1')
+ })
  }finally{
   const restore=previous?{p_version:previous.version,p_wh_per_point:previous.wh_per_point,p_daily_cap:previous.daily_point_cap,p_enabled:true}:{p_version:null,p_wh_per_point:null,p_daily_cap:null,p_enabled:false}
   const done=(await rpc('operator_set_reward_policy',operator.token,restore)).data
