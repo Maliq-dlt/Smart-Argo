@@ -7,8 +7,18 @@ import { useAccount } from './accountContext'
 
 const back = () => `${location.origin}${location.pathname}#statistik`
 const pause = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms))
+/** Auth answers in English; the common ones get a sentence that says what to do next. Others pass through. */
+const plain: [RegExp, string][] = [
+  [/invalid login credentials/i, 'Email atau kata sandi salah. Belum punya akun? Pilih Daftar.'],
+  [/email not confirmed/i, 'Email belum dikonfirmasi. Buka tautan konfirmasi di email Anda, lalu masuk.'],
+  [/already registered|already been registered/i, 'Email ini sudah terdaftar. Pilih Masuk.'],
+  [/password should be at least|weak password/i, 'Kata sandi terlalu pendek: minimal 10 karakter.'],
+  [/rate limit|too many/i, 'Terlalu banyak percobaan. Tunggu sebentar, lalu coba lagi.'],
+  [/signups? not allowed/i, 'Pendaftaran sedang ditutup.'],
+]
+const friendly = (text: string) => plain.find(([pattern]) => pattern.test(text))?.[1] ?? text
 
-/** The door into the simulator: Google, email, or (without `signInRequired`) a guest visit that keeps data in this browser. */
+/** The door into the simulator: Google, email, or a guest visit that keeps data in this browser. */
 export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
   const account = useAccount()
   const client = account.client!
@@ -26,7 +36,7 @@ export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
 
   async function run(action: () => Promise<void>) {
     setPending(true); setNotice(null)
-    try { await action() } catch (err) { setNotice({ error: true, text: err instanceof Error ? err.message : 'Permintaan gagal.' }) }
+    try { await action() } catch (err) { setNotice({ error: true, text: friendly(err instanceof Error ? err.message : 'Permintaan gagal.') }) }
     finally { setPending(false) }
   }
   /** The guard sprouts for a moment before the app opens (skipped with reduced motion). */
@@ -52,6 +62,12 @@ export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
           await opened(signup ? 'Akun siap digunakan. Aktifkan 2FA di Profil sebelum menukar poin.' : 'Berhasil masuk.')
         })}
         onCode={code => run(async () => { await client.verifyMfa(code); await opened('Berhasil masuk.') })}
+        onRecoveryCode={code => run(async () => { await client.recoverMfa(code); setMfaStep(false); await opened('Masuk dengan kode pemulihan. Autentikator lama dihapus; aktifkan lagi di Profil. Penukaran dan transfer ditahan 24 jam.') })}
+        onForgot={email => run(async () => {
+          if (!/^[^@\s]+@[^@\s]+$/.test(email)) throw new Error('Isi email akun Anda dulu, lalu pilih Lupa kata sandi.')
+          await client.requestPasswordReset(email, back())
+          setNotice({ error: false, text: 'Jika email itu terdaftar, tautan untuk membuat kata sandi baru sudah dikirim. Buka di browser ini.' })
+        })}
         onCancelCode={() => { setMfaStep(false); void client.logout().catch(() => undefined) }} />
     </div>
   </main>

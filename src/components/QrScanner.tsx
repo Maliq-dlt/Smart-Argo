@@ -82,12 +82,18 @@ export default function QrScanner({ onSerial, label = 'Pindai QR' }: { onSerial:
         stream = camera
         view.srcObject = stream
         await view.play()
+        if (stopped) return
         setLive(true)
         setStatus('Arahkan kamera ke QR pada kemasan.')
         const reader = await qrDetector()
         const tick = async () => {
           if (stopped) return
-          try { const codes = await reader.detect(view); if (codes[0] && accept(codes[0].rawValue)) return } catch { /* a frame that cannot be read yet */ }
+          try {
+            const codes = await reader.detect(view)
+            // Closed while this frame was being read: drop the result, or it would pick a product after the dialog shut.
+            if (stopped) return
+            if (codes[0] && accept(codes[0].rawValue)) return
+          } catch { /* a frame that cannot be read yet */ }
           timer = window.setTimeout(() => void tick(), 220)
         }
         void tick()

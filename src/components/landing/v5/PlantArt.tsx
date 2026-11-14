@@ -123,6 +123,13 @@ export default function PlantArt() {
     <rect className="v5-rim" x="52" y="342" width="296" height="28" rx="7" />
     <path className="v5-rim-shine" d="M62 349H338" fill="none" />
     <g className="v5-zone"><path d="M356 452v124" fill="none" /><path d="M350 452h12M350 576h12" fill="none" /></g>
+    <ChiliPlant />
+  </svg>
+}
+
+/** The chili above the soil (stem base at 200, 368 in this file's 400 × 610 space), also used by the garden scene. */
+export function ChiliPlant() {
+  return <g>
     {stems.map(s => <path key={s.d} className="v5-draw-line v5-stem" d={s.d} fill="none" style={{ strokeWidth: s.w }} />)}
     {pods.map((pd, i) => <g key={i} className={pd.ripe ? 'v5-pod is-ripe' : 'v5-pod'}>
       <path className="v5-draw-line v5-pod-stalk" d={pd.stalk} fill="none" />
@@ -139,5 +146,5 @@ export default function PlantArt() {
       {[0, 72, 144, 216, 288].map(deg => <ellipse key={deg} className="v5-draw-line v5-draw-fill v5-petal" cx={fl.x} cy={fl.y - fl.r} rx={fl.r * .55} ry={fl.r} transform={`rotate(${deg} ${fl.x} ${fl.y})`} />)}
       <circle className="v5-draw-fill v5-flower-eye" cx={fl.x} cy={fl.y} r={fl.r * .36} />
     </g>)}
-  </svg>
+  </g>
 }

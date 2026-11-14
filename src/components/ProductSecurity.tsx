@@ -7,6 +7,8 @@ import type { ProductAccountClient, TotpEnrollment } from '../lib/productAccount
 const KINDS: Record<string, string> = {
   sign_in: 'Masuk', mfa_enabled: '2FA diaktifkan', mfa_removed: '2FA dimatikan', password_changed: 'Kata sandi diganti',
   redemption_reserved: 'Reservasi penukaran', transfer_created: 'Kode transfer dibuat', transfer_accepted: 'Transfer kepemilikan',
+  recovery_requested: 'Ada permintaan pemulihan atas produk Anda', recovery_decided: 'Keputusan pemulihan kepemilikan',
+  recovery_codes_created: 'Kode pemulihan dibuat', mfa_recovered: '2FA dipulihkan dengan kode pemulihan',
 }
 const BROWSERS: [RegExp, string][] = [[/Edg\//, 'Edge'], [/OPR\//, 'Opera'], [/Firefox\//, 'Firefox'], [/Chrome\//, 'Chrome'], [/Safari\//, 'Safari']]
 const SYSTEMS: [RegExp, string][] = [[/Android/, 'Android'], [/iPhone|iPad/, 'iOS'], [/Windows/, 'Windows'], [/Mac OS X/, 'macOS'], [/Linux/, 'Linux']]

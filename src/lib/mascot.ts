@@ -4,6 +4,9 @@ import type { DecisionCode } from './agronomyEngine.ts'
 
 export type Mood = 'unknown' | 'calm' | 'care' | 'alert'
 
+/** The words shown beside the mascot; `ready` is the simulator's "waiting to be planted" face. */
+export const MOOD_LABEL = { ready: 'Semangat', calm: 'Santai', care: 'Perlu perhatian', alert: 'Waspada', unknown: 'Menunggu data' }
+
 const DATA = new Set<DecisionCode>(['KALIBRASI_LOKAL', 'PULIHKAN_DATA', 'PERIKSA_SENSOR'])
 const CARE = new Set<DecisionCode>(['PERIKSA_MEDIA_KERING', 'PERIKSA_SIRAMAN', 'PERIKSA_SEBELUM_PERGI'])
 const SEVERITY: Record<Exclude<Mood, 'unknown'>, number> = { calm: 0, care: 1, alert: 2 }

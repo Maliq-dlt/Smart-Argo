@@ -1,10 +1,13 @@
-import { Package, ShieldCheck, SignOut, UserCircle, GoogleLogo, EnvelopeSimple } from '@phosphor-icons/react'
+import { Package, ShieldCheck, SignOut, UserCircle, GoogleLogo, EnvelopeSimple, Wrench } from '@phosphor-icons/react'
 import { useState } from 'react'
 import ProductAccount from './ProductAccount'
 import ProductSecurity from './ProductSecurity'
+import ProductRecoveryCodes from './ProductRecoveryCodes'
+import ProductRecovery from './ProductRecovery'
+import OperatorWorkspace from './OperatorWorkspace'
 import { useAccount } from './accountContext'
 
-const SECTIONS = [['account', 'Akun', UserCircle], ['security', 'Keamanan', ShieldCheck], ['products', 'Produk', Package]] as const
+const SECTIONS = [['account', 'Akun', UserCircle], ['security', 'Keamanan', ShieldCheck], ['products', 'Produk', Package], ['operator', 'Operator', Wrench]] as const
 type Section = typeof SECTIONS[number][0]
 
 /** One section at a time (account, security, products), so nothing sits far down the page. */
@@ -17,7 +20,7 @@ export default function ProfilePage() {
   const { identity, client } = account
   return <div className="profile-page">
     <nav className="profile-nav" aria-label="Bagian profil">
-      {SECTIONS.map(([id, label, Icon]) => <button key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}><Icon aria-hidden="true" weight={section === id ? 'fill' : 'regular'} />{label}</button>)}
+      {SECTIONS.filter(([id]) => id !== 'operator' || account.roles.includes('operator')).map(([id, label, Icon]) => <button key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}><Icon aria-hidden="true" weight={section === id ? 'fill' : 'regular'} />{label}</button>)}
     </nav>
     <div className="profile-body">
       {section === 'account' && <section className="panel profile-account" aria-labelledby="profile-account-heading">
@@ -29,8 +32,9 @@ export default function ProfilePage() {
         </dl>
         <button type="button" className="button" onClick={() => { void account.signOut(); location.hash = '#masuk' }}><SignOut aria-hidden="true" />Keluar</button>
       </section>}
-      {section === 'security' && <div className="panel profile-security"><ProductSecurity client={client} onChanged={() => void account.refresh()} /></div>}
-      {section === 'products' && <ProductAccount />}
+      {section === 'security' && <div className="panel profile-security"><ProductSecurity client={client} onChanged={() => void account.refresh()} /><ProductRecoveryCodes client={client} /></div>}
+      {section === 'products' && <><ProductAccount /><ProductRecovery client={client} /></>}
+      {section === 'operator' && account.roles.includes('operator') && <OperatorWorkspace client={client} />}
     </div>
   </div>
 }

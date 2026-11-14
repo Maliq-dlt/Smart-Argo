@@ -4,25 +4,62 @@ Notable changes to Smart Agro. Dates are UTC+7.
 
 ## [Unreleased]
 
+### Changed
+- Dashboard redesigned around the answer. The stage has a sky that follows the session clock (sun, moon and a chili constellation at night, per theme), the clock sits at its foot labelled "Waktu simulasi", and the pot title is a small label so the engine's advice is the first read, also on a phone. The advice card keeps at most three facts and no longer repeats the stage's numbers.
+- Moisture now has a condition band: three zones from the profile's own watering and drained limits, the line broken wherever a reading failed, a 24-hour ribbon, and values readable by pointer, tap or keyboard (←/→, Shift for 6 hours, Home/End, Esc), spoken through a live region. It replaces the lime trend card.
+- Three instruments add context instead of repeating readings: growth phase against the 65/90-day journey, 24 hours of soil temperature against the heat limit, and the last three pH readings against the profile's range. Wording follows the product: "Hari ke-N" instead of "HST", "batas siram/panas" instead of "acuan", and the session pill says "Simulasi".
+- The rail shows a word under each icon on desktop (the phone dock stays icon-only).
+- Pure dashboard logic (zones, sun and moon, phase steps, "ago" labels) lives in `src/lib/dashboardFacts.ts`; `tests/dashboardFacts.test.ts` keeps the sky periods equal to the simulator scene's and the phase steps equal to `phaseAt`.
+
 ### Added
+- "Siapkan pot" after the first sign-in (Google or email): name the pot, pick Cabai or Bawang merah, say whether a unit is on hand. Saved on the account (Auth user metadata, validated on read) and opens that crop's journey; with a unit it continues to activation. Checked by `tests/pot-setup-browser.mjs` against a mocked Auth.
+- Landing numbers and soil scenes animate what the device does (roots drawing in, LED waves, data up the probes, sunlight onto the panel) instead of naming its parts again; parts are labelled only in the product scene.
 - Simulator gate (`#masuk`): sign in with Google or email, or continue as a guest whose data stays in the browser. Deep links pass through the gate and continue to the requested page. Without a backend, the gate is skipped.
 - Account menu (initials avatar) with Profil & keamanan and Keluar; the pot mascot moved into the pot pill.
 - Profile page (`#profil`) with Akun, Keamanan and Produk sections, one at a time.
-- Google sign-in through Supabase Auth (authorization code with PKCE S256). It is offered first when Auth enables Google; email and password stay available in a folded section.
-- A dedicated sign-in card: the pot mascot follows the email being typed, covers its eyes for passwords and codes, droops after a failure and sprouts on success. The steps run sign in, register the pot, then 2FA. On narrow cards the mascot sits small above the form.
+- Google sign-in through Supabase Auth (authorization code with PKCE S256). It is offered first when Auth enables Google; the email form stays open below it with Masuk and Daftar tabs (no fold since 2026-11-14), and common Auth errors are explained in Indonesian.
+- A dedicated sign-in card: the terracotta pot mascot (also the dashboard avatar) beams and reads along the email at the caret, squeezes its eyes shut and peeks now and then for passwords and codes, droops after a failure and sprouts on success. The steps run sign in, register the pot, then 2FA. On narrow cards the mascot sits small above the form.
 - Account security: authenticator-app 2FA (TOTP), a 5-minute step-up and a 24-hour hold after security changes before points can be redeemed, and an activity log.
 - Transfer confirmation for passwordless (Google) accounts: a fresh authenticator code or a new Google sign-in.
 - Hosted backend on Supabase cloud (project `smart-agro`, ap-southeast-1): the same migrations, four edge functions and Auth settings (Google, passwords of 10+ characters, TOTP, email confirmation). `npm run build:cloud` builds against it from `.env.cloud`; that build requires sign-in and offers no guest visit.
 
+- Care journal and sensor history for an owned unit (Ekosistem → Unit & sensor), on the backend contract in `docs/care-history-api.md`: log watering, fertilizing, inspections and notes (a retry reuses its request id, so nothing is saved twice), page back through 31 days, compare the last week with the one before (missing data stays "—"), and download a CSV for up to 31 days. The journal never changes readings, pumps or rewards. Checked by `tests/care-history-browser.mjs` against a mocked backend.
+- Landing "Tanya mesinnya" section (replaces the prototype card row): pick chili or shallot, slide the soil moisture, and read the advice, reason and trigger straight from the simulator's rule engine with that crop's profile.
+
 ### Changed
+- The landing device is one interactive 3D model built in code (Three.js) instead of pre-rendered video and frame sequences. It turns by drag (vertical swipes still scroll), changes state with the story (studio, labelled parts, see-through shell, in the soil, highlighted parts per figure), keeps clear of the nav, and survives viewport resizes and lost WebGL contexts. Reduced motion and browsers without WebGL show rendered posters.
+- The growth demo plays a vector Lottie clip recoloured to the Sage palette, and the leaf reveal opens onto a vector garden of a chili and a shallot pot; both stay sharp at any zoom. `public/landing` shrank from 11 MB to about 0.4 MB.
 - Email sign-up runs PKCE: the confirmation link signs the visitor in through `?code=` (verifier kept in this browser), and expired links return to the gate with the reason.
 - The sign-in card always labels the email section "Masuk atau daftar dengan email" and shows a loading line until Auth reports whether Google is available.
 - The ecosystem page no longer starts with the long online account panel. The summary and module tabs come first, and signed-in data sits at the top of the matching tab (telemetry, knowledge, energy and rewards).
 - Auth requires passwords of at least 10 characters.
 - The local gateway passes Auth redirects through, and allows the preview origin `127.0.0.1:4173`.
+- Dashboard first visit (critique 2026-11-14): "Tanam bibit" and the mascot on the start card, care tiles hidden until planting, a calmer trend card in dark mode, the pot pill shows HST or "Belum ditanam" instead of repeating "Perjalanan", "Ruang tanam" is a link, and a disabled play button names why it is disabled.
+- Backend error codes (journal, history, AI admission such as `request_pending`) are shown in Indonesian; codes are matched as own keys only.
+- The ecosystem and profile pages load on first visit, so the simulator chunk shrank from 625 kB to 430 kB.
+- An error without a code no longer signs the visitor out; only `unauthorized`, `invalid_session` or HTTP 401 do.
+
+### Added (Miro diagram gap, stages 6–12)
+- Suspicious energy claims (at least 90% of the meter limit) are held for review; owners appeal, operators take and decide cases with a reason, and an upheld case credits points once (RW-04).
+- Ownership recovery with a statement and evidence references; an operator's approval moves ownership atomically with an outbox proof and a security event for the previous owner (ID-03).
+- Units can be renamed, archived and restored; devices are placed on units with history, and ingest rejects packets for another or an archived unit (APP-02).
+- "Kondisi unit": latest reading per sensor and alerts for no data, stale data, failed sensors, revoked devices, energy deficit and low battery (APP-03).
+- Products are provisioned from a manifest signed by a pinned issuer key (`product-provision` edge function); the public check verifies the Ed25519 signature again in the browser (ID-01, ID-04).
+- Password reset (Auth recover with PKCE) and one-time 2FA recovery codes (`mfa-recovery` edge function) (APP-01).
+- Chain proof worker (`scripts/chain-worker.mjs`): leased jobs, JSON-RPC send, receipts matched on chain, signer, destination and hash (A08).
+- Operator workspace (Profil → Operator): reward cases, ownership recoveries, registry (provision, key rotation, revocation) and chain proofs.
+- Paged sensor history for a date range next to the CSV download (APP-06).
+
+### Fixed
+- Care journal entries without notes were rejected, and a journal holding one failed to load.
+- The energy panel broke on a claim held for review.
+- Curators saw profile ids instead of names once there were more than 100 profiles (migration `20261114170000_knowledge_workspace_profiles`).
+- Operators and curators without 2FA lost their tools silently; the pages now say 2FA is required.
+- A unit created in the telemetry panel did not appear in "Kondisi unit", and renames or archives there did not reach the telemetry list.
 
 ### Security
 - Ownership transfer offers wait out the same 24-hour hold as redemptions after a password or 2FA change (migration `20261113020000_transfer_security_hold`).
+- Content-Security-Policy, Permissions-Policy (camera for this site only) and frame denial in `public/_headers`, checked by `tests/csp-browser.mjs`.
 
 ## [1.11.0] - 2026-11-13
 

@@ -4,6 +4,7 @@ import {execFileSync} from 'node:child_process'
 import {createRequire} from 'node:module'
 import {signIn,signOut,ecosystemTab} from './entry-helpers.mjs'
 import {mkdir,readFile,writeFile} from 'node:fs/promises'
+import {enableTotp} from './totp.mjs'
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE||'playwright')
 // SelectField (Radix): open the trigger, then choose the option by its value.
 const pick=async(scope,name,value)=>{await scope.getByRole('combobox',{name,exact:true}).click();await scope.page().locator(`[role=option][data-value="${value}"]`).click()}
@@ -14,13 +15,13 @@ const config=JSON.parse(await readFile('.tmp/phase1/settings.json','utf8')),base
 const sql=input=>execFileSync('docker',['exec','-i','smart-agro-phase1-db-1','psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','postgres'],{input,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim()
 const q=v=>"'"+String(v).replaceAll("'","''")+"'"
 const run=randomUUID().slice(0,8),password=randomBytes(20).toString('base64url'),species=`Synthetic browser curation ${run}`
-async function account(label,roles){const response=await fetch(base+'/auth/v1/signup',{method:'POST',headers:{apikey:config.anon,'Content-Type':'application/json'},body:JSON.stringify({email:`knowledge-${run}-${label}@example.test`,password})});assert.equal(response.status,200);const user=await response.json();const r=await fetch(base+'/rest/v1/rpc/ensure_my_account',{method:'POST',headers:{apikey:config.anon,Authorization:`Bearer ${user.access_token}`,'Content-Type':'application/json'},body:'{}'});assert.equal(r.status,200);const body=await r.json();assert.equal(body.ok,true);sql(`UPDATE account SET access_roles=ARRAY[${roles.map(q).join(',')}]::text[] WHERE id=${q(body.account.id)};`);return `knowledge-${run}-${label}@example.test`}
+async function account(label,roles){const response=await fetch(base+'/auth/v1/signup',{method:'POST',headers:{apikey:config.anon,'Content-Type':'application/json'},body:JSON.stringify({email:`knowledge-${run}-${label}@example.test`,password})});assert.equal(response.status,200);const user=await response.json();const r=await fetch(base+'/rest/v1/rpc/ensure_my_account',{method:'POST',headers:{apikey:config.anon,Authorization:`Bearer ${user.access_token}`,'Content-Type':'application/json'},body:'{}'});assert.equal(r.status,200);const body=await r.json();assert.equal(body.ok,true);sql(`UPDATE account SET access_roles=ARRAY[${roles.map(q).join(',')}]::text[] WHERE id=${q(body.account.id)};`);const mfa=roles.includes('curator')?await enableTotp(base,config.anon,user.access_token):null;return{email:`knowledge-${run}-${label}@example.test`,secret:mfa?.secret}}
 const author=await account('author',['owner','contributor']),curator=await account('curator',['owner','curator'])
 const browser=await chromium.launch({headless:true,channel:'chrome'}),page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
 const knowledge=page.getByRole('region',{name:'Profil & pengetahuan bersama',exact:true})
 const errors=[],checks=[];page.on('pageerror',err=>errors.push(err.message))
 await mkdir('.tmp/phase3/browser',{recursive:true})
-async function login(email){await signIn(page,email,password);await ecosystemTab(page,'Kurasi & blockchain');await knowledge.getByRole('button',{name:'Muat ulang pengetahuan',exact:true}).waitFor();await knowledge.getByRole('button',{name:'Muat ulang pengetahuan',exact:true}).isEnabled();await page.waitForFunction(()=>{const region=document.getElementById('knowledge-heading')?.closest('section');return region?.querySelector('[aria-busy]')?.getAttribute('aria-busy')==='false'})}
+async function login(person){await signIn(page,person.email,password,{secret:person.secret});await ecosystemTab(page,'Kurasi & blockchain');await knowledge.getByRole('button',{name:'Muat ulang pengetahuan',exact:true}).waitFor();await knowledge.getByRole('button',{name:'Muat ulang pengetahuan',exact:true}).isEnabled();await page.waitForFunction(()=>{const region=document.getElementById('knowledge-heading')?.closest('section');return region?.querySelector('[aria-busy]')?.getAttribute('aria-busy')==='false'})}
 async function logout(){await signOut(page);assert.equal(await knowledge.count(),0)}
 const profile={pot_id:'synthetic-browser-target',crop:'Synthetic browser crop',media:'Test medium',phase:'Test phase',validated:false,ph_validated:false,needs_water:[30,35,40],drained:[70,75,80],next_visit_h:6,hot_c:35,ph_range:[5.5,7]}
 try{

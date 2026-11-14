@@ -5,7 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Hero from './landing/v5/Hero'
 import { LeafReveal, Numbers, Problem, Product, RootZone } from './landing/v5/Story'
 import Grow from './landing/v5/Grow'
-import Explore from './landing/v5/Explore'
+import Ask from './landing/v5/Ask'
 import { useLenis } from './landing/v5/smoothScroll'
 import MeadowRiseFooter, { type MeadowPaletteOverrides } from './landing/MeadowRiseFooter'
 import ThemeToggle from './ThemeToggle'
@@ -73,7 +73,7 @@ export default function LandingPage() {
     <header className={`sa-nav${scrolled ? ' is-scrolled' : ''}`}>
       <a className="sa-logo" href="#landing-main" onClick={jump('landing-main')}><Plant aria-hidden="true" />smart agro</a>
       <nav aria-label="Bagian halaman">
-        <a href="#masalah" onClick={jump('masalah')}>Masalah</a><a href="#kenalan" onClick={jump('kenalan')}>Cara kerja</a><a href="#rawat" onClick={jump('rawat')}>Coba rawat</a><a href="#jelajah" onClick={jump('jelajah')}>Jelajahi</a>
+        <a href="#masalah" onClick={jump('masalah')}>Masalah</a><a href="#kenalan" onClick={jump('kenalan')}>Cara kerja</a><a href="#rawat" onClick={jump('rawat')}>Coba rawat</a><a href="#tanya" onClick={jump('tanya')}>Tanya mesin</a>
       </nav>
       <div className="sa-nav-end"><ThemeToggle /><a className="sa-btn sa-btn-dark sa-nav-cta ag-simulator-link" href="#simulasi" aria-label="Coba simulator"><span className="sa-xs-hide">Coba simulator</span><span className="sa-xs-show" aria-hidden="true">Simulator</span><ArrowRight aria-hidden="true" /></a></div>
     </header>
@@ -86,7 +86,7 @@ export default function LandingPage() {
       <Numbers />
       <LeafReveal />
       <Grow />
-      <Explore />
+      <Ask />
     </main>
 
     <MeadowRiseFooter
@@ -102,7 +102,7 @@ export default function LandingPage() {
       newsletter={false}
       columns={[
         { title: 'Produk', links: [{ label: 'Simulator', href: '#simulasi' }, { label: 'Dashboard', href: '#statistik' }, { label: 'Perangkat', href: '#perangkat' }, { label: 'Ekosistem', href: '#ekosistem' }] },
-        { title: 'Halaman ini', links: [{ label: 'Masalah', href: '#masalah' }, { label: 'Cara kerja', href: '#kenalan' }, { label: 'Coba rawat', href: '#rawat' }, { label: 'Jelajahi', href: '#jelajah' }] },
+        { title: 'Halaman ini', links: [{ label: 'Masalah', href: '#masalah' }, { label: 'Cara kerja', href: '#kenalan' }, { label: 'Coba rawat', href: '#rawat' }, { label: 'Tanya mesin', href: '#tanya' }] },
         { title: 'Proyek', links: [{ label: 'Kode sumber', href: 'https://github.com/Maliq-dlt/Smart-Argo' }, { label: 'Kredit gambar', href: 'https://github.com/Maliq-dlt/Smart-Argo/blob/main/public/landing/CREDITS.md' }] },
       ]}
       socialTitle=""

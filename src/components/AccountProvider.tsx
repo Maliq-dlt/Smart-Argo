@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AccountContext, type AccountState, type Identity } from './accountContext'
-import { ProductAccountClient, productAccountConfigured, oauthReturn, parseOwnedProducts, tokenClaims, type OwnedProduct } from '../lib/productAccountClient'
+import StepUpDialog from './StepUpDialog'
+import NewPasswordDialog from './NewPasswordDialog'
+import { ProductAccountClient, productAccountConfigured, oauthReturn, parseOwnedProducts, parsePot, tokenClaims, type OwnedProduct } from '../lib/productAccountClient'
 
 // A Google return is single-use (code and verifier), so it is handled once per page load. StrictMode's second
 // effect run gets the same promise for the same client; a later remount (new client) just restores the session.
@@ -18,6 +20,12 @@ function googleHandoff(client: ProductAccountClient) {
   return handoff.client === client ? handoff.result : Promise.resolve(null)
 }
 
+/** Roles from ensure_my_account; they only choose which tools to show, the server checks every privileged call. */
+const rolesOf = (value: Record<string, unknown>) => {
+  const roles = (value.account as { access_roles?: unknown } | undefined)?.access_roles
+  return Array.isArray(roles) ? roles.filter((r): r is string => typeof r === 'string') : []
+}
+
 function identityOf(client: ProductAccountClient | null): Identity | null {
   if (!client?.session) return null
   const claims = tokenClaims(client.session.access_token)
@@ -25,7 +33,7 @@ function identityOf(client: ProductAccountClient | null): Identity | null {
   const app = (claims.app_metadata ?? {}) as Record<string, unknown>
   const email = typeof claims.email === 'string' ? claims.email : ''
   const named = [meta.full_name, meta.name].find(v => typeof v === 'string' && v.trim()) as string | undefined
-  return { email, name: (named ?? email.split('@')[0]) || 'Akun', google: Array.isArray(app.providers) && app.providers.includes('google') }
+  return { email, name: (named ?? email.split('@')[0]) || 'Akun', google: Array.isArray(app.providers) && app.providers.includes('google'), pot: parsePot(meta.pot) }
 }
 
 export default function AccountProvider({ children }: { children: ReactNode }) {
@@ -33,23 +41,31 @@ export default function AccountProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(!client)
   const [signedIn, setSignedIn] = useState(false)
   const [products, setProducts] = useState<OwnedProduct[]>([])
+  const [roles, setRoles] = useState<string[]>([])
   const [mfaPending, setMfaPending] = useState(false)
   const [notice, setNotice] = useState<AccountState['notice']>(null)
   const [version, setVersion] = useState(0)
+  // Privileged writes ask for a fresh authenticator code through this dialog (ProductAccountClient.rpc).
+  const [stepUp, setStepUp] = useState<{ resolve: (code: string | null) => void } | null>(null)
+  useEffect(() => {
+    if (!client) return
+    client.stepUp = () => new Promise(resolve => setStepUp({ resolve }))
+    return () => { client.stepUp = null }
+  }, [client])
 
   const refresh = useCallback(async () => {
     if (client?.session) {
-      await client.rpc('ensure_my_account')
+      setRoles(rolesOf(await client.rpc('ensure_my_account')))
       setProducts(parseOwnedProducts((await client.rpc('my_products')).products))
-    } else setProducts([])
+    } else { setProducts([]); setRoles([]) }
     setMfaPending(false)
     setSignedIn(Boolean(client?.session)); setVersion(v => v + 1)
   }, [client])
   const expire = useCallback((text = 'Sesi berakhir. Masuk kembali.') => {
-    setProducts([]); setSignedIn(false); setNotice({ error: true, text })
+    setProducts([]); setRoles([]); setSignedIn(false); setNotice({ error: true, text })
   }, [])
   const signOut = useCallback(async () => {
-    setProducts([]); setSignedIn(false)
+    setProducts([]); setRoles([]); setSignedIn(false)
     try { await client?.logout(); setNotice({ error: false, text: 'Berhasil keluar.' }) }
     catch { setNotice({ error: true, text: 'Sesi pada browser sudah dihapus. Keluar dari layanan gagal; periksa koneksi sebelum masuk kembali.' }) }
   }, [client])
@@ -63,9 +79,9 @@ export default function AccountProvider({ children }: { children: ReactNode }) {
       // The app opens as soon as the stored session is read; products follow in the background.
       if (active) { setReady(true); setSignedIn(Boolean(client.session)) }
       if (client.session) {
-        await client.rpc('ensure_my_account')
+        const found = rolesOf(await client.rpc('ensure_my_account'))
         const owned = parseOwnedProducts((await client.rpc('my_products')).products)
-        if (active) { setProducts(owned); if (viaGoogle === 'ok') setNotice({ error: false, text: 'Berhasil masuk dengan Google.' }) }
+        if (active) { setProducts(owned); setRoles(found); if (viaGoogle === 'ok') setNotice({ error: false, text: 'Berhasil masuk dengan Google.' }) }
       }
     }).catch(err => {
       if (!active) return
@@ -85,9 +101,11 @@ export default function AccountProvider({ children }: { children: ReactNode }) {
   }, [client, signedIn, expire])
 
   const value = useMemo<AccountState>(() => ({
-    client, ready, signedIn, identity: signedIn ? identityOf(client) : null, products, mfaPending, notice, setNotice, refresh, signOut, expire,
+    client, ready, signedIn, identity: signedIn ? identityOf(client) : null, products, roles, mfaPending, notice, setNotice, refresh, signOut, expire,
   // `version` re-derives the identity and re-renders readers after aal or token changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [client, ready, signedIn, products, mfaPending, notice, refresh, signOut, expire, version])
-  return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>
+  }), [client, ready, signedIn, products, roles, mfaPending, notice, refresh, signOut, expire, version])
+  return <AccountContext.Provider value={value}>{children}{stepUp && <StepUpDialog onDone={code => { stepUp.resolve(code); setStepUp(null) }} />}
+    {signedIn && client?.resetting && <NewPasswordDialog onClose={() => { client.resetting = false; setVersion(v => v + 1) }}
+      onSave={async password => { await client.setPassword(password); setNotice({ error: false, text: 'Kata sandi baru tersimpan.' }); setVersion(v => v + 1) }} />}</AccountContext.Provider>
 }

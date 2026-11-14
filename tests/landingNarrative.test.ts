@@ -32,3 +32,14 @@ test('Lapisan kering dan hitungan surya tetap dalam batas', () => {
   assert.equal(solar.powerPolicy, 'normal')
   assert(solar.minBatteryWh > solar.dailyEnergyWh * 3)
 })
+
+test('Tanya mesinnya: bacaan stabil tiga jam memberi saran dari profil tanaman yang dipilih', async () => {
+  const { askEngine } = await import('../src/lib/landingNarrative.ts')
+  assert.equal(askEngine('cabai', 25).decision, 'PERIKSA_MEDIA_KERING')
+  assert.equal(askEngine('cabai', 55).decision, 'AMATI')
+  assert.equal(askEngine('cabai', 92).decision, 'PERIKSA_DRAINASE')
+  // The same reading means different things for different crops: 33 is dry for chili (39), not for shallot (28).
+  assert.equal(askEngine('cabai', 33).decision, 'PERIKSA_MEDIA_KERING')
+  assert.equal(askEngine('bawang', 33).decision, 'AMATI')
+  assert.equal(askEngine('bawang', 33).evidence.moisture, 33)
+})

@@ -28,6 +28,14 @@ export function thresholds(data: PotCase) {
   return { dry: median(data.profile.needs_water), wet: Math.min(100, median(data.profile.drained) + 10) }
 }
 
+/** The landing's "ask the engine": what the simulator's engine says if the pot had read `moisture` steadily for the
+ * last three hours (one reading per 30 minutes), with the chosen crop's own profile. */
+export function askEngine(crop: StoryCrop, moisture: number): Decision {
+  const { data } = pickCase(crop, 'dry'), last = data.samples.at(-1)!
+  const samples = Array.from({ length: 7 }, (_, i) => ({ ...last, t_h: i * .5, moisture }))
+  return evaluate({ ...data, samples, now_h: 3, watering: null })
+}
+
 /** Share of the root zone drawn as dried from the top: 0 when wet, rising as the index falls. */
 export const dryShare = (moisture: number) => Math.min(1, Math.max(0, (90 - moisture) / 90))
 

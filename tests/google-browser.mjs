@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import {createHash,randomUUID,randomBytes} from 'node:crypto'
 import {createRequire} from 'node:module'
 import {mkdir,readFile} from 'node:fs/promises'
-import {gate,signOut} from './entry-helpers.mjs'
+import {gate,signOut,passPotSetup} from './entry-helpers.mjs'
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE||'playwright')
 const curtainOpen=page=>page.waitForFunction(()=>{const c=document.querySelector('.curtain');return !c||c.dataset.state==='open'})
 // Google itself is mocked (no client ID in tests): Auth's /authorize is answered with the redirect Google+Auth would
@@ -36,10 +36,12 @@ try{
   await page.goto(app);await curtainOpen(page)
   const google=gate(page).getByRole('button',{name:'Lanjut dengan Google',exact:true})
   await google.waitFor()
-  assert.equal(await gate(page).locator('details.signin-email').evaluate(d=>d.open),false)
+  assert.equal(await gate(page).getByLabel('Email',{exact:true}).isVisible(),true,'email form is open, not folded')
+  assert.equal(await gate(page).getByRole('tab',{name:'Daftar',exact:true}).count(),1,'sign-up is one tab away')
   assert.equal(await gate(page).getByRole('button',{name:'Coba tanpa akun',exact:true}).count(),1)
-  checks.push('Gate offers Google first when Auth enables it, then guest; email form folded')
+  checks.push('Gate offers Google first when Auth enables it, then guest; email form open with a Daftar tab')
   await google.click()
+  await passPotSetup(page)
   await avatar.waitFor()
   assert.equal(authorize.searchParams.get('provider'),'google')
   assert.equal(authorize.searchParams.get('code_challenge_method'),'s256')

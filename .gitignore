@@ -18,6 +18,11 @@ tests/playback-browser.js
 .kilo/
 .opencode/
 .taste-skill/
+# Status alat lokal: .impeccable/live menyimpan token server, .remember menyimpan memori percakapan
+.impeccable/
+.superpowers/
+.remember/
+.wrangler/
 design-previews/
 docs/diagram/miro-atlas-2026-10-22/
 __pycache__/

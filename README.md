@@ -32,7 +32,7 @@ No host Node.js, Supabase account, or `.env` file is needed. Only port `8088` is
 
 | Area | Behavior |
 | --- | --- |
-| Landing | Scroll story with pre-rendered device sequences (GSAP), Lenis smooth scroll, a loading curtain, and an interactive grow sequence. Reduced motion is supported throughout. |
+| Landing | Scroll story around one interactive 3D device modelled in code (Three.js, drag to turn) that changes state per section, vector illustrations, a Lottie growth clip, an "ask the engine" pot driven by the rule engine, Lenis smooth scroll and a loading curtain. Reduced motion and browsers without WebGL get rendered posters. |
 | Simulator and dashboard | Deterministic rule engine with evidence, timestamped synthetic readings, watering/fertilizer logs, session import/export and comparison, light and dark themes. |
 | Record proof | Freeze a session as exact JSON bytes, record its SHA-256 through the user's own wallet as a zero-value self-transfer on Base Sepolia or Sepolia, and verify a file against its separate proof file through the public node. |
 | Product QR | Public QR holds only the serial. Scan by camera or photo (ZXing WebAssembly, self-hosted), print as SVG/PNG, and check the public registry status before signing in. |
@@ -103,7 +103,7 @@ Without them, the sign-in card offers email and password only. Accounts created 
 
 For static hosting, run `npm run build` and publish `dist/`. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` at build time for online features. Never put a service-role or AI key in a `VITE_` variable.
 
-`npm run build:cloud` builds against the hosted Supabase project in `.env.cloud` (public URL and publishable key only). That build sets `VITE_SIGN_IN_REQUIRED=true`, so the entry gate has no guest option; local builds keep it. The hosted functions accept one origin, set as the `APP_ORIGIN` secret, and have no AI key: a router on your machine is unreachable from the cloud, so explanations come from the rule engine.
+`npm run build:cloud` builds against the hosted Supabase project in `.env.cloud` (public URL and publishable key only). Since 2026-11-14 that build keeps the guest option too (`VITE_SIGN_IN_REQUIRED=false`); set it to `true` to make every visitor sign in. The hosted functions accept one origin, set as the `APP_ORIGIN` secret, and have no AI key: a router on your machine is unreachable from the cloud, so explanations come from the rule engine.
 
 ### Production deployment
 

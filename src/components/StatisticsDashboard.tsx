@@ -1,17 +1,17 @@
 import { SelectField } from './ui/select'
 import SegmentedControl from './ui/segmented-control'
 import { useMemo, useState } from 'react'
-import { ArrowsVertical, CaretDown, Clock, Pulse, ShieldCheck } from '@phosphor-icons/react'
+import { ArrowsVertical, CaretDown, Clock, Plant, Pulse, ShieldCheck } from '@phosphor-icons/react'
 import type { Decision, PotCase } from '../lib/agronomyEngine'
 import { METRICS, chartSegments, summarizeSamples, type Metric } from '../lib/chartData'
 import type { SessionClock } from '../lib/sessionClock'
 import type { LogEntry } from '../lib/sessionStore'
 import HistoryChart from './HistoryChart'
 import SpotlightCard from './ui/spotlight-card'
-import AgroMark from './AgroMark'
+import Mascot from './Mascot'
 
 /** The dashboard's second half: the full sensor history and, folded away, the statistics behind it. */
-export default function StatisticsDashboard({ clock, data, decision, logs, awaitingPlant, manual }: { awaitingPlant: boolean; manual: boolean; clock: SessionClock; data: PotCase; decision: Decision; logs: LogEntry[] }) {
+export default function StatisticsDashboard({ clock, data, decision, logs, awaitingPlant, manual, onPlant }: { awaitingPlant: boolean; manual: boolean; onPlant?: () => void; clock: SessionClock; data: PotCase; decision: Decision; logs: LogEntry[] }) {
   const [metric, setMetric] = useState<Metric>('moisture')
   const [windowHours, setWindowHours] = useState(0)
   const [bin, setBin] = useState<number | null>(null)
@@ -32,9 +32,12 @@ export default function StatisticsDashboard({ clock, data, decision, logs, await
   const measuredPercent = rows.length ? stats.count / rows.length * 100 : 0
   const highestBin = Math.max(1, ...stats.bins.map(b => b.count))
   let offset = 0
-  if (data.samples.length < 2) return <section className="panel observation-empty" aria-labelledby="observation-start-title">
-    <span className="empty-mark"><AgroMark /></span><div><h2 id="observation-start-title">{awaitingPlant ? 'Mulai dari bibit' : 'Pengamatan baru dimulai'}</h2>
-    <p>{awaitingPlant ? 'Tanam bibit di Ruang tanam untuk mulai mengamati perubahan media.' : manual ? 'Tambahkan sampel berikutnya di Ruang tanam untuk melihat perubahan.' : 'Lanjutkan waktu. Grafik muncul setelah sampel berikutnya tercatat.'}</p></div>
+  // First visit: one thing to do, right here, with the mascot asking for it; then it waits with the first readings.
+  if (data.samples.length < 2) return <section className="panel observation-empty" data-awaiting={awaitingPlant || undefined} aria-labelledby="observation-start-title">
+    <span className="empty-mark"><Mascot face={awaitingPlant ? 'curious' : 'joy'} look={{ x: .6, y: .2 }} bud={!awaitingPlant} /></span>
+    <div><h2 id="observation-start-title">{awaitingPlant ? 'Mulai dari bibit' : 'Pengamatan baru dimulai'}</h2>
+      <p>{awaitingPlant ? 'Tanam bibitnya, lalu waktu berjalan sendiri dan media mulai diamati.' : manual ? <>Tambahkan sampel berikutnya di <a href="#simulasi">Ruang tanam</a> untuk melihat perubahan.</> :'Waktu berjalan. Grafik muncul setelah sampel berikutnya tercatat.'}</p></div>
+    {awaitingPlant && onPlant && <button type="button" className="button primary observation-plant" onClick={onPlant}><Plant weight="fill" aria-hidden="true" />Tanam bibit</button>}
   </section>
   return <section className="analysis" aria-labelledby="analysis-title">
     <div className="analysis-toolbar"><div><h2 id="analysis-title">Pengamatan sesi</h2><p>{rows.length} sampel · {windowHours ? `${windowHours} jam terakhir` : 'seluruh sesi'}</p></div>

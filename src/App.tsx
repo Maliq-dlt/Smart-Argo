@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { gsap } from 'gsap'
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
 
-import { ArrowCounterClockwise, ArrowUpRight, BookOpenText, Broadcast, CaretRight, ChartLine, Check, Clock, DownloadSimple, Drop, Flask, FolderSimple, GitDiff, Hourglass, Leaf, LinkSimple, Pause, Play, Plant, Printer, Pulse, Question, ShieldCheck, SlidersHorizontal, SquaresFour, TerminalWindow, TrendDown, TrendUp, UploadSimple, Warning, X, UserCircle } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, ArrowUpRight, BookOpenText, Broadcast, CaretRight, ChartLine, Check, Clock, DownloadSimple, Drop, Flask, FolderSimple, GitDiff, Hourglass, Leaf, LinkSimple, Pause, Play, Plant, Printer, Pulse, Question, ShieldCheck, SlidersHorizontal, SquaresFour, TerminalWindow, UploadSimple, Warning, X, UserCircle } from '@phosphor-icons/react'
 import { addSample, evaluate, parseCase, phaseAt, type PotCase, type Profile } from './lib/agronomyEngine'
 import scenarios from './lib/scenarios.json'
 import ThemeToggle from './components/ThemeToggle'
@@ -22,8 +22,11 @@ import StatisticsDashboard from './components/StatisticsDashboard'
 import TerminalSimulator from './components/TerminalSimulator'
 import SessionComparison from './components/SessionPanel'
 import PlantStage from './components/dashboard/PlantStage'
-import TrendCard from './components/dashboard/TrendCard'
-import CareCard from './components/dashboard/CareCard'
+import ConditionBand from './components/dashboard/ConditionBand'
+import AnswerCard, { type AnswerRow } from './components/dashboard/AnswerCard'
+import Instruments from './components/dashboard/Instruments'
+import { agoLabel, skyPeriod } from './lib/dashboardFacts'
+import './components/dashboard/dashboard.css'
 import SessionClockCard from './components/dashboard/SessionClockCard'
 import { appendSession, createSession, exportSession as encodeSession, importSession as decodeSession, readBook, saveBook, sessionTime, STORAGE_KEY, type Session, type SessionBook, type LogEntry } from './lib/sessionStore'
 import ProfileEditor from './components/ProfileEditor'
@@ -31,19 +34,21 @@ import ClockSettings from './components/ClockSettings'
 import DevicePanel from './components/DevicePanel'
 import ChainProofDialog from './components/ChainProofDialog'
 import { settledMood } from './lib/mascot'
-import MiroEcosystemWorkspace from './components/MiroEcosystemWorkspace'
+// The ecosystem and profile pages (every online panel) load on first visit, keeping them out of the dashboard chunk.
+const MiroEcosystemWorkspace = lazy(() => import('./components/MiroEcosystemWorkspace'))
+const ProfilePage = lazy(() => import('./components/ProfilePage'))
 import AccountProvider from './components/AccountProvider'
 import { useAccount } from './components/accountContext'
 import AccountGate from './components/AccountGate'
+import PotSetup from './components/PotSetup'
 import AccountMenu from './components/AccountMenu'
-import ProfilePage from './components/ProfilePage'
 import { entryView } from './lib/siteRoute'
-import { productAccountConfigured, signInRequired } from './lib/productAccountClient'
-import { clockDate, clockTime, utcLabel } from './lib/sessionClock'
+import { oauthReturn, productAccountConfigured, signInRequired } from './lib/productAccountClient'
+import { clockTime } from './lib/sessionClock'
 import { deviceStatuses, type DeviceSnapshot } from './lib/telemetry'
 import SimulationControls from './components/SimulationControls'
 import SimulationOverview from './components/SimulationOverview'
-import { createJourney, simulationOf, advanceSimulation, plantSeed, waterSimulation, canUndoWater, undoWaterSimulation, recordFertilizer, feedingDue, shouldPause, simulationStopped, simulationStopReason, sampleIntervalMs, logEvent, type SimulationState } from './lib/simulation'
+import { clockHour, scenePeriod, createJourney, simulationOf, advanceSimulation, plantSeed, waterSimulation, canUndoWater, undoWaterSimulation, recordFertilizer, feedingDue, shouldPause, simulationStopped, simulationStopReason, sampleIntervalMs, logEvent, type SimulationState } from './lib/simulation'
 
 gsap.registerPlugin(ScrollToPlugin)
 
@@ -58,6 +63,8 @@ const pages = [
   // Opened from the account menu, not the rail.
   { id: 'profile', hash: '#profil', label: 'Profil', title: 'Profil', lead: 'Akun, keamanan, dan produk Anda.', icon: UserCircle, hidden: true },
 ] as const
+// Short words under the rail icons; the long labels stay as the accessible names.
+const RAIL_TEXT: Record<string, string> = { statistics: 'Dashboard', simulation: 'Ruang tanam', comparison: 'Bandingkan', devices: 'Perangkat', ecosystem: 'Ekosistem', terminal: 'Terminal' }
 const GUEST_KEY = 'smart-agro.guest'
 const pageFromHash = () => pages.find(p => p.hash === location.hash)?.id ?? 'simulation'
 const one = (value: number) => value.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -97,6 +104,8 @@ function Simulator() {
   const [hash, setHash] = useState(() => location.hash)
   const account = useAccount()
   const [guest, setGuest] = useState(() => { try { return localStorage.getItem(GUEST_KEY) === '1' } catch { return false } })
+  // Opened on a Google or email-link return (?code= or #error=): the entry waits for its outcome (see entryView).
+  const [returning] = useState(() => oauthReturn(location.search) !== null || location.hash.includes('error='))
   // Signed in while the address still says #masuk (back from the gate): open the dashboard instead.
   useEffect(() => { if (account.signedIn && hash === '#masuk') location.replace('#statistik') }, [account.signedIn, hash])
   const currentPage = pages.find(p => p.id === page)!
@@ -361,15 +370,30 @@ function Simulator() {
   const { slope_per_h, eta_h, low } = result.evidence
   const validShare = data.samples.length ? Math.round(data.samples.filter(s => s.valid).length / data.samples.length * 100) : 0
   const openCare = (event: MouseEvent<HTMLAnchorElement>) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) pendingCare.current = true }
-  const phaseText = awaitingPlant ? 'Belum ditanam' : `${phaseAt(developmentDay, onion)} · HST ${day}`
+  // At most three facts, in order of use; the current readings are on the stage and in the chart already.
+  const answerCandidates: (AnswerRow | null)[] = awaitingPlant ? [] : [
+    { icon: <Hourglass aria-hidden="true" />, label: 'Menuju batas siram', value: eta_h === null ? 'Tidak diproyeksikan' : `${eta_h.toLocaleString('id-ID')} jam` },
+    data.watering ? { icon: <Drop aria-hidden="true" />, label: 'Siraman terakhir', value: `${agoLabel(data.now_h - data.watering.t_h)} lalu · ${data.watering.volume_ml} ml` } : null,
+    journey && sim.feedEveryDays ? { icon: <Leaf aria-hidden="true" />, label: 'Pengingat pupuk', value: feedingDue(session) ? 'Jatuh tempo' : `Hari ke-${Math.floor(sim.lastFedAt / 24) + sim.feedEveryDays}` } : null,
+    !journey ? { icon: <Pulse aria-hidden="true" />, label: 'Sampel valid', value: `${validShare}% dari ${data.samples.length}` } : null,
+  ]
+  const answerRows = answerCandidates.filter((row): row is AnswerRow => row !== null).slice(0, 3)
   const lead = currentPage.lead
   const openGuide = () => openModal('guide')
-  const view = entryView({ configured: productAccountConfigured, ready: account.ready, signedIn: account.signedIn, guest: guest && !signInRequired, hash })
+  // Planting starts the journey's clock; offered in Ruang tanam and, on a first visit, on the dashboard itself.
+  const plantNow = () => { edit(plantSeed(session)); showCareEffect('plant'); setNotice('Bibit ditanam. Waktu simulasi berjalan.'); setPauseNote(''); setRunning(true) }
+  const view = entryView({ configured: productAccountConfigured, ready: account.ready, signedIn: account.signedIn, guest: guest && !signInRequired, hash, mfaPending: account.mfaPending, returning })
   if (view === 'loading') return <main className="site-initial-loading" role="status"><p>Memeriksa sesi akun…</p></main>
   if (view === 'gate') return <AccountGate onGuest={signInRequired ? undefined : () => {
     try { localStorage.setItem(GUEST_KEY, '1') } catch { /* storage blocked: guest for this visit only */ }
     setGuest(true)
     if (!location.hash || location.hash === '#masuk') location.hash = '#statistik'
+  }} />
+  // Signed in for the first time (Google or email): set up the first pot, which opens its journey.
+  if (account.signedIn && account.identity && !account.identity.pot) return <PotSetup onSaved={pot => {
+    openNew({ ...createJourney(loadScenario(pot.crop === 'bawang' ? 7 : 0).data), name: pot.name })
+    if (pot.device) location.hash = '#ekosistem' // activation by serial lives there
+    else if (!location.hash || location.hash === '#masuk') location.hash = '#statistik'
   }} />
   return <>
     <a className="skip-link" href="#main" onClick={e => { e.preventDefault(); document.getElementById('main')?.focus() }}>Lewati ke konten</a>
@@ -380,16 +404,16 @@ function Simulator() {
       <nav className="rail-nav" aria-label="Navigasi utama">
         {pages.filter(p => !('hidden' in p)).map(({ id, hash, label, icon: Icon }) => <a key={id} href={hash} className="rail-link" data-label={label} aria-label={label} aria-current={page === id ? 'page' : undefined} onClick={() => { if (page === id) scrollTo(0) }}>
           {page === id && <motion.span className="rail-active" layoutId="rail-active" transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }} aria-hidden="true" />}
-          <Icon weight={page === id ? 'fill' : 'regular'} aria-hidden="true" />
+          <Icon weight={page === id ? 'fill' : 'regular'} aria-hidden="true" /><span className="rail-text">{RAIL_TEXT[id]}</span>
         </a>)}
       </nav>
-      <button type="button" className="rail-link rail-guide" data-label="Panduan" aria-label="Panduan" onClick={openGuide}><Question aria-hidden="true" /></button>
+      <button type="button" className="rail-link rail-guide" data-label="Panduan" aria-label="Panduan" onClick={openGuide}><Question aria-hidden="true" /><span className="rail-text">Panduan</span></button>
     </aside>
     <div className="app-content">
     <header className="app-topbar">
       <a className="topbar-brand" href="#" aria-label="Smart Agro · Beranda"><AgroMark /></a>
       <h1 className="page-title"><i aria-hidden="true" />{currentPage.title}</h1>
-      <div className="session-pill"><PlantMood mood={!sim.planted ? 'ready' : mood} /><span><strong>{session.name}</strong><small>{data.profile.crop} · {journey ? 'Perjalanan tanam' : 'Eksperimen'}</small></span>
+      <div className="session-pill"><PlantMood mood={!sim.planted ? 'ready' : mood} /><span><strong>{session.name}</strong><small>Simulasi · {!journey ? 'Eksperimen' : sim.planted ? `Hari ke-${day}` : 'Belum ditanam'}</small></span>
         <span className={`save-status ${saveState.error ? 'save-failed' : ''}`} role="status"><i aria-hidden="true" />{saveState.error ? 'Belum tersimpan' : saveState.book === book ? 'Tersimpan' : 'Menyimpan…'}</span></div>
       <div className="topbar-tools">
         <ClockSettings clock={session.clock} hour={data.now_h} onChange={clock => { setRunning(false); setPauseNote('Zona waktu diubah. Tekan Lanjutkan waktu.'); edit({ clock }) }} />
@@ -436,7 +460,7 @@ function Simulator() {
             </section>}
             {journey && <div className="journey-progress"><span>{sim.planted ? `HST ${day} / ${maxDay}` : 'Bibit siap ditanam'}</span><progress aria-label="Perjalanan tanam" max={maxDay} value={day} /><span>{phaseAt(developmentDay, onion)}</span></div>}
           </div>
-          <div className="control-stack"><SimulationControls waterStatus={sim.source !== 'manual' ? waterStatus : null} waterPending={undoAvailable} pauseNote={playbackNote} recommendation={recommendation} session={session} running={running} onChange={configureSimulation} onRun={toggleRunning} onAdvance={advance} onPlant={() => { edit(plantSeed(session)); showCareEffect('plant'); setNotice('Bibit ditanam. Waktu simulasi berjalan.'); setPauseNote(''); setRunning(true) }} onWater={() => recordWater(150)} onFeed={() => edit(recordFertilizer(session))} />
+          <div className="control-stack"><SimulationControls waterStatus={sim.source !== 'manual' ? waterStatus : null} waterPending={undoAvailable} pauseNote={playbackNote} recommendation={recommendation} session={session} running={running} onChange={configureSimulation} onRun={toggleRunning} onAdvance={advance} onPlant={plantNow} onWater={() => recordWater(150)} onFeed={() => edit(recordFertilizer(session))} />
             {!journey && sim.source === 'manual' &&
             <SensorControls waterStatus={waterStatus} waterPending={undoAvailable} clock={session.clock} key={session.id} reading={reading} setReading={value => edit({ reading: value })} now={data.now_h} freshPh={session.freshPh} setFreshPh={value => edit({ freshPh: value })} volume={session.volume} setVolume={value => edit({ volume: value })} canAdd={data.samples.length < 10000} onSample={freshPh => {
               try { commit(addSample(data, { ...reading, ph: freshPh ? reading.ph : null, valid: true }), `Sampel baru: indeks ${reading.moisture}, ${reading.temp_c} °C; pH ${freshPh ? reading.ph : 'tidak diukur'}.`, 'data') }
@@ -449,36 +473,36 @@ function Simulator() {
 
       {page === 'statistics' && <div className="statistics-page">
         <div className="dash">
-          <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${phaseText}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
-            onion={onion} day={developmentDay} age={day} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} readings={{
-              moisture: { label: 'Kelembapan media', value: last.valid ? last.moisture.toLocaleString('id-ID') : 'Gagal', unit: last.valid ? '/100' : undefined, note: `Acuan air ${low} · basah ${result.evidence.wet}`, alert: !last.valid || last.moisture <= low },
-              temperature: { label: 'Suhu tanah', value: last.valid ? one(last.temp_c) : 'Gagal', unit: last.valid ? '°C' : undefined, note: `Acuan panas ${one(data.profile.hot_c)} °C`, alert: !last.valid || last.temp_c >= data.profile.hot_c },
+          <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, onion)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
+            onion={onion} day={developmentDay} age={day} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
+            hour={clockHour(data.now_h, session.clock)} period={skyPeriod(clockHour(data.now_h, session.clock))} readings={{
+              moisture: { label: 'Kelembapan media', value: last.valid ? last.moisture.toLocaleString('id-ID') : 'Gagal', unit: last.valid ? '/100' : undefined, note: `Batas siram ${low} · basah ${result.evidence.wet}`, alert: !last.valid || last.moisture <= low },
+              temperature: { label: 'Suhu tanah', value: last.valid ? one(last.temp_c) : 'Gagal', unit: last.valid ? '°C' : undefined, note: `Batas panas ${one(data.profile.hot_c)} °C`, alert: !last.valid || last.temp_c >= data.profile.hot_c },
               ph: { label: 'pH zona akar', value: phRow?.ph != null ? one(phRow.ph) : '—', note: !phRow ? 'Belum diukur' : !data.profile.ph_validated ? 'Belum tervalidasi' : phFresh ? 'Tervalidasi' : 'Lebih dari 24 jam lalu' },
-            }} />
-          <div className="dash-side">
-            {waterStatus}
-            <TrendCard key={session.id} samples={data.samples} now={data.now_h} low={low} clock={session.clock} />
-            <CareCard tone={calm ? 'calm' : blocked ? 'blocked' : 'care'} onOpen={openCare}
-              action={awaitingPlant ? 'Bibit siap memulai perjalanan' : result.action}
-              reason={awaitingPlant ? 'Tanam untuk memulai waktu, lalu amati perubahan media dan perkembangan tanaman.' : result.reason}
-              openLabel={awaitingPlant ? 'Mulai menanam' : 'Buka perawatan'}
-              tiles={[
-                { icon: slope_per_h !== null && slope_per_h > 0 ? <TrendUp aria-hidden="true" /> : <TrendDown aria-hidden="true" />, label: 'Tren', value: slope_per_h === null ? 'Belum tersedia' : `${slope_per_h > 0 ? '+' : ''}${slope_per_h.toLocaleString('id-ID')} poin/jam` },
-                { icon: <Hourglass aria-hidden="true" />, label: 'Menuju acuan air', value: eta_h === null ? 'Tidak diproyeksikan' : `${eta_h.toLocaleString('id-ID')} jam` },
-                { icon: <Plant aria-hidden="true" />, label: 'Fase', value: phaseText },
-                journey ? { icon: <Leaf aria-hidden="true" />, label: 'Pengingat pupuk', value: sim.feedEveryDays ? `HST ${Math.floor(sim.lastFedAt / 24) + sim.feedEveryDays}` : 'Nonaktif' }
-                  : { icon: <Pulse aria-hidden="true" />, label: 'Sampel valid', value: `${validShare}% dari ${data.samples.length}` },
-              ]} />
-            <SessionClockCard samples={data.samples} date={clockDate(session.clock, data.now_h)} utc={utcLabel(session.clock, data.now_h)} time={clockTime(session.clock, data.now_h).slice(0, 5)}
+            }}>
+            <SessionClockCard samples={data.samples} time={clockTime(session.clock, data.now_h).slice(0, 5)} period={scenePeriod(data.now_h, session.clock)}
               state={awaitingPlant ? 'Menunggu bibit ditanam' : running ? 'Timelapse berjalan' : 'Waktu dijeda'} note={playbackNote} rate={sim.rate}
               running={running} disabled={simulationStopped(session)} onToggle={toggleRunning} />
+          </PlantStage>
+          <div className="dash-side">
+            {waterStatus}
+            <AnswerCard tone={calm ? 'calm' : blocked ? 'blocked' : 'care'} mood={!sim.planted ? 'ready' : mood} onOpen={openCare}
+              action={awaitingPlant ? 'Bibit siap memulai perjalanan' : result.action}
+              reason={awaitingPlant ? 'Tanam untuk memulai waktu, lalu amati perubahan media dan perkembangan tanaman.' : result.reason}
+              openLabel={awaitingPlant ? 'Mulai menanam' : 'Buka perawatan'} rows={answerRows} />
           </div>
+          {!awaitingPlant && <>
+            <ConditionBand key={session.id} samples={data.samples} now={data.now_h} low={low} wet={result.evidence.wet} slope={slope_per_h} />
+            <Instruments samples={data.samples} now={data.now_h} hot={data.profile.hot_c} phRange={data.profile.ph_range} phValidated={data.profile.ph_validated} day={developmentDay} onion={onion} awaitingPlant={awaitingPlant} />
+          </>}
         </div>
-        <StatisticsDashboard awaitingPlant={awaitingPlant} manual={sim.source === 'manual'} clock={session.clock} key={session.id} data={data} decision={result} logs={session.logs} />
+        <StatisticsDashboard awaitingPlant={awaitingPlant} onPlant={plantNow} manual={sim.source === 'manual'} clock={session.clock} key={session.id} data={data} decision={result} logs={session.logs} />
       </div>}
       {page === 'devices' && <DevicePanel key={session.id} clock={session.clock} snapshot={session.deviceSnapshot} onImport={importDevice} />}
-      {page === 'ecosystem' && <MiroEcosystemWorkspace activePotCase={data} onApplyProfileVersion={(profile, label) => { applyProfile(profile); setNotice(`Profil terkurasi ${label} diterapkan ke sesi simulator.`) }} />}
-      {page === 'profile' && <ProfilePage />}
+      {(page === 'ecosystem' || page === 'profile') && <Suspense fallback={<div className="page-loading" aria-busy="true">Memuat…</div>}>
+        {page === 'ecosystem' && <MiroEcosystemWorkspace activePotCase={data} onApplyProfileVersion={(profile, label) => { applyProfile(profile); setNotice(`Profil terkurasi ${label} diterapkan ke sesi simulator.`) }} />}
+        {page === 'profile' && <ProfilePage />}
+      </Suspense>}
       {page === 'comparison' && <SessionComparison sessions={book.sessions} activeId={book.activeId} onSnapshot={snapshot} />}
       {page === 'terminal' && <section className="terminal-page" aria-label="Terminal sesi">
         <div className="terminal-page-heading"><div className="decision-code"><Pulse aria-hidden="true" /><span>Keputusan</span><code>{result.decision}</code></div>

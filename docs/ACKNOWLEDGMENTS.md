@@ -14,7 +14,11 @@ Composition after the Dribbble shot "Smart Plant Monitoring Dashboard" by [Oripi
 
 QR reading uses [barcode-detector](https://github.com/Sec-ant/barcode-detector) 3.2.3 and [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) (MIT, ZXing-C++ under Apache-2.0); the reader WASM is bundled with the site. QR generation uses [uqr](https://github.com/unjs/uqr) 0.1.3 (MIT). Wallet discovery follows EIP-6963 and EIP-1193; no wallet SDK is bundled.
 
-The notes below preserve attribution for earlier component adaptations and retired landing assets. The former flower carousel and Three.js assets are no longer shipped.
+## Landing 2D and 3D (2026-11-13)
+
+The landing device is modelled in code with [three.js](https://threejs.org/) 0.187.0 (MIT); its posters in `public/landing/device/` are rendered from that model. The growth animation is "plant5v3" by Ömer Faruk on [LottieFiles](https://lottiefiles.com/animations/plant5v3-DlGito0Myl) under the Lottie Simple License, with its leaf and flower-centre colours changed to the Sage palette, played with [lottie-web](https://github.com/airbnb/lottie-web) 5.13.0 (MIT).
+
+The notes below preserve attribution for earlier component adaptations and retired landing assets. The former flower carousel and its botanical 3D assets are no longer shipped.
 
 # Botanical assets
 

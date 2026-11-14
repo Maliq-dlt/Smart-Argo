@@ -188,7 +188,11 @@ try {
   const dashboardSession = (await active(page)).data
   assert.equal(await page.locator('.dashboard-details').getAttribute('open'), null)
   assert.equal(await page.locator('.distribution-card').isVisible(), false, 'Secondary analysis starts collapsed')
-  assert.equal(await page.locator('.dash-side > .panel').count(), 3, 'Trend, care and clock cards beside the plant')
+  assert.equal(await page.locator('.dash-side > .panel').count(), 1, 'The answer card beside the stage')
+  assert.equal(await page.locator('.plant-stage-section .dashboard-clock').count(), 1, 'The clock sits inside the stage')
+  assert.equal(await page.locator('.condition-band').count(), 1, 'Moisture against its zones')
+  assert.equal(await page.locator('.instrument').count(), 3, 'Phase, soil temperature and pH')
+  assert.equal(await page.locator('.rail-text').first().isVisible(), true, 'Rail items carry their words')
   assert.equal(await page.locator('.history-panel').count(), 1)
   await page.screenshot({ path: '.tmp/landing-dashboard-polish/dashboard-light.png', fullPage: true })
   await page.locator('.dashboard-details > summary').focus(); await page.keyboard.press('Space')

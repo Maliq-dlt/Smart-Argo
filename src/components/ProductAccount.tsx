@@ -2,7 +2,10 @@ import QrScanner from './QrScanner'
 import ProductTransfer from './ProductTransfer'
 import { useState } from 'react'
 import { useAccount } from './accountContext'
-import { parseProductChallenge, parsePublicStatus, type ProductChallenge, type PublicStatus } from '../lib/productAccountClient'
+import { parseProductChallenge, parsePublicStatus, verifyIssuerManifest, type ProductChallenge, type PublicStatus } from '../lib/productAccountClient'
+
+// A04: only a signature checked here counts as "sah"; a server flag alone is reported as such, and no manifest is never "asli".
+const ISSUER_TEXT = { valid: 'Tanda tangan penerbit sah, diperiksa di browser ini.', invalid: 'Tanda tangan penerbit tidak cocok. Jangan aktifkan produk ini.' }
 
 function initialSerial() {
   const value = new URLSearchParams(window.location.search).get('serial') ?? ''
@@ -21,6 +24,7 @@ export default function ProductAccount() {
   const [sealedCode, setSealedCode] = useState('')
   const [signature, setSignature] = useState('')
   const [status, setStatus] = useState<PublicStatus | null>(null)
+  const [issuer, setIssuer] = useState<'valid' | 'invalid' | 'unavailable' | null>(null)
 
   const loadProducts = () => account.refresh()
   async function run(action: () => Promise<void>) {
@@ -36,7 +40,11 @@ export default function ProductAccount() {
     await run(async () => {
       setStatus(null)
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(value.trim())) throw new Error('Nomor seri tidak valid.')
-      try { setStatus(parsePublicStatus(await client.publicStatus(value.trim()))) } catch (err) {
+      setIssuer(null)
+      try {
+        const next = parsePublicStatus(await client.publicStatus(value.trim()))
+        setStatus(next); setIssuer(await verifyIssuerManifest(next))
+      } catch (err) {
         if ((err as { code?: string }).code === 'not_registered') throw new Error(`Nomor seri ${value.trim().toUpperCase()} tidak ada di registri Smart Agro.`)
         throw err
       }
@@ -58,7 +66,10 @@ export default function ProductAccount() {
         <label className="miro-field"><span>Nomor seri produk / QR</span><input value={serial} maxLength={120} required onChange={e => { setSerial(e.target.value); setStatus(null); setChallenge(null); setSealedCode(''); setSignature('') }} /></label>
         <div className="miro-actions-row"><QrScanner onSerial={(value, warning) => { setSerial(value); setChallenge(null); setSealedCode(''); setSignature(''); void checkStatus(value, warning) }} />
         <button className="button" type="submit">Periksa status</button></div>
-        {status && <div className="miro-callout product-status" data-status={status.registry_status}><strong>{status.serial_public} · {status.variant === 'single_pot' ? 'Satu pot' : 'Kebun'}</strong><p>{statusText}</p><small>Status registri bukan bukti keaslian fisik perangkat.</small></div>}
+        {status && <div className="miro-callout product-status" data-status={status.registry_status}><strong>{status.serial_public} · {status.variant === 'single_pot' ? 'Satu pot' : 'Kebun'}</strong><p>{statusText}</p>
+          {issuer && <p data-issuer={issuer === 'unavailable' ? (status.issuer_verified ? 'server' : 'none') : issuer}>{issuer !== 'unavailable' ? ISSUER_TEXT[issuer]
+            : status.issuer_verified ? 'Manifest penerbit diverifikasi server; browser ini tidak dapat memeriksanya sendiri.' : 'Belum ada manifest penerbit yang terverifikasi. Jangan anggap produk ini asli.'}</p>}
+          <small>Status registri bukan bukti keaslian fisik perangkat.</small></div>}
       </fieldset></form>
       <div className="miro-actions-row"><button className="button" disabled={pending} onClick={() => void run(loadProducts)}>Muat ulang produk</button></div>
       <h3>Produk saya</h3>

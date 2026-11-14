@@ -4,7 +4,7 @@ import {parseEnergyWorkspace,type EnergyWorkspace} from '../lib/productEnergyCli
 import { SelectField } from './ui/select'
 const empty:EnergyWorkspace={roles:[],meters:[],windows:[]}
 const utc=(v:string)=>new Date(v).toLocaleString('id-ID',{timeZone:'UTC'})+' UTC'
-const reason:Record<string,string>={credited:'Dikreditkan',policy_disabled:'Program belum aktif',below_threshold:'Di bawah ambang poin',daily_cap:'Batas poin harian tercapai'}
+const reason:Record<string,string>={credited:'Dikreditkan',policy_disabled:'Program belum aktif',below_threshold:'Di bawah ambang poin',daily_cap:'Batas poin harian tercapai',held_for_review:'Ditahan untuk ditinjau operator'}
 export default function ProductEnergy({client,onSessionExpired}:{client:ProductAccountClient;onSessionExpired:()=>void}){
  const [workspace,setWorkspace]=useState(empty),[pending,setPending]=useState(true),[message,setMessage]=useState(''),[error,setError]=useState(false)
  const [device,setDevice]=useState(''),[key,setKey]=useState(''),[calibration,setCalibration]=useState(''),[load,setLoad]=useState(''),[from,setFrom]=useState(''),[until,setUntil]=useState(''),[power,setPower]=useState(''),[meter,setMeter]=useState(''),[revokeReason,setRevokeReason]=useState('')

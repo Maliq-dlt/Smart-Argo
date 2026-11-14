@@ -1,16 +1,20 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { DrawSVGPlugin } from 'gsap/DrawSVGPlugin'
 import { charReveal, motionOk, revealHeadings } from './effects'
-import { FrameSequence } from './frameSequence'
+import GardenArt from './GardenArt'
 import PlantArt from './PlantArt'
 import { formatNumber, pickCase, solarSizing, thresholds } from '../../../lib/landingNarrative'
+import DeviceSlot from '../../device/DeviceSlot'
+import { READING_INTERVAL_MIN, type DeviceMode, type Highlight } from '../../device/deviceFacts'
+import { setSlotProgress } from '../../device/deviceStage'
 
 gsap.registerPlugin(ScrollTrigger, DrawSVGPlugin)
 
-/** Splits a sticky stage into phases by scroll progress; headings marked data-split replay as their phase opens. */
-function usePhases(pin: React.RefObject<HTMLDivElement | null>, stage: React.RefObject<HTMLDivElement | null>, phases: number, extra?: (self: ScrollTrigger) => void) {
+/** Splits a sticky stage into phases by scroll progress; headings marked data-split replay as their phase opens.
+ * `onScroll` (keep it stable) hears the phase and the scroll progress through the pin. */
+function usePhases(pin: React.RefObject<HTMLDivElement | null>, stage: React.RefObject<HTMLDivElement | null>, phases: number, onScroll?: (phase: number, progress: number) => void) {
   useLayoutEffect(() => {
     const host = stage.current!
     const ctx = gsap.context(() => {
@@ -26,40 +30,15 @@ function usePhases(pin: React.RefObject<HTMLDivElement | null>, stage: React.Ref
       set(0)
       ScrollTrigger.create({
         trigger: pin.current, start: 'top top', end: 'bottom bottom',
-        onUpdate: self => { set(Math.min(phases - 1, Math.floor(self.progress * phases))); extra?.(self) },
+        onUpdate: self => { set(Math.min(phases - 1, Math.floor(self.progress * phases))); onScroll?.(current, self.progress) },
       })
     }, host)
     return () => ctx.revert()
-  }, [pin, stage, phases, extra])
+  }, [pin, stage, phases, onScroll])
 }
 
-/** A frame sequence that follows scroll progress through `pin`; reduced motion shows one still frame. */
-function useScrubbedSequence(canvas: React.RefObject<HTMLCanvasElement | null>, pin: React.RefObject<HTMLElement | null>, name: string, count: number, range: [string, string] = ['top top', 'bottom bottom']) {
-  useLayoutEffect(() => {
-    const sequence = new FrameSequence(canvas.current!, {
-      desktop: { dir: `./landing/seq/${name}/d`, count }, mobile: { dir: `./landing/seq/${name}/m`, count },
-    })
-    const ctx = gsap.context(() => {
-      if (!motionOk()) { sequence.load(); sequence.show(count - 1); return }
-      const state = { p: 0 }
-      gsap.to(state, { p: 1, ease: 'none', onUpdate: () => sequence.seek(state.p), scrollTrigger: { trigger: pin.current, start: range[0], end: range[1], scrub: 1 } })
-    })
-    return () => { ctx.revert(); sequence.dispose() }
-  }, [canvas, pin, name, count, range])
-}
-
-/** Muted loop that only plays while it is on screen, and never under reduced motion. */
-function useInViewVideo(video: React.RefObject<HTMLVideoElement | null>) {
-  useLayoutEffect(() => {
-    const el = video.current!
-    if (!motionOk()) return
-    const io = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) el.play().catch(() => {}); else el.pause() }, { rootMargin: '10% 0px' })
-    io.observe(el)
-    return () => io.disconnect()
-  }, [video])
-}
-
-const NUMBERS_RANGE: [string, string] = ['top 75%', 'bottom 60%']
+const PRODUCT_MODES: DeviceMode[] = ['studio', 'label', 'tembus']
+const NUMBER_PARTS: Highlight[] = ['led', 'probe', 'moisture', 'solar']
 
 export function Problem() {
   const root = useRef<HTMLElement>(null), pin = useRef<HTMLDivElement>(null)
@@ -95,7 +74,7 @@ export function Problem() {
     <h2 id="v5-problem-title" className="sa-sr">Permukaan tampak basah, akar bisa sudah haus.</h2>
     <div className="v5-lines" aria-hidden="true">
       <p className="v5-line"><span>Permukaan</span><span className="v5-inline-img"><img src="./landing/potted-chili.webp" alt="" loading="lazy" /></span><span>tampak basah,</span></p>
-      <p className="v5-line"><span>akar</span><span className="v5-inline-img"><img src="./landing/seq/rootzone/m/00.avif" alt="" loading="lazy" /></span><span>bisa sudah haus.</span></p>
+      <p className="v5-line"><span>akar</span><span className="v5-inline-img"><img src="./landing/rootzone-still.avif" alt="" loading="lazy" /></span><span>bisa sudah haus.</span></p>
     </div>
     <div ref={pin} className="v5-pin v5-pin-draw">
       <div className="v5-stage v5-draw">
@@ -108,10 +87,12 @@ export function Problem() {
 }
 
 export function Product() {
-  const pin = useRef<HTMLDivElement>(null), stage = useRef<HTMLDivElement>(null), canvas = useRef<HTMLCanvasElement>(null)
-  useScrubbedSequence(canvas, pin, 'lie', 43)
-  usePhases(pin, stage, 3)
-  const cards = [
+  const pin = useRef<HTMLDivElement>(null), stage = useRef<HTMLDivElement>(null)
+  // Reduced motion shows every phase at once, so the device shows its last state.
+  const [mode, setMode] = useState<DeviceMode>(() => (motionOk() ? 'studio' : 'tembus'))
+  usePhases(pin, stage, 3, useCallback((phase: number) => setMode(PRODUCT_MODES[phase]), []))
+  // One reading's path through the device, in order: a strip with a pulse running along it, not three cards.
+  const steps = [
     ['Baca tiap 30 menit', 'Kelembapan, suhu, pH.'],
     ['Saring yang meragukan', 'Bacaan janggal ditahan dulu.'],
     ['Saran dengan alasan', 'Bukan perintah, tapi penjelasan.'],
@@ -119,29 +100,29 @@ export function Product() {
   return <section id="kenalan" className="v5-product" tabIndex={-1} aria-labelledby="v5-product-title">
     <div ref={pin} className="v5-pin v5-pin-product">
       <div ref={stage} className="v5-stage v5-tone-sage">
-        <div className="v5-seq-box"><canvas ref={canvas} className="v5-seq" role="img" aria-label="Render konsep perangkat Smart Agro yang rebah dan berputar pelan menghadap kamera" /></div>
+        <div className="v5-device-box"><DeviceSlot mode={mode} /></div>
         <h2 id="v5-product-title" className="v5-ph v5-ph-0 v5-at-tl" data-split>Bagaimana kalau pot bisa memberi tahu sendiri?</h2>
         <div className="v5-ph v5-ph-1 v5-at-tr">
           <h2 data-split>Kenalkan Smart Agro.</h2>
           <p>Sensor kecil bertenaga surya untuk satu pot.</p>
         </div>
-        <ul className="v5-ph v5-ph-2 v5-cards">
-          {cards.map(([title, body]) => <li key={title}><i aria-hidden="true">×</i><h3>{title}</h3><p>{body}</p></li>)}
-        </ul>
+        <ol className="v5-ph v5-ph-2 v5-flow">
+          {steps.map(([title, body]) => <li key={title}><h3>{title}</h3><p>{body}</p></li>)}
+        </ol>
       </div>
     </div>
   </section>
 }
 
 export function RootZone() {
-  const pin = useRef<HTMLDivElement>(null), stage = useRef<HTMLDivElement>(null), canvas = useRef<HTMLCanvasElement>(null)
-  useScrubbedSequence(canvas, pin, 'rootzone', 95)
-  usePhases(pin, stage, 3)
+  const pin = useRef<HTMLDivElement>(null), stage = useRef<HTMLDivElement>(null), slot = useRef<HTMLDivElement>(null)
+  // The device sinks into the soil over the first 40% of the pin, then stays in.
+  usePhases(pin, stage, 3, useCallback((_: number, progress: number) => setSlotProgress(slot.current!, Math.min(1, progress / 0.4)), []))
 
   return <section id="zona-akar" className="v5-rootzone" aria-labelledby="v5-root-title">
     <div ref={pin} className="v5-pin v5-pin-root">
       <div ref={stage} className="v5-stage v5-tone-cream">
-        <div className="v5-seq-box"><canvas ref={canvas} className="v5-seq" role="img" aria-label="Perangkat turun di sisi pot kaca dan kedua kakinya masuk ke tanah sampai zona akar, di samping bibit cabai" /></div>
+        <div className="v5-device-box"><DeviceSlot slotRef={slot} mode="tanah" /></div>
         <h2 id="v5-root-title" className="v5-at-tl v5-ph v5-ph-0 v5-keep" data-split>Tancapkan di zona akar.</h2>
         <p className="v5-ph v5-ph-1 v5-at-bl">Membaca tanah tempat akar minum.</p>
         <p className="v5-ph v5-ph-2 v5-at-br">Satu bacaan tiap 30 menit.</p>
@@ -151,11 +132,12 @@ export function RootZone() {
 }
 
 export function Numbers() {
-  const root = useRef<HTMLElement>(null), canvas = useRef<HTMLCanvasElement>(null)
-  useScrubbedSequence(canvas, root, 'water', 49, NUMBERS_RANGE)
+  const root = useRef<HTMLElement>(null)
+  // Opens already close on the first figure's part (the LED), so the camera never flies in from a wide shot.
+  const [highlight, setHighlight] = useState<Highlight>(() => (motionOk() ? NUMBER_PARTS[0] : 'moisture'))
   const limit = thresholds(pickCase('cabai', 'dry').data), solar = solarSizing()
   const items: [string, string, string][] = [
-    ['30', 'menit', 'jarak antarbacaan sensor'],
+    [String(READING_INTERVAL_MIN), 'menit', 'jarak antarbacaan sensor'],
     ['3', 'sensor', 'kelembapan, suhu, dan pH'],
     [String(limit.dry), 'indeks', 'batas kering profil cabai'],
     [formatNumber(solar.dailyEnergyWh), 'Wh', 'kebutuhan energi perangkat per hari'],
@@ -165,12 +147,17 @@ export function Numbers() {
     const ctx = gsap.context(() => {
       if (!motionOk()) return
       revealHeadings(host)
-      gsap.utils.toArray<HTMLElement>('.v5-num').forEach(el => gsap.from(el, { y: 60, autoAlpha: 0, duration: 1, ease: 'expo.out', scrollTrigger: { trigger: el, start: 'top 85%', once: true } }))
+      gsap.utils.toArray<HTMLElement>('.v5-num').forEach((el, i) => {
+        gsap.from(el, { y: 60, autoAlpha: 0, duration: 1, ease: 'expo.out', scrollTrigger: { trigger: el, start: 'top 85%', once: true } })
+        // The figure crossing the middle of the screen lights the device part it comes from (one at a time: the
+        // figures touch, so the centre line is inside exactly one of them).
+        ScrollTrigger.create({ trigger: el, start: 'top center', end: 'bottom center', onToggle: self => { if (self.isActive) setHighlight(NUMBER_PARTS[i]) } })
+      })
     }, host)
     return () => ctx.revert()
   }, [])
   return <section ref={root} className="v5-numbers" aria-labelledby="v5-numbers-title">
-    <div className="v5-numbers-media" aria-hidden="true"><canvas ref={canvas} className="v5-seq" /></div>
+    <div className="v5-numbers-media" aria-hidden="true"><DeviceSlot mode="angka" highlight={highlight} /></div>
     <div className="v5-numbers-list">
       <h2 id="v5-numbers-title" data-split>Angka yang bisa dicek.</h2>
       <dl>
@@ -182,23 +169,27 @@ export function Numbers() {
 }
 
 export function LeafReveal() {
-  const pin = useRef<HTMLDivElement>(null), stage = useRef<HTMLDivElement>(null), video = useRef<HTMLVideoElement>(null)
-  useInViewVideo(video)
+  const pin = useRef<HTMLDivElement>(null), stage = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const host = stage.current!
     const ctx = gsap.context(() => {
       if (!motionOk()) { host.dataset.reduced = ''; return }
       const line = charReveal(host.querySelector<HTMLElement>('.v5-leaf-line')!)
-      // The leaf grows, the rest of the frame fades in around it until the garden is the whole background,
-      // then the words arrive. Both mask layers are driven through custom properties.
+      // The leaf grows, the rest of the frame fades in around it until the garden is the whole background, the two
+      // plants draw themselves meanwhile, then the words arrive. Both mask layers are driven through custom properties.
       gsap.timeline({ defaults: { ease: 'none' }, scrollTrigger: {
         trigger: pin.current, start: 'top top', end: 'bottom bottom', scrub: 1,
         onUpdate: self => (self.progress > .68 ? line.play() : line.reverse()),
+        // The leaves sway only while the garden is on screen.
+        onToggle: self => host.toggleAttribute('data-sway', self.isActive),
       } })
         .to('.v5-leaf-row', { xPercent: -26, duration: .6 }, 0)
         .fromTo('.v5-leaf-img', { '--m': '9vmax' }, { '--m': '230vmax', duration: .58, ease: 'power2.in' }, 0)
         .fromTo('.v5-leaf-img', { '--fill': 0 }, { '--fill': 1, duration: .24, ease: 'power1.inOut' }, .36)
-        .fromTo('.v5-leaf-img video', { scale: 1.16 }, { scale: 1, duration: .7, ease: 'power1.out' }, 0)
+        .fromTo('.v5-garden', { scale: 1.16 }, { scale: 1, duration: .7, ease: 'power1.out' }, 0)
+        .from('.v5-garden .v5-draw-line', { drawSVG: '0%', duration: .3, stagger: .003 }, .08)
+        .from('.v5-garden .v5-draw-fill', { fillOpacity: 0, duration: .14, stagger: .002 }, .3)
+        .from('.v5-garden .v5-draw-vein', { drawSVG: '0%', duration: .1, stagger: .001 }, .42)
         .to('.v5-leaf-row', { autoAlpha: 0, duration: .14 }, .46)
         .fromTo('.v5-leaf-cap', { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: .12 }, .74)
     }, host)
@@ -208,9 +199,7 @@ export function LeafReveal() {
     <div ref={pin} className="v5-pin v5-pin-leaf">
       <div ref={stage} className="v5-stage">
         <div className="v5-leaf-row" aria-hidden="true">{[0, 1, 2].map(i => <span key={i}>Amati. Pahami. Rawat.</span>)}</div>
-        <div className="v5-leaf-img" aria-hidden="true">
-          <video ref={video} muted playsInline loop preload="none" poster="./landing/video/garden-poster.webp"><source src="./landing/video/garden.mp4" type="video/mp4" /></video>
-        </div>
+        <div className="v5-leaf-img" aria-hidden="true"><GardenArt /></div>
         <h2 id="v5-leaf-title" className="v5-leaf-line">Satu pot, dirawat dengan alasan.</h2>
         <p className="v5-leaf-cap">Profil cabai dan bawang merah, masing-masing dengan batas kering dan basahnya.</p>
       </div>

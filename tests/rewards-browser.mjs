@@ -19,6 +19,8 @@ const rpc=(name,token,body={})=>api('/rest/v1/rpc/'+name,token,body)
 const run=randomUUID().slice(0,8),password=randomBytes(20).toString('base64url'),title=`Synthetic UI reward ${run}`,version=`synthetic-browser-${run}`
 async function account(label,roles){const email=`reward-browser-${run}-${label}@example.test`,r=await api('/auth/v1/signup',null,{email,password});assert.equal(r.status,200);const a=await rpc('ensure_my_account',r.data.access_token);assert.equal(a.data.ok,true);sql(`UPDATE account SET access_roles=ARRAY[${roles.map(q).join(',')}]::text[] WHERE id=${q(a.data.account.id)}`);return{email,token:r.data.access_token,id:a.data.account.id}}
 const operator=await account('operator',['owner','operator']),owner=await account('owner',['owner'])
+// Operator tools open only in an AAL2 session with a verified authenticator (privileged access, 2026-11-14).
+Object.assign(operator,await enableTotp(base,config.anon,operator.token))
 // The owner redeems, so 2FA is on and the 24 h hold after enabling it is backdated away.
 Object.assign(owner,await enableTotp(base,config.anon,owner.token));sql(`UPDATE security_event SET created_at=created_at-interval '25 hours' WHERE kind='mfa_enabled' AND user_id=(SELECT auth_user_id FROM account WHERE id=${q(owner.id)})`)
 const previous=(await rpc('reward_workspace',operator.token)).data.policy
@@ -30,7 +32,7 @@ const browser=await chromium.launch({headless:true,channel:'chrome'}),page=await
 const panel=page,rewards=page.getByRole('region',{name:'Poin & penukaran program',exact:true})
 const errors=[],checks=[];page.on('pageerror',err=>errors.push(err.message));await mkdir('.tmp/phase4/browser',{recursive:true})
 async function ready(){await page.waitForFunction(()=>document.getElementById('reward-heading')?.closest('section')?.querySelector('[aria-busy]')?.getAttribute('aria-busy')==='false')}
-async function login(person){await signIn(page,person.email,password);if(person.secret){await panel.getByLabel('Kode autentikator',{exact:true}).fill(totp(person.secret));await panel.getByRole('button',{name:'Verifikasi',exact:true}).click()}await ecosystemTab(page,'Energi & reward');await rewards.waitFor();await ready()}
+async function login(person){await signIn(page,person.email,password,{secret:person.secret});await ecosystemTab(page,'Energi & reward');await rewards.waitFor();await ready()}
 async function logout(){await signOut(page);assert.equal(await rewards.count(),0)}
 async function balance(confirmed,reserved,available){const expected=[confirmed,reserved,available];assert.deepEqual(await rewards.locator('dl dd').allTextContents(),expected.map(String))}
 try{

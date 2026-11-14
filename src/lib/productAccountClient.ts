@@ -34,7 +34,60 @@ export function oauthReturn(search: string): { code: string } | { error: string 
   if (code !== null) return code.length <= 512 && validToken(code) ? { code } : null
   return error ? { error: error.slice(0, 300) } : null
 }
+/** Backend gates answer in English; these codes get the app's own words (see privileged_write_gate, activation_mfa). */
+const GATE_TEXT: Record<string, string> = {
+  mfa_required: 'Aksi ini memerlukan 2FA. Aktifkan di Profil, bagian Keamanan, lalu masuk kembali dengan kodenya.',
+  step_up_required: 'Masukkan kode 2FA terbaru untuk melanjutkan aksi ini.',
+  forbidden: 'Akun ini tidak punya peran untuk aksi tersebut.',
+  rate_limited: 'Terlalu banyak permintaan. Tunggu sebentar, lalu coba lagi.',
+  unit_unavailable: 'Unit ini tidak tersedia untuk akun Anda.',
+  invalid_request: 'Isian tidak valid. Periksa lagi lalu coba kembali.',
+  request_conflict: 'Kiriman ini bentrok dengan kiriman sebelumnya. Muat ulang lalu coba lagi.',
+  request_pending: 'Permintaan yang sama masih diproses. Tunggu sebentar.',
+  request_expired: 'Permintaan kedaluwarsa. Kirim ulang.',
+  invalid_range: 'Rentang waktu tidak valid.',
+  range_too_large: 'Rentang terlalu besar. Perkecil rentangnya.',
+  invalid_cursor: 'Halaman berikutnya tidak valid. Muat ulang daftar.',
+  export_too_large: 'Data terlalu banyak untuk satu berkas. Perkecil rentang tanggal.',
+  subject_unavailable: 'Hanya hasil energi (30 hari) atau penukaran (90 hari) milik Anda yang bisa diajukan.',
+  case_open: 'Sudah ada pengajuan yang belum diputus untuk hal ini.',
+  case_unavailable: 'Pengajuan tidak ditemukan.',
+  state_conflict: 'Status sudah berubah. Muat ulang lalu coba lagi.',
+  self_review: 'Anda tidak boleh memutus perkara yang melibatkan akun Anda sendiri.',
+  already_owner: 'Produk ini sudah milik Anda.',
+  product_unavailable: 'Produk tidak terdaftar atau sudah dicabut.',
+  unit_mismatch: 'Perangkat ditempatkan di unit lain.',
+  invalid_label: 'Nama unit harus 1–120 karakter.',
+  unit_limit: 'Batas unit untuk produk ini sudah tercapai. Arsipkan unit lain dulu.',
+  device_unavailable: 'Perangkat tidak aktif atau bukan milik Anda.',
+  invalid_manifest: 'Manifest tidak sesuai format resmi.',
+  manifest_unverified: 'Manifest harus dikirim lewat layanan provisioning agar tanda tangannya diperiksa.',
+  unknown_issuer: 'Kunci penerbit pada manifest tidak dikenal.',
+  invalid_signature: 'Tanda tangan tidak sah.',
+  serial_taken: 'Serial sudah terdaftar.',
+  key_in_use: 'Salah satu kunci perangkat sudah terdaftar.',
+  invalid_code: 'Kode tidak cocok.',
+}
+/** One wording for every failed account call: a known code gets the app's text, otherwise the server's message. */
+function accountError(value: unknown) {
+  const v = record(value) ? value : {}
+  const code = typeof v.code === 'string' ? v.code : undefined
+  const text = code && Object.hasOwn(GATE_TEXT, code) ? GATE_TEXT[code] : typeof v.message === 'string' ? v.message : typeof v.error_description === 'string' ? v.error_description : 'Permintaan akun gagal. Coba kembali.'
+  return Object.assign(new Error(text), { code })
+}
+/** The RPCs the app calls (Supabase migrations define them). */
+type RpcName = 'append_my_care_journal' | 'read_my_care_journal' | 'read_my_measurement_history' |'compare_my_measurement_history' | 'open_reward_appeal' | 'my_reward_cases' | 'operator_reward_cases' | 'operator_take_reward_case' | 'operator_decide_reward_case' | 'open_ownership_recovery' | 'withdraw_ownership_recovery' | 'my_ownership_recoveries' | 'operator_recovery_cases' | 'operator_take_recovery_case' | 'operator_decide_recovery_case' | 'rename_my_unit' | 'archive_my_unit' | 'restore_my_unit' | 'place_my_device' | 'my_units' | 'my_unit_history' | 'my_unit_overview' | 'create_my_recovery_codes' | 'my_recovery_codes_status' | 'my_chain_proofs' | 'operator_outbox_status' | 'operator_rotate_device_key' | 'operator_revoke_device' | 'operator_revoke_product' | 'operator_registry_history' | 'ensure_my_account' | 'my_products' | 'issue_activation_nonce' | 'my_device_units' | 'unit_measurements' | 'create_my_unit' | 'published_profile_versions' | 'unit_explanations' | 'knowledge_workspace' | 'submit_profile_contribution' | 'revise_profile_contribution' | 'review_profile_contribution' | 'published_profile_details' | 'assign_unit_profile' | 'energy_workspace' | 'operator_register_energy_meter' | 'operator_revoke_energy_meter' | 'operator_set_reward_policy' | 'operator_upsert_catalog' | 'reserve_my_reward' | 'cancel_my_redemption' | 'operator_fulfill_redemption' | 'operator_compensate_redemption' | 'reward_workspace' | 'create_transfer_offer' | 'cancel_transfer_offer' | 'accept_transfer' | 'security_workspace'
 export interface TotpEnrollment { id: string; secret: string; uri: string }
+/** The first pot, asked once after sign-up. `crop` names a simulator profile; `device` says whether a Smart Agro
+ * unit is on hand to activate. */
+export interface PotSetup { name: string; crop: 'cabai' | 'bawang'; device: boolean }
+/** Metadata comes back from the token, which its owner can write: validate it like any other input. */
+export function parsePot(value: unknown): PotSetup | null {
+  if (!record(value) || typeof value.name !== 'string' || typeof value.device !== 'boolean' || (value.crop !== 'cabai' && value.crop !== 'bawang')) return null
+  const name = value.name.trim().replace(/\s+/g, ' ')
+  const clean = name.length > 0 && name.length <= 40 && !/[<>]/.test(name) && ![...name].some(c => c.charCodeAt(0) < 32)
+  return clean ? { name, crop: value.crop, device: value.device } : null
+}
 const totpCode = (code: string) => { const value = code.replace(/\s/g, ''); if (!/^\d{6}$/.test(value)) throw new Error('Kode autentikator harus 6 angka.'); return value }
 const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
 const runtime = (globalThis as typeof globalThis & { SMART_AGRO_CONFIG?: Record<string, unknown> }).SMART_AGRO_CONFIG
@@ -44,11 +97,14 @@ const storageKey = `smart-agro.account:${endpoint}`
 const pkceKey = `smart-agro.pkce:${endpoint}`
 // The sign-up verifier outlives the tab: the confirmation link usually opens in a new one.
 const signupPkceKey = `smart-agro.pkce-signup:${endpoint}`
+// Password reset (APP-01) uses PKCE like sign-up: the email link returns with ?code= in this browser.
+const resetPkceKey = `smart-agro.pkce-reset:${endpoint}`
 const local = { get: (key: string) => { try { return localStorage.getItem(key) } catch { return null } }, drop: (key: string) => { try { localStorage.removeItem(key) } catch { /* storage blocked */ } } }
 export const productAccountConfigured = Boolean(endpoint && anonKey && (() => {
   try { const u = new URL(endpoint); return u.protocol === 'https:' || (u.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(u.hostname)) } catch { return false }
 })())
-/** Mode B (hosted backend, `.env.cloud`): every visitor signs in, so the gate offers no guest visit. */
+/** Set `VITE_SIGN_IN_REQUIRED=true` to make every visitor sign in (the gate then offers no guest visit). The hosted
+ * demo leaves it off since 2026-11-14, so visitors can try the simulator first. */
 export const signInRequired = productAccountConfigured && env?.VITE_SIGN_IN_REQUIRED === 'true'
 
 export class ProductAccountClient {
@@ -80,8 +136,9 @@ export class ProductAccountClient {
     if (response.status === 401 && token && token === this.session?.access_token) this.clear()
     if (response.status === 204) return {}
     const value = await response.json().catch(() => null)
-    if (record(value) && value.ok === false && token === this.session?.access_token && (value.code === 'unauthorized' || value.code === 'invalid_session' || value.code === undefined)) this.clear()
-    if (!response.ok || !record(value) || value.ok === false) throw Object.assign(new Error(typeof value?.message === 'string' ? value.message : typeof value?.error_description === 'string' ? value.error_description : 'Permintaan akun gagal. Coba kembali.'), { code: typeof value?.code === 'string' ? value.code : undefined })
+    // Only an explicit session verdict signs out; an error of unknown shape must not cost the visitor their session.
+    if (record(value) && value.ok === false && token === this.session?.access_token && (value.code === 'unauthorized' || value.code === 'invalid_session')) this.clear()
+    if (!response.ok || !record(value) || value.ok === false) throw accountError(value)
     return value
   }
 
@@ -112,6 +169,16 @@ export class ProductAccountClient {
     return this.begin(value)
   }
 
+  /** Saves the first pot's setup on the account (Auth user metadata: the owner's own preferences, never used for
+   * access decisions), then refreshes the session so its token carries it. */
+  async savePot(pot: PotSetup) {
+    const clean = parsePot(pot)
+    if (!clean) throw new Error('Data pot tidak valid.')
+    await this.refreshIfNeeded()
+    await this.request('/auth/v1/user', { data: { pot: clean } }, this.session!.access_token, 'PUT')
+    this.store(await this.request('/auth/v1/token?grant_type=refresh_token', { refresh_token: this.session!.refresh_token }))
+  }
+
   /** Whether this Auth server has Google sign-in configured (public settings, no session needed). */
   async googleEnabled() {
     const settings = await this.request('/auth/v1/settings', undefined, undefined, 'GET')
@@ -128,9 +195,12 @@ export class ProductAccountClient {
 
   /** Finishes a PKCE return: Google (verifier in this tab) or an email confirmation link (verifier in this browser). Single-use. */
   async completeReturn(code: string): Promise<'ok' | 'mfa'> {
-    const verifier = sessionStorage.getItem(pkceKey) ?? local.get(signupPkceKey)
+    const reset = local.get(resetPkceKey)
+    const verifier = sessionStorage.getItem(pkceKey) ?? local.get(signupPkceKey) ?? reset
     sessionStorage.removeItem(pkceKey)
     local.drop(signupPkceKey)
+    local.drop(resetPkceKey)
+    this.resetting = Boolean(reset) && verifier === reset
     if (!verifier) throw new Error('Proses masuk tidak dimulai di browser ini. Jika Anda baru mengonfirmasi email, silakan masuk dengan email dan kata sandi.')
     this.pending = null
     return this.begin(await this.request('/auth/v1/token?grant_type=pkce', { auth_code: code, code_verifier: verifier }))
@@ -206,14 +276,80 @@ export class ProductAccountClient {
     await this.refreshing
   }
 
-  async rpc(name: 'ensure_my_account' | 'my_products' | 'issue_activation_nonce' | 'my_device_units' | 'unit_measurements' | 'create_my_unit' | 'published_profile_versions' | 'unit_explanations' | 'knowledge_workspace' | 'submit_profile_contribution' | 'revise_profile_contribution' | 'review_profile_contribution' | 'published_profile_details' | 'assign_unit_profile' | 'energy_workspace' | 'operator_register_energy_meter' | 'operator_revoke_energy_meter' | 'operator_set_reward_policy' | 'operator_upsert_catalog' | 'reserve_my_reward' | 'cancel_my_redemption' | 'operator_fulfill_redemption' | 'operator_compensate_redemption' | 'reward_workspace' | 'create_transfer_offer' | 'cancel_transfer_offer' | 'accept_transfer' | 'security_workspace', body?: unknown) {
+  /** Asks the person for an authenticator code (null when they cancel). Set by AccountProvider. */
+  stepUp: (() => Promise<string | null>) | null = null
+
+  /** Operator and curator writes need a code from the last five minutes (privileged_write_gate); when the server asks,
+   * the app collects one, verifies it, and repeats the call once. Other calls keep their own handling. */
+  async rpc(name: RpcName, body?: unknown) {
     await this.refreshIfNeeded()
-    return this.request(`/rest/v1/rpc/${name}`, body, this.session!.access_token)
+    try { return await this.request(`/rest/v1/rpc/${name}`, body, this.session!.access_token) }
+    catch (err) {
+      if ((err as { code?: string }).code !== 'step_up_required' || !/^(operator_|review_profile_contribution$|create_my_recovery_codes$)/.test(name) || !this.stepUp) throw err
+      const code = await this.stepUp()
+      if (!code) throw err
+      await this.verifyMfa(code)
+      return this.request(`/rest/v1/rpc/${name}`, body, this.session!.access_token)
+    }
   }
 
   async claim(nonceId: string, sealedCode: string, signature: string) {
     await this.refreshIfNeeded()
     return this.request('/functions/v1/product-claim', { nonce_id: nonceId, sealed_code: sealedCode, signature }, this.session!.access_token)
+  }
+
+  /** The owner's sensor history for [from,to) as CSV (history-export, see docs/care-history-api.md). */
+  async exportHistory(unitId: string, from: string, to: string) {
+    await this.refreshIfNeeded()
+    const token = this.session!.access_token
+    const response = await fetch(`${endpoint}/functions/v1/history-export`, {
+      method: 'POST', headers: { apikey: anonKey, 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ unit_id: unitId, from, to }), signal: AbortSignal.timeout(30000),
+    })
+    if (response.status === 401 && token === this.session?.access_token) this.clear()
+    if (!response.ok) throw accountError(await response.json().catch(() => null))
+    if (!response.headers.get('content-type')?.startsWith('text/csv')) throw new Error('Berkas histori tidak valid.')
+    return { csv: await response.blob(), rows: Number(response.headers.get('x-history-row-count')) || 0 }
+  }
+
+  /** True after a password-reset link signed the person in: the app asks for a new password before anything else. */
+  resetting = false
+
+  /** Sends the reset email (Auth answers the same whether or not the address exists). */
+  async requestPasswordReset(email: string, returnTo: string) {
+    const verifier = pkceVerifier()
+    try { localStorage.setItem(resetPkceKey, verifier) } catch { throw new Error('Browser menolak penyimpanan lokal, jadi tautan reset tidak bisa diselesaikan di sini.') }
+    await this.request(`/auth/v1/recover?${new URLSearchParams({ redirect_to: returnTo })}`, { email: email.trim(), code_challenge: await pkceChallenge(verifier), code_challenge_method: 's256' })
+  }
+
+  async setPassword(password: string) {
+    if (password.length < 10) throw new Error('Kata sandi minimal 10 karakter.')
+    await this.refreshIfNeeded()
+    await this.request('/auth/v1/user', { password }, this.session!.access_token, 'PUT')
+    this.resetting = false
+  }
+
+  /** APP-01, lost authenticator: spends a recovery code for the password sign-in that waits for its second factor. */
+  async recoverMfa(code: string) {
+    if (!this.pending) throw new Error('Masuk dengan email dan kata sandi dulu.')
+    const value = this.pending
+    await this.request('/functions/v1/mfa-recovery', { code: code.trim() }, String(value.access_token))
+    // The factor is gone, so this session now reaches data; refresh so the token reflects it.
+    this.pending = null
+    this.store(await this.request('/auth/v1/token?grant_type=refresh_token', { refresh_token: value.refresh_token }))
+  }
+
+  /** ID-04: registers a product from an issuer-signed manifest; asks for a fresh code when the server wants one. */
+  async provision(body: { request_id: string; manifest: string; signature: string; activation_secret_hash: string }) {
+    await this.refreshIfNeeded()
+    try { return await this.request('/functions/v1/product-provision', body, this.session!.access_token) }
+    catch (err) {
+      if ((err as { code?: string }).code !== 'step_up_required' || !this.stepUp) throw err
+      const code = await this.stepUp()
+      if (!code) throw err
+      await this.verifyMfa(code)
+      return this.request('/functions/v1/product-provision', body, this.session!.access_token)
+    }
   }
 
   /** ID-01: registry status of a public serial; needs no account. */
@@ -233,8 +369,32 @@ export class ProductAccountClient {
   }
 }
 
-export interface PublicStatus { serial_public: string; variant: 'single_pot' | 'garden'; registry_status: 'active' | 'revoked' | 'pending'; claimed: boolean }
+/** Public registry status; manifest fields are null for products registered before signed manifests (ID-01). */
+export interface PublicStatus { serial_public: string; variant: 'single_pot' | 'garden'; registry_status: 'active' | 'revoked' | 'pending'; claimed: boolean
+  manifest: string | null; issuer_key_id: string | null; issuer_signature: string | null; issuer_verified: boolean }
+const optional = (v: unknown, max: number) => v === null || v === undefined ? null : typeof v === 'string' && v.length <= max ? v : (() => { throw new Error('Status produk tidak valid.') })()
 export function parsePublicStatus(value: unknown): PublicStatus {
   if (!record(value) || typeof value.serial_public !== 'string' || !['single_pot', 'garden'].includes(String(value.variant)) || !['active', 'revoked', 'pending'].includes(String(value.registry_status)) || typeof value.claimed !== 'boolean') throw new Error('Status produk tidak valid.')
-  return { serial_public: value.serial_public, variant: value.variant as PublicStatus['variant'], registry_status: value.registry_status as PublicStatus['registry_status'], claimed: value.claimed }
+  return { serial_public: value.serial_public, variant: value.variant as PublicStatus['variant'], registry_status: value.registry_status as PublicStatus['registry_status'], claimed: value.claimed,
+    manifest: optional(value.manifest, 8192), issuer_key_id: optional(value.issuer_key_id, 64), issuer_signature: optional(value.issuer_signature, 88), issuer_verified: value.issuer_verified === true }
+}
+
+/** Issuer public keys pinned in this build ({"key-id": "<base64 Ed25519>"}); the trust anchor for A04's check. */
+export const pinnedIssuerKeys: Record<string, string> = (() => {
+  try { const v: unknown = JSON.parse(String((typeof runtime?.issuerKeys === 'string' ? runtime.issuerKeys : env?.VITE_ISSUER_PUBLIC_KEYS) ?? '{}')); return record(v) ? Object.fromEntries(Object.entries(v).filter(([, k]) => typeof k === 'string' && /^[A-Za-z0-9+/]{43}=$/.test(k))) as Record<string, string> : {} } catch { return {} }
+})()
+
+/** A04 "Tanda tangan penerbit sah?" checked in this browser against the pinned key, not taken from the server's word.
+ * 'unavailable': no manifest, key not pinned, or the browser lacks Ed25519 (then only the server attestation remains). */
+export async function verifyIssuerManifest(status: PublicStatus, keys = pinnedIssuerKeys): Promise<'valid' | 'invalid' | 'unavailable'> {
+  if (!status.manifest || !status.issuer_signature || !status.issuer_key_id || !Object.hasOwn(keys, status.issuer_key_id)) return 'unavailable'
+  let manifest: unknown
+  try { manifest = JSON.parse(status.manifest) } catch { return 'invalid' }
+  // The signed bytes must describe this very product.
+  if (!record(manifest) || manifest.serial_public !== status.serial_public || manifest.variant !== status.variant || manifest.issuer_key_id !== status.issuer_key_id) return 'invalid'
+  const bytes = (b64: string) => Uint8Array.from(atob(b64), c => c.charCodeAt(0))
+  try {
+    const key = await crypto.subtle.importKey('raw', bytes(keys[status.issuer_key_id]), 'Ed25519', false, ['verify'])
+    return await crypto.subtle.verify('Ed25519', key, bytes(status.issuer_signature), new TextEncoder().encode(status.manifest)) ? 'valid' : 'invalid'
+  } catch { return 'unavailable' }
 }

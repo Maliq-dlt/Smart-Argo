@@ -1,5 +1,7 @@
 import { ArrowUpRight, ArrowsClockwise, BookBookmark, Check, LinkSimple, Medal, Plant, Plus, QrCode, Robot, ShieldCheck, Sun, Warning } from '@phosphor-icons/react'
 import ProductTelemetry from './ProductTelemetry'
+import ProductUnits from './ProductUnits'
+import ProductRewardCases from './ProductRewardCases'
 import ProductKnowledge from './ProductKnowledge'
 import ProductEnergy from './ProductEnergy'
 import ProductRewards from './ProductRewards'
@@ -79,6 +81,9 @@ export default function MiroEcosystemWorkspace({
     readEcosystemState(window.localStorage, activePotCase.profile)
   )
   const [tab, setTab] = useState<SectionTab>('identity')
+  // Both unit panels reload when either one creates, renames, archives, restores or places a unit.
+  const [unitsVersion, setUnitsVersion] = useState(0)
+  const unitsChanged = () => setUnitsVersion(v => v + 1)
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
 
   // State form Tab 1: QR & Aktivasi
@@ -126,12 +131,18 @@ export default function MiroEcosystemWorkspace({
 
   const account = useAccount()
   const online = account.signedIn && account.client ? { client: account.client, onSessionExpired: account.expire } : null
+  // Operator and curator tools open only in a 2FA session (privileged access); say so instead of hiding them silently.
+  const locked = (role: 'operator' | 'curator') => online && !online.client.mfa && account.roles.includes(role)
+    ? <p className="miro-callout">Alat {role === 'operator' ? 'operator' : 'kurator'} terbuka setelah 2FA aktif. Aktifkan di Profil → Keamanan.</p> : null
   const activeAccount = eco.accounts.find(a => a.id === eco.activeAccountId) ?? eco.accounts[0]
   const qrCheck = inspectPublicQr(eco, qrSerial)
   const currentUnit = eco.units[0]
   const mascotEval = evaluateUnitWithMascot(activePotCase)
   const pointSummary = getAccountPointSummary(eco, activeAccount.id)
 
+  // Typed power goes through the same bounds as the engine before it is used: a negative or empty value would make
+  // calculateSolarBatterySizing throw during render and take the whole simulator down to its error fallback.
+  const watts = (raw: string) => Math.min(100, Math.max(0, Number(raw) || 0))
   const sleepHours = Math.max(0, 24 - activeHours)
   const sizing = calculateSolarBatterySizing({
     modes: [
@@ -411,7 +422,7 @@ export default function MiroEcosystemWorkspace({
         </div>
       )}
 
-      {online && tab === 'units' && <div className="online-panel"><ProductTelemetry {...online} products={account.products} /></div>}
+      {online && tab === 'units' && <div className="online-panel"><ProductUnits {...online} version={unitsVersion} onUnitsChanged={unitsChanged} /><ProductTelemetry {...online} products={account.products} version={unitsVersion} onUnitsChanged={unitsChanged} /></div>}
       {tab === 'units' && (
         <div className="miro-grid">
           <section className="panel miro-card" aria-labelledby="units-variant-heading">
@@ -663,7 +674,7 @@ export default function MiroEcosystemWorkspace({
         </div>
       )}
 
-      {online && tab === 'energy' && <div className="online-panel"><ProductEnergy {...online} /><ProductRewards {...online} /></div>}
+      {online && tab === 'energy' && <div className="online-panel">{locked('operator')}<ProductEnergy {...online} /><ProductRewards {...online} /><ProductRewardCases {...online} /></div>}
       {tab === 'energy' && (
         <div className="miro-grid">
           <section className="panel miro-card" aria-labelledby="solar-sizing-heading">
@@ -680,11 +691,11 @@ export default function MiroEcosystemWorkspace({
               <div className="miro-form-three">
                 <label className="miro-field">
                   <span>Daya siaga (W)</span>
-                  <input type="number" step="0.05" value={sleepW} onChange={e => setSleepW(Number(e.target.value) || 0)} />
+                  <input type="number" min="0" max="100" step="0.05" value={sleepW} onChange={e => setSleepW(watts(e.target.value))} />
                 </label>
                 <label className="miro-field">
                   <span>Daya ukur/TX (W)</span>
-                  <input type="number" step="0.1" value={activeW} onChange={e => setActiveW(Number(e.target.value) || 0)} />
+                  <input type="number" min="0" max="100" step="0.1" value={activeW} onChange={e => setActiveW(watts(e.target.value))} />
                 </label>
                 <label className="miro-field">
                   <span>Durasi aktif (jam/hari)</span>
@@ -928,7 +939,7 @@ export default function MiroEcosystemWorkspace({
         </div>
       )}
 
-      {online && tab === 'community' && <div className="online-panel"><ProductKnowledge {...online} /></div>}
+      {online && tab === 'community' && <div className="online-panel">{locked('curator')}<ProductKnowledge {...online} /></div>}
       {tab === 'community' && (
         <div className="miro-grid">
           <section className="panel miro-card" aria-labelledby="community-curation-heading">

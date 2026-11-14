@@ -23,10 +23,16 @@
   --pot: #b9693f; --pot-light: #d48a5c; --pot-dark: #8f4a2a; --pot-rim: #cd7d50; --stem: #3f6b3c; --leaf-a: #4b7a45; --leaf-b: #6f9d58; --leaf-line: #2f5a3c; --vein: #b9d99b;
   --pod: #c4462f; --pod-edge: #8e2f1f; --pod-raw: #7aa35a; --petal: #f7f5ec; --petal-edge: #d8d5c2; --eye: #e2c24e;
   /* Stages with photographs or renders: the same ink in both themes. */
-  --stage-ink: #18211b; --stage-soft: rgb(24 33 27 / .78);
+  --stage-ink: #18211b; --stage-soft: rgb(24 33 27 / .88); /* ≥4.5:1 on the sage and green stages */
+  --stage-plate: rgb(246 247 242 / .92); --stage-line: rgb(24 33 27 / .16); --stage-mark: #2f5a3c;
+  /* The 2D device matches the 3D model's finish (deviceModel.ts FINISH): a product colour, the same in both themes. */
+  --device-shell: #dcdad1; --device-skirt: #2d3330; --device-panel: #10161f; --device-steel: #c4c9c6; --device-steel-edge: #8e9490; --device-led: #6fe39a;
+  /* The garden scene behind the leaf reveal is a picture too: one palette in both themes. */
+  --garden-sky-a: #eceddc; --garden-sky-b: #c3ccae; --garden-sun: #f7f0d4; --garden-hill: #a7b794; --garden-hill-near: #869b75; --garden-ground: #3e5437;
+  --shallot: #a65468; --shallot-edge: #6d2d3d; --shallot-leaf: #6f9868;
   --display: 'Fraunces', Georgia, serif;
   --pad: clamp(20px, 4vw, 56px); --max: 1240px; --top: clamp(96px, 12vh, 128px);
-  --ease: cubic-bezier(.22, 1, .36, 1); --spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ease: cubic-bezier(.22, 1, .36, 1);
   position: relative; isolation: isolate; background: var(--bg); color: var(--ink);
   font-family: 'General Sans', 'Segoe UI', system-ui, sans-serif; font-size: 17px; line-height: 1.6; letter-spacing: -.003em;
   -webkit-font-smoothing: antialiased; overflow-x: clip; transition: background-color .4s, color .4s;
@@ -59,8 +65,8 @@
 .sa-skip:focus { top: 16px; }
 
 /* Buttons */
-.sa-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 22px; border-radius: 999px; border: 0; font: 500 16px/1 inherit; font-family: inherit; text-decoration: none; white-space: nowrap; cursor: pointer; transition: transform .35s var(--spring), background-color .25s, box-shadow .3s, color .25s; }
-.sa-btn svg { width: 18px; height: 18px; transition: transform .35s var(--spring); }
+.sa-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 22px; border-radius: 999px; border: 0; font: 500 16px/1 inherit; font-family: inherit; text-decoration: none; white-space: nowrap; cursor: pointer; transition: transform .35s var(--ease), background-color .25s, box-shadow .3s, color .25s; }
+.sa-btn svg { width: 18px; height: 18px; transition: transform .35s var(--ease); }
 .sa-btn:hover { transform: translateY(-2px); }
 .sa-btn:hover svg { transform: translateX(3px); }
 .sa-btn:active { transform: scale(.97); }
@@ -100,10 +106,14 @@
 .v5-pin-product { height: 320svh; }
 .v5-pin-root { height: 300svh; }
 .v5-pin-leaf { height: 240svh; }
-.v5-seq-box { position: absolute; inset: 0; }
-.v5-seq { width: 100%; height: 100%; }
-.v5-tone-sage { background: #a4ae97; color: var(--stage-ink); }
-.v5-tone-cream { background: #dcd7c3; color: var(--stage-ink); }
+/* The device keeps clear of the floating nav. */
+.v5-device-box { position: absolute; inset: var(--top) 0 0; }
+/* Tablets held upright: the device starts below the corner headings instead of behind them. */
+@media (min-width: 761px) and (max-width: 1100px) and (orientation: portrait) {
+  .v5-pin-product .v5-device-box, .v5-pin-root .v5-device-box { top: 30%; }
+}
+.v5-tone-sage { --device-ground: #a4ae97; background: var(--device-ground); color: var(--stage-ink); }
+.v5-tone-cream { --device-ground: #dcd7c3; background: var(--device-ground); color: var(--stage-ink); }
 .v5-at-tl, .v5-at-tr, .v5-at-bl, .v5-at-br { position: absolute; z-index: 2; }
 .v5-at-tl { left: var(--pad); top: var(--top); max-width: min(13ch, 44vw); }
 .v5-at-tr { right: var(--pad); top: var(--top); max-width: 340px; }
@@ -125,9 +135,11 @@
 
 /* Hero */
 .v5-hero-wrap { position: relative; height: 160svh; }
-.v5-hero { position: sticky; top: 0; height: 100svh; min-height: 600px; overflow: hidden; background: #a7b29c url('/landing/video/spin-poster.webp') center / cover; color: var(--stage-ink); }
+.v5-hero { position: sticky; top: 0; height: 100svh; min-height: 600px; overflow: hidden; background: #a7b29c; color: var(--stage-ink); }
+/* Out-of-focus leaf shade swaying over the sage stage (Hero draws it); the 3D device sits above it in its own light.
+ * max-width: none overrides the .sa canvas reset, which otherwise cut the layer short on the right. */
+.v5-leaf-shade { position: absolute; inset: -6%; width: 112%; max-width: none; height: 112%; opacity: .2; filter: blur(9px); mix-blend-mode: multiply; pointer-events: none; }
 .v5-hero-media { position: absolute; inset: 0; }
-.v5-hero-media video { width: 100%; height: 100%; object-fit: cover; }
 .v5-trail { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .v5-wordmark { position: absolute; left: var(--pad); top: calc(var(--top) - 20px); z-index: 2; font-family: var(--display); font-variation-settings: 'SOFT' 100; font-weight: 400; font-size: clamp(64px, 9.6vw, 168px); line-height: .86; letter-spacing: -.045em; pointer-events: none; }
 .v5-hero-tag { position: absolute; right: var(--pad); top: var(--top); z-index: 2; text-align: right; font-size: 14px; font-weight: 500; color: var(--stage-soft); }
@@ -175,20 +187,35 @@
 .v5-flower-eye { fill: var(--eye); }
 
 /* Device and root zone: corner text over full-bleed sequences */
-.v5-cards { position: absolute; z-index: 2; left: var(--pad); right: var(--pad); bottom: clamp(24px, 5vh, 48px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.v5-cards li { display: flex; flex-direction: column; min-height: 168px; padding: 18px 22px 22px; border-radius: 6px; background: rgb(246 247 242 / .92); color: var(--stage-ink); }
-.v5-cards i { font-style: normal; font-size: 24px; line-height: 1; color: #2f5a3c; }
-.v5-cards h3 { margin-top: auto; font-size: 24px; }
-.v5-cards p { margin-top: 6px; font-size: 15px; color: var(--stage-soft); }
-.v5-stage[data-phase] .v5-cards li { transition: opacity .6s var(--ease), transform .9s var(--ease); }
-.v5-stage[data-phase="2"] .v5-cards li:nth-child(2) { transition-delay: .08s; }
-.v5-stage[data-phase="2"] .v5-cards li:nth-child(3) { transition-delay: .16s; }
-.v5-stage[data-phase]:not([data-phase="2"]):not([data-phase="all"]) .v5-cards li { transform: translateY(40px); opacity: 0; }
+/* Phase 2: one reading's path through the device (read → filter → advise) on a single plate. A fill sweeps the track
+ * every 3 s, the pace of the device's own reading pulse, and lights each step as it passes. */
+.v5-flow { --node: 9px; --inset: 28px; position: absolute; z-index: 2; left: var(--pad); right: var(--pad); bottom: clamp(24px, 5vh, 48px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 24px 0 26px; border-radius: 18px; background: var(--stage-plate); color: var(--stage-ink); box-shadow: 0 18px 40px -26px rgb(24 33 27 / .5); }
+.v5-flow::before, .v5-flow::after { content: ''; position: absolute; top: calc(24px + var(--node) / 2); left: calc(var(--inset) + var(--node) / 2); width: calc(200% / 3); height: 1px; background: var(--stage-line); }
+.v5-flow::after { height: 2px; margin-top: -.5px; background: var(--stage-mark); transform: scaleX(0); transform-origin: left; }
+.v5-flow li { position: relative; padding: 0 var(--inset); }
+.v5-flow li::before { content: ''; display: block; position: relative; width: var(--node); height: var(--node); margin-bottom: 16px; border-radius: 50%; background: var(--stage-plate); box-shadow: inset 0 0 0 1.5px var(--stage-mark); }
+.v5-flow h3 { font-size: 22px; }
+.v5-flow p { margin-top: 6px; font-size: 15px; color: var(--stage-soft); }
+.v5-stage[data-phase] .v5-flow li { transition: opacity .6s var(--ease), transform .9s var(--ease); }
+.v5-stage[data-phase="2"] .v5-flow li:nth-child(2) { transition-delay: .08s; }
+.v5-stage[data-phase="2"] .v5-flow li:nth-child(3) { transition-delay: .16s; }
+.v5-stage[data-phase]:not([data-phase="2"]):not([data-phase="all"]) .v5-flow li { transform: translateY(40px); opacity: 0; }
+.v5-stage[data-phase="all"] .v5-flow li::before { background: var(--stage-mark); }
+@media (prefers-reduced-motion: no-preference) {
+  .v5-stage[data-phase="2"] .v5-flow::after { animation: v5-flow-sweep 3s linear .6s infinite; }
+  .v5-stage[data-phase="2"] .v5-flow li::before { animation: v5-flow-node 3s linear infinite; }
+  .v5-stage[data-phase="2"] .v5-flow li:nth-child(1)::before { animation-delay: .6s; }
+  .v5-stage[data-phase="2"] .v5-flow li:nth-child(2)::before { animation-delay: 1.65s; }
+  .v5-stage[data-phase="2"] .v5-flow li:nth-child(3)::before { animation-delay: 2.7s; }
+}
+@keyframes v5-flow-sweep { 0% { transform: scaleX(0); opacity: 1; } 70% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes v5-flow-node { 0%, 28% { background: var(--stage-mark); } 40%, 100% { background: var(--stage-plate); } }
 
-/* Numbers beside a sticky clip */
+/* Numbers beside the sticky device, which lights the part each figure comes from */
 .v5-numbers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: var(--bg); }
-.v5-numbers-media { position: sticky; top: 0; height: 100svh; overflow: hidden; background: #6f6a45; }
-.v5-numbers-list { padding: var(--top) var(--pad) clamp(80px, 10vw, 140px); }
+.v5-numbers-media { --device-ground: var(--bg-2); position: sticky; top: 0; height: 100svh; padding-top: var(--top); overflow: hidden; background: var(--device-ground); color: var(--ink); }
+/* Room below the last figure, so it reaches the middle of the screen while the device is still pinned. */
+.v5-numbers-list { padding: var(--top) var(--pad) max(140px, 45svh); }
 .v5-numbers h2 { font-size: clamp(38px, 4vw, 64px); margin-bottom: clamp(24px, 4vw, 56px); }
 .v5-num { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 180px); grid-template-areas: "num label"; gap: 16px; align-items: start; padding: 28px 0 clamp(48px, 9vh, 96px); border-top: 1px solid var(--line); }
 .v5-num dt { grid-area: label; text-align: right; font-size: 15px; color: var(--muted); }
@@ -201,13 +228,30 @@
 .v5-leafreveal .v5-stage { background: var(--bg); }
 .v5-leaf-row { position: absolute; left: 0; top: calc(50% - .55em); display: flex; white-space: nowrap; font-family: var(--display); font-variation-settings: 'SOFT' 100; font-weight: 400; font-size: clamp(64px, 11vw, 190px); line-height: 1.1; letter-spacing: -.04em; color: var(--primary); }
 .v5-leaf-row span { padding-right: .5em; }
-.v5-leaf-img { --m: 9vmax; --fill: 0; position: absolute; inset: 0; z-index: 2; overflow: hidden; background: #b9b48f;
+.v5-leaf-img { --m: 9vmax; --fill: 0; position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--garden-sky-b);
   -webkit-mask-image: url('/landing/v5/leaf-mask.svg'), linear-gradient(rgb(0 0 0 / var(--fill)), rgb(0 0 0 / var(--fill)));
   mask-image: url('/landing/v5/leaf-mask.svg'), linear-gradient(rgb(0 0 0 / var(--fill)), rgb(0 0 0 / var(--fill)));
   -webkit-mask-size: var(--m), 100% 100%; mask-size: var(--m), 100% 100%;
   -webkit-mask-position: center, 0 0; mask-position: center, 0 0;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; mask-composite: add; }
-.v5-leaf-img video { width: 100%; height: 100%; object-fit: cover; }
+.v5-garden { display: block; width: 100%; height: 100%; }
+.v5-garden :where(path, rect, ellipse, circle) { stroke-linecap: round; stroke-linejoin: round; }
+.v5-garden-sun { fill: var(--garden-sun); }
+.v5-garden-sun.is-halo { opacity: .35; }
+.v5-garden-hill { fill: var(--garden-hill); }
+.v5-garden-hill.is-near { fill: var(--garden-hill-near); }
+.v5-garden-ground { fill: var(--garden-ground); }
+.v5-garden-shadow { fill: rgb(10 16 12 / .3); }
+.v5-garden-pot { fill: var(--pot); }
+.v5-garden-pot-side { fill: var(--pot-dark); opacity: .45; }
+.v5-garden-soil { fill: var(--soil); }
+.v5-garden-rim { fill: var(--pot-rim); }
+.v5-shallot-leaf { fill: var(--shallot-leaf); stroke: var(--leaf-line); stroke-width: 1.2; }
+.v5-shallot { fill: var(--shallot); stroke: var(--shallot-edge); stroke-width: 1.4; }
+.v5-sway { transform-box: fill-box; transform-origin: 50% 100%; }
+.v5-stage[data-sway] .v5-sway { animation: v5-sway 5s ease-in-out infinite alternate; }
+.v5-stage[data-sway] .v5-sway.is-slow { animation-duration: 6.5s; animation-delay: -2s; }
+@keyframes v5-sway { from { rotate: -1.4deg; } to { rotate: 1.4deg; } }
 .v5-leaf-img::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgb(16 22 18 / .6), transparent 45%); }
 .v5-leaf-line { position: absolute; z-index: 3; left: var(--pad); bottom: clamp(32px, 8vh, 72px); max-width: 12ch; font-size: clamp(38px, 4.6vw, 76px); color: #f6f7f2; }
 .v5-leaf-cap { position: absolute; z-index: 3; right: var(--pad); bottom: clamp(32px, 8vh, 72px); max-width: 300px; font-size: 16px; line-height: 1.5; color: rgb(246 247 242 / .9); }
@@ -216,7 +260,8 @@
 /* Grow: a click plays the next stretch of the clip */
 .v5-grow { position: relative; height: 100svh; min-height: 620px; overflow: hidden; background: #879c7b; color: var(--stage-ink); }
 .v5-grow::before { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: radial-gradient(70% 60% at 0% 0%, rgb(236 239 231 / .6), transparent 70%), radial-gradient(50% 50% at 0% 100%, rgb(236 239 231 / .45), transparent 70%); }
-.v5-grow-canvas { position: absolute; inset: 0; }
+.v5-grow-art { position: absolute; inset: var(--top) 0 clamp(24px, 4vh, 48px); }
+.v5-grow-art svg { display: block; }
 .v5-grow-copy { position: absolute; z-index: 2; left: var(--pad); top: var(--top); max-width: 390px; }
 .v5-grow-copy h2 { font-size: clamp(36px, 4vw, 64px); }
 .v5-grow-copy p { margin-top: 14px; color: var(--stage-soft); }
@@ -227,39 +272,54 @@
 .v5-drops i { width: 13px; height: 17px; border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; box-shadow: inset 0 0 0 1.5px var(--stage-ink); transition: background-color .4s; }
 .v5-drops i.is-full { background: #2f5a3c; box-shadow: none; }
 
-/* Explore the prototype: a card row that runs off the right edge */
-.v5-explore { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: clamp(24px, 4vw, 64px); padding: clamp(110px, 13vw, 180px) 0 clamp(90px, 10vw, 140px) var(--pad); overflow: hidden; background: var(--bg); }
-.v5-explore-head h2 { font-size: clamp(38px, 4vw, 64px); }
-.v5-explore-head p { margin-top: 16px; color: var(--muted); font-size: 16px; }
-.v5-explore-nav { display: flex; gap: 8px; margin-top: 28px; }
-.v5-round { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: var(--btn); color: var(--btn-ink); cursor: pointer; transition: background-color .2s, transform .3s var(--spring); }
-.v5-round:hover { background: var(--btn-hover); transform: translateY(-2px); }
-.v5-round svg { width: 18px; height: 18px; }
-.v5-explore-track { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 4px var(--pad) 8px 4px; }
-.v5-explore-track::-webkit-scrollbar { display: none; }
-.v5-card { flex: none; width: clamp(260px, 27vw, 380px); scroll-snap-align: start; }
-.v5-card a { display: grid; gap: 10px; height: 100%; padding: 12px 12px 22px; border-radius: 8px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); text-decoration: none; transition: background-color .3s, box-shadow .3s; }
-.v5-card a:hover { background: var(--raised); box-shadow: inset 0 0 0 1px var(--line), 0 24px 40px -32px var(--shadow); }
-.v5-card-media { display: block; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 4px; background: var(--bg-2); }
-.v5-card-media img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease); }
-.v5-card a:hover .v5-card-media img { transform: scale(1.05); }
-.v5-card-status { margin: 6px 10px 0; font-size: 13px; font-weight: 500; color: var(--primary); }
-.v5-card-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 10px; font-family: var(--display); font-variation-settings: 'SOFT' 100; font-size: 28px; line-height: 1.1; letter-spacing: -.02em; }
-.v5-card-title svg { flex: none; width: 20px; height: 20px; color: var(--muted); transition: transform .3s var(--spring); }
-.v5-card a:hover .v5-card-title svg { transform: translate(2px, -2px); color: var(--ink); }
-.v5-card-body { margin: 0 10px; font-size: 15px; color: var(--muted); }
+/* Ask the engine: a pot that answers from the simulator's rules */
+.v5-ask { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 96px); align-items: center; max-width: var(--max); margin: 0 auto; padding: clamp(96px, 12vw, 160px) var(--pad); }
+.v5-ask-art { position: relative; aspect-ratio: 4 / 5; border-radius: 28px; overflow: hidden; }
+.v5-ask-art svg { position: absolute; inset: 8% 10% 5%; width: 80%; height: 87%; overflow: visible; }
+.v5-ask-art :where(path, rect, ellipse, circle) { stroke-linecap: round; stroke-linejoin: round; }
+.v5-ask-dry { fill: var(--soil-dry); transform-box: fill-box; transform-origin: 50% 0; transition: transform .45s var(--ease); }
+.v5-ask-probe { fill: none; stroke: var(--device-steel); stroke-width: 3.5; }
+.v5-ask-shell { fill: var(--device-shell); stroke: var(--device-skirt); stroke-width: 1.2; }
+.v5-ask-skirt { fill: var(--device-skirt); }
+.v5-ask-panel-cells { fill: var(--device-panel); }
+.v5-ask-led-ring { fill: var(--device-skirt); stroke: var(--device-steel-edge); stroke-width: 1; }
+.v5-ask-led { fill: var(--device-led); }
+.v5-ask-panel h2 { font-size: clamp(38px, 4vw, 64px); }
+.v5-ask-panel > p { max-width: 42ch; margin-top: 16px; font-size: 16px; color: var(--muted); text-wrap: pretty; }
+/* Two equal halves and one thumb that slides under the pressed crop (--i from Ask.tsx). */
+.v5-ask-crops { position: relative; display: inline-grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 28px; padding: 4px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.v5-ask-crops::before { content: ''; position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 6px); border-radius: 999px; background: var(--btn); box-shadow: 0 6px 14px -8px var(--shadow); transform: translateX(calc(var(--i, 0) * (100% + 4px))); transition: transform .5s var(--ease); }
+.v5-ask-crops button { position: relative; min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; transition: color .3s var(--ease); }
+.v5-ask-crops button:hover { color: var(--ink); }
+.v5-ask-crops button[aria-pressed=true] { color: var(--btn-ink); }
+.v5-ask-meter { margin-top: 28px; }
+.v5-ask-meter label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 15px; color: var(--muted); }
+.v5-ask-value { font-family: var(--display); font-variation-settings: 'SOFT' 100; font-size: 40px; line-height: 1; color: var(--ink); }
+.v5-ask-meter input { display: block; width: 100%; margin: 12px 0 0; accent-color: var(--primary); }
+.v5-ask-scale { position: relative; height: 22px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.v5-ask-scale span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; transition: left .6s var(--ease); }
+.v5-ask-answer-body { animation: v5-ask-swap .45s var(--ease); }
+@keyframes v5-ask-swap { from { opacity: 0; transform: translateY(6px); } }
+.v5-ask-scale span::before { content: ''; position: absolute; left: 50%; top: -8px; width: 1px; height: 6px; background: currentColor; }
+.v5-ask-answer { margin-top: 20px; padding: 20px 22px; border-radius: 20px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.v5-ask-rule { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 500; background: var(--accent); color: var(--accent-ink); }
+.v5-ask-answer[data-tone=act] .v5-ask-rule { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.v5-ask-answer h3 { margin-top: 12px; font-size: 22px; line-height: 1.25; }
+.v5-ask-answer p { margin-top: 6px; font-size: 15px; color: var(--muted); }
+.v5-ask-answer small { display: block; margin-top: 10px; font-size: 13px; color: var(--soft); }
+.v5-ask-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
 
 /* Footer handoff */
 .sa .mrf-h { font-family: var(--display); font-weight: 420; font-variation-settings: 'SOFT' 100; letter-spacing: -.025em; }
 
 @media (max-width: 1100px) {
   .v5-draw { grid-template-columns: minmax(0, 1fr) minmax(220px, 340px) minmax(0, 1fr); }
-  .v5-cards li { min-height: 140px; }
   .v5-hero-actions .sa-btn-ghost { display: none; }
 }
 @media (max-width: 900px) {
   .sa-nav nav { display: none; }
-  .v5-explore { grid-template-columns: minmax(0, 1fr); padding-right: 0; }
+  .v5-ask { grid-template-columns: minmax(0, 1fr); }
+  .v5-ask-art { aspect-ratio: auto; height: min(56svh, 480px); }
 }
 @media (max-width: 760px) {
   .sa-nav { top: 10px; padding: 6px 6px 6px 16px; gap: 10px; }
@@ -268,7 +328,6 @@
   .v5-stage { min-height: 0; }
   .v5-wordmark { font-size: 24vw; top: 84px; }
   /* A cover crop of the 16:9 turn would make the device fill a phone; keep it in a soft-edged middle band. */
-  .v5-hero { background-image: none; }
   .v5-hero-media { inset: 26% 0 31%; -webkit-mask-image: linear-gradient(transparent, #000 16%, #000 84%, transparent); mask-image: linear-gradient(transparent, #000 16%, #000 84%, transparent); }
   .v5-hero-tag { top: auto; bottom: 244px; left: var(--pad); right: auto; text-align: left; font-size: 14px; }
   .v5-hero-copy { right: var(--pad); bottom: 104px; }
@@ -281,33 +340,38 @@
   .v5-draw-a, .v5-draw-b { font-size: 28px; max-width: none; margin: 0; }
   .v5-draw-b { justify-self: start; text-align: left; }
   .v5-plant { max-height: 100%; justify-self: center; }
-  /* Sequences become a 4:3 window with the words above and below it. */
-  .v5-pin-product .v5-seq-box, .v5-pin-root .v5-seq-box { inset: auto 0; top: 50%; aspect-ratio: 4 / 3; transform: translateY(-46%); }
+  /* The device sits in a 4:3 window with the words above and below it. */
+  .v5-pin-product .v5-device-box, .v5-pin-root .v5-device-box { inset: auto 0; top: 50%; aspect-ratio: 4 / 3; transform: translateY(-46%); }
   .v5-at-tl, .v5-at-tr { left: var(--pad); right: var(--pad); top: 80px; max-width: none; }
   .v5-at-bl, .v5-at-br { left: var(--pad); right: var(--pad); bottom: 28px; max-width: none; }
   .v5-stage h2 { font-size: 30px; }
   .v5-stage p { font-size: 16px; }
-  .v5-cards { grid-template-columns: minmax(0, 1fr); gap: 6px; bottom: 14px; }
-  .v5-cards li { min-height: 0; padding: 12px 16px; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; }
-  .v5-cards i { grid-row: span 2; }
-  .v5-cards h3 { margin: 0; font-size: 19px; }
-  .v5-cards p { margin: 0; font-size: 14px; }
+  /* Steps stack; the track runs down between their nodes, which still light in turn. */
+  .v5-flow { --inset: 18px; grid-template-columns: minmax(0, 1fr); row-gap: 12px; bottom: 14px; padding: 16px 0; border-radius: 14px; }
+  .v5-flow::before, .v5-flow::after { display: none; }
+  .v5-flow li { display: grid; grid-template-columns: var(--node) minmax(0, 1fr); column-gap: 14px; }
+  .v5-flow li::before { grid-row: span 2; margin: 6px 0 0; }
+  .v5-flow li:not(:last-child)::after { content: ''; position: absolute; left: calc(var(--inset) + var(--node) / 2 - .5px); top: calc(6px + var(--node)); bottom: -18px; width: 1px; background: var(--stage-line); }
+  .v5-flow h3 { font-size: 19px; }
+  .v5-flow p { margin: 0; font-size: 14px; }
+  /* One column: the device stays pinned at the top while the figures scroll up beneath it. */
   .v5-numbers { grid-template-columns: minmax(0, 1fr); }
-  .v5-numbers-media { position: relative; height: 62svh; }
-  .v5-numbers-list { padding-top: 64px; }
+  .v5-numbers > * { grid-area: 1 / 1; }
+  .v5-numbers-media { height: 40svh; padding-top: 64px; align-self: start; z-index: 1; border-bottom: 1px solid var(--line); }
+  .v5-numbers-list { padding-top: calc(40svh + 40px); }
   .v5-num { grid-template-columns: minmax(0, 1fr); grid-template-areas: "num" "label"; gap: 4px; padding-bottom: 36px; }
   .v5-num dt { text-align: left; }
   .v5-leaf-row { font-size: 24vw; }
   .v5-grow { height: auto; min-height: 0; display: grid; padding: 96px 0 40px; }
   .v5-grow::before { display: none; }
-  .v5-grow-canvas { position: relative; inset: auto; order: 2; aspect-ratio: 4 / 3; height: auto; margin: 24px 0; }
+  .v5-grow-art { position: relative; inset: auto; order: 2; aspect-ratio: 4 / 3; height: auto; margin: 24px 0; }
   .v5-grow-copy, .v5-grow-ctrl { position: static; padding: 0 var(--pad); max-width: none; }
   .v5-grow-copy { order: 1; }
   .v5-grow-ctrl { order: 3; }
   .v5-grow-copy h2 { font-size: 34px; }
-  .v5-card { width: 78vw; }
-  .v5-leaf-cap { left: var(--pad); bottom: 24px; max-width: none; font-size: 15px; }
-  .v5-leaf-line { bottom: 96px; }
+  /* Portrait: the pots fill the lower half, so the words move up into the sky, in dark ink. */
+  .v5-leaf-line { top: calc(var(--top) - 8px); bottom: auto; right: var(--pad); max-width: none; color: var(--stage-ink); }
+  .v5-leaf-cap { left: var(--pad); top: calc(var(--top) + 92px); bottom: auto; max-width: 30ch; font-size: 15px; color: var(--stage-soft); }
 }
 @media (max-width: 380px) {
   .sa-xs-hide { display: none; }

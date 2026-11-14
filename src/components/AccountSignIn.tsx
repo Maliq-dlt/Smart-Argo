@@ -1,44 +1,30 @@
-import { CaretDown, GoogleLogo } from '@phosphor-icons/react'
-import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { GoogleLogo } from '@phosphor-icons/react'
+import { useId, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
+import Mascot, { type Face } from './Mascot'
 
 export type GuardMood = 'idle' | 'busy' | 'error' | 'welcome'
 type Field = 'email' | 'secret' | null
-const spring = { type: 'spring', stiffness: 260, damping: 22 } as const
+type Mode = 'signin' | 'signup'
+/** GoTrue's own minimum for new passwords (supabase/config.toml and the hosted Auth settings). */
+const NEW_PASSWORD_MIN = 10
 
-/** The pot mascot as a guard: it reads along with the email, covers its eyes for passwords and codes,
- * droops after a failed attempt and sprouts on success. Decorative; the form's own messages carry the state. */
-function Guardian({ look, hide, mood }: { look: number; hide: boolean; mood: GuardMood }) {
-  const mouth = mood === 'error' ? 'M76 112Q80 108 84 112' : mood === 'welcome' ? 'M68 108Q80 123 92 108' : hide ? 'M76 113a4 4 0 1 0 8 0a4 4 0 1 0 -8 0' : 'M70 109Q80 118 90 109'
-  const hand = (x: number, flip: boolean) => <g transform={`translate(${x} 101)${flip ? ' scale(-1 1)' : ''}`}>
-    <motion.g initial={false} animate={{ rotate: hide ? -4 : 112 }} transition={spring} style={{ originX: 0, originY: 0.5 }}>
-      <path d="M0 0C8 -9 22 -9 29 0C22 9 8 9 0 0Z" fill="var(--leaf)" />
-      <path d="M3 0H24" stroke="var(--leaf-vein)" strokeWidth="1.4" strokeLinecap="round" />
-    </motion.g>
-  </g>
-  return <svg className="guardian" viewBox="22 10 116 136" aria-hidden="true" data-mood={mood}>
-    <motion.g initial={false} animate={{ rotate: mood === 'error' ? -16 : 0 }} transition={spring} style={{ originX: 0.5, originY: 1 }}>
-      <path d="M80 81V44" fill="none" stroke="var(--stem)" strokeWidth="4" strokeLinecap="round" />
-      <path d="M80 63C52 63 44 42 48 27C70 29 83 42 80 63Z" fill="var(--leaf-light)" />
-      <path d="M80 51C81 30 96 19 115 23C115 45 102 56 80 51Z" fill="var(--leaf)" />
-      <path d="M80 62L57 37M81 49L104 30" fill="none" stroke="var(--leaf-vein)" strokeWidth="1.5" strokeLinecap="round" />
-      <motion.path d="M80 45C77 34 82 24 93 21C95 33 89 42 80 45Z" fill="var(--accent-2)" initial={false}
-        animate={{ scale: mood === 'welcome' ? 1 : 0 }} transition={spring} style={{ originX: 0, originY: 1 }} />
-    </motion.g>
-    <path d="M44 78H116L108 122Q80 136 52 122Z" fill="var(--pot)" />
-    <rect x="41" y="73" width="78" height="12" rx="5" fill="var(--pot-light)" />
-    <g fill="var(--pot-light)"><circle cx="66" cy="98" r="6.5" /><circle cx="94" cy="98" r="6.5" /></g>
-    <motion.g fill="var(--soil-wet)" initial={false} animate={{ x: look * 3, y: mood === 'busy' ? -2 : 0 }} transition={spring}>
-      <circle cx="66" cy="98" r="3.2" /><circle cx="94" cy="98" r="3.2" />
-    </motion.g>
-    <motion.path key={mouth} d={mouth} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: .18 }} fill="none" stroke="var(--soil-wet)" strokeWidth="3" strokeLinecap="round" />
-    {hand(43, false)}{hand(117, true)}
-  </svg>
+const faceOf: Record<GuardMood, Face> = { idle: 'smile', busy: 'think', error: 'sad', welcome: 'happy' }
+const caption = (mood: GuardMood, field: Field, mode: Mode) => mood === 'error' ? 'Ups, belum cocok. Coba sekali lagi, ya.'
+  : mood === 'busy' ? 'Sebentar, saya cek dulu…' : mood === 'welcome' ? 'Asyik, selamat datang!'
+  : field === 'secret' ? 'Mata saya tutup. Janji tidak mengintip… hehe.' : field === 'email' ? 'Wah, saya ikut membaca!'
+  : mode === 'signup' ? 'Halo! Ayo siapkan pot pertama Anda.' : 'Halo! Saya penjaga pot Anda.'
+
+let ruler: CanvasRenderingContext2D | null = null
+/** Where the caret sits across the input, -1 (left edge) to 1 (right edge), so the mascot reads along. */
+function caretAt(input: HTMLInputElement) {
+  ruler ??= document.createElement('canvas').getContext('2d')
+  if (!ruler) return 0
+  const style = getComputedStyle(input)
+  ruler.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+  const text = input.value.slice(0, input.selectionEnd ?? input.value.length)
+  const x = parseFloat(style.paddingLeft) + ruler.measureText(text).width - input.scrollLeft
+  return Math.max(-1, Math.min(1, x / Math.max(1, input.clientWidth) * 2 - 1))
 }
-
-const caption = (mood: GuardMood, field: Field) => mood === 'error' ? 'Belum berhasil. Coba sekali lagi.'
-  : mood === 'busy' ? 'Sebentar, saya periksa dulu.' : mood === 'welcome' ? 'Selamat datang.'
-  : field === 'secret' ? 'Mata saya tertutup. Silakan ketik.' : field === 'email' ? 'Saya ikut membaca.' : 'Saya menjaga akun dan pot Anda.'
 
 interface Props {
   mood: GuardMood
@@ -48,67 +34,94 @@ interface Props {
   onPassword: (email: string, password: string, signup: boolean) => Promise<void>
   onCode: (code: string) => Promise<void>
   onCancelCode: () => void
-  /** Shown at the simulator gate: continue without an account, data stays in this browser. */
+  /** Lost authenticator: spend a one-time recovery code instead of the 6-digit code (APP-01). */
+  onRecoveryCode?: (code: string) => Promise<void>
+  /** Send a password-reset link to this email (APP-01). */
+  onForgot?: (email: string) => Promise<void>
+  /** Continue without an account; data stays in this browser. */
   onGuest?: () => void
 }
 
-/** Sign-in and sign-up: Google first when the server offers it, email and password otherwise or on request. */
-export default function AccountSignIn({ mood, google, mfaStep, onGoogle, onPassword, onCode, onCancelCode, onGuest }: Props) {
+/** Sign-in and sign-up on one card: Google first when the server offers it, then the email form, always open, with
+ * "Masuk" and "Daftar" as tabs so creating an account is never hidden behind a fold. */
+export default function AccountSignIn({ mood, google, mfaStep, onGoogle, onPassword, onCode, onCancelCode, onRecoveryCode, onForgot, onGuest }: Props) {
+  const [mode, setMode] = useState<Mode>('signin')
+  const [recovering, setRecovering] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
   const [field, setField] = useState<Field>(null)
+  const [caret, setCaret] = useState(0)
+  const tabs = useRef<Record<Mode, HTMLButtonElement | null>>({ signin: null, signup: null })
+  const id = useId(), hint = `${id}-hint`
   // Droops on each new failure and perks up once the person starts correcting the form.
   const [sad, setSad] = useState(mood === 'error')
   const [lastMood, setLastMood] = useState(mood)
   if (mood !== lastMood) { setLastMood(mood); setSad(mood === 'error') }
   const shown: GuardMood = mood === 'error' && !sad ? 'idle' : mood
   const focus = (value: Field) => ({ onFocus: () => setField(value), onBlur: () => setField(null) })
-  const submitPassword = (signup: boolean) => { void onPassword(email.trim(), password, signup).finally(() => setPassword('')) }
+  const follow = (event: SyntheticEvent<HTMLInputElement>) => setCaret(caretAt(event.currentTarget))
+  const signup = mode === 'signup', short = signup && password.length < NEW_PASSWORD_MIN
+  // Reading: along the line it types into (below and to the right of the mascot); thinking: up and away.
+  const look = shown === 'busy' ? { x: .8, y: -1 } : field === 'email' ? { x: .3 + caret * .7, y: .9 } : { x: .35, y: .2 }
+  const pick = (next: Mode) => { setMode(next); setSad(false); tabs.current[next]?.focus() }
+  const arrows = (event: KeyboardEvent) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); pick(signup ? 'signin' : 'signup') } }
 
   return <div className="signin">
     <div className="signin-guard">
-      <Guardian look={field === 'email' ? Math.min(email.length / 22, 1) * 2 - 1 : 0} hide={field === 'secret'} mood={shown} />
-      <p aria-hidden="true">{caption(shown, field)}</p>
+      {/* Typing the email it beams and reads along; on the password it shuts its eyes, shy, and now and then peeks. */}
+      <Mascot className="guardian" face={field === 'email' && shown === 'idle' ? 'joy' : faceOf[shown]} look={look} hands hide={field === 'secret' && shown !== 'busy'} bud={shown === 'welcome'} />
+      <p aria-hidden="true">{caption(shown, field, mode)}</p>
     </div>
     <div className="signin-body">
-      <h3>{mfaStep ? 'Satu langkah lagi' : 'Masuk ke Smart Agro'}</h3>
-      {mfaStep ? <form onSubmit={event => { event.preventDefault(); void onCode(otp).finally(() => setOtp('')) }}>
+      <h3>{mfaStep ? 'Satu langkah lagi' : signup ? 'Buat akun Smart Agro' : 'Masuk ke Smart Agro'}</h3>
+      {mfaStep ? <form onSubmit={event => { event.preventDefault(); void (recovering && onRecoveryCode ? onRecoveryCode(otp) : onCode(otp)).finally(() => setOtp('')) }}>
         <fieldset className="signin-fields" disabled={mood === 'busy'}>
           <legend className="sr-only">Verifikasi dua langkah</legend>
-          <p>Masukkan kode 6 angka dari aplikasi autentikator Anda.</p>
-          <label className="miro-field"><span>Kode autentikator</span><input inputMode="numeric" autoComplete="one-time-code" required pattern="\d{6}" maxLength={6} value={otp} {...focus('secret')} onChange={e => { setOtp(e.target.value.replace(/\D/g, '')); setSad(false) }} /></label>
-          <div className="miro-actions-row"><button className="button primary" type="submit">Verifikasi</button><button className="button" type="button" onClick={() => { setOtp(''); onCancelCode() }}>Batal</button></div>
+          {recovering ? <>
+            <p>Masukkan salah satu kode pemulihan. Kode hanya berlaku sekali.</p>
+            <label className="miro-field"><span>Kode pemulihan</span><input autoComplete="off" autoCapitalize="characters" required pattern="[0-9A-Fa-f]{4}[\s-]?[0-9A-Fa-f]{4}[\s-]?[0-9A-Fa-f]{4}" maxLength={16} value={otp} {...focus('secret')} onChange={e => { setOtp(e.target.value); setSad(false) }} /></label>
+          </> : <>
+            <p>Masukkan kode 6 angka dari aplikasi autentikator Anda.</p>
+            <label className="miro-field"><span>Kode autentikator</span><input inputMode="numeric" autoComplete="one-time-code" required pattern="\d{6}" maxLength={6} value={otp} {...focus('secret')} onChange={e => { setOtp(e.target.value.replace(/\D/g, '')); setSad(false) }} /></label>
+          </>}
+          <div className="miro-actions-row"><button className="button primary" type="submit">Verifikasi</button><button className="button" type="button" onClick={() => { setOtp(''); setRecovering(false); onCancelCode() }}>Batal</button></div>
+          {onRecoveryCode && <small className="signin-switch"><button type="button" className="link-button" onClick={() => { setOtp(''); setRecovering(r => !r) }}>{recovering ? 'Pakai kode autentikator' : 'Autentikator hilang? Pakai kode pemulihan'}</button></small>}
         </fieldset>
       </form> : <>
         <p className="signin-lede">Satu akun untuk pot, data sensor, dan poin Anda.</p>
-        {google && <>
-          <button className="button primary signin-google" type="button" disabled={mood === 'busy'} onClick={onGoogle}><GoogleLogo weight="bold" aria-hidden="true" />Lanjut dengan Google</button>
-          <small className="signin-note">Belum punya akun? Akun dibuat otomatis saat pertama masuk.</small>
-        </>}
-        {onGuest && <>
-          <button className="button signin-guest" type="button" disabled={mood === 'busy'} onClick={onGuest}>Coba tanpa akun</button>
-          <small className="signin-note">Data tamu hanya tersimpan di browser ini.</small>
-        </>}
+        <div className="signin-quick">
+          {google && <button className="button primary signin-google" type="button" disabled={mood === 'busy'} onClick={onGoogle}><GoogleLogo weight="bold" aria-hidden="true" />Lanjut dengan Google</button>}
+          {onGuest && <button className="button signin-guest" type="button" disabled={mood === 'busy'} onClick={onGuest}>Coba tanpa akun</button>}
+        </div>
+        {(google || onGuest) && <small className="signin-note">{google ? 'Akun Google dibuat otomatis saat pertama masuk. ' : ''}{onGuest ? 'Data tamu hanya tersimpan di browser ini.' : ''}</small>}
         {google === null && <small className="signin-note">Memuat pilihan masuk…</small>}
-        {google !== null && <details className="signin-email" open={!google || undefined}>
-          <summary><span>Masuk atau daftar dengan email</span><CaretDown aria-hidden="true" /></summary>
-          <form onSubmit={event => { event.preventDefault(); submitPassword(false) }}>
-            <fieldset className="signin-fields" disabled={mood === 'busy'}>
-              <legend className="sr-only">Masuk atau daftar akun</legend>
-              <label className="miro-field"><span>Email</span><input type="email" required autoComplete="email" value={email} {...focus('email')} onChange={e => { setEmail(e.target.value); setSad(false) }} /></label>
-              <label className="miro-field"><span>Kata sandi</span><input type="password" required minLength={8} maxLength={256} autoComplete="current-password" value={password} {...focus('secret')} onChange={e => { setPassword(e.target.value); setSad(false) }} /></label>
-              <div className="miro-actions-row">
-                <button className="button primary" type="submit">Masuk</button>
-                <button className="button" type="button" disabled={!email.trim() || password.length < 10} onClick={() => submitPassword(true)}>Daftar</button>
-              </div>
-              <small>Akun baru memakai kata sandi minimal 10 karakter.</small>
-            </fieldset>
-          </form>
-        </details>}
+        <div className="signin-or"><span>{google || onGuest ? 'atau pakai email' : 'Pakai email'}</span></div>
+        <div className="signin-mode" role="tablist" aria-label="Masuk atau daftar" data-mode={mode}>
+          <button ref={el => { tabs.current.signin = el }} type="button" role="tab" id={`${id}-signin`} aria-selected={!signup} aria-controls={`${id}-form`} tabIndex={signup ? -1 : 0} onClick={() => pick('signin')} onKeyDown={arrows}>Masuk</button>
+          <button ref={el => { tabs.current.signup = el }} type="button" role="tab" id={`${id}-signup`} aria-selected={signup} aria-controls={`${id}-form`} tabIndex={signup ? 0 : -1} onClick={() => pick('signup')} onKeyDown={arrows}>Daftar</button>
+        </div>
+        <form id={`${id}-form`} role="tabpanel" aria-labelledby={`${id}-${mode}`} onSubmit={event => { event.preventDefault(); if (!short) void onPassword(email.trim(), password, signup).finally(() => setPassword('')) }}>
+          <fieldset className="signin-fields" disabled={mood === 'busy'}>
+            <legend className="sr-only">{signup ? 'Daftar akun baru' : 'Masuk dengan email'}</legend>
+            <label className="miro-field"><span>Email</span><input type="email" required autoComplete="email" value={email} {...focus('email')}
+              onChange={e => { setEmail(e.target.value); setSad(false); follow(e) }} onSelect={follow} onKeyUp={follow} onClick={follow} /></label>
+            <label className="miro-field"><span>Kata sandi</span><input type="password" required minLength={signup ? NEW_PASSWORD_MIN : 1} maxLength={256}
+              autoComplete={signup ? 'new-password' : 'current-password'} aria-describedby={signup ? hint : undefined} value={password} {...focus('secret')}
+              onChange={e => { setPassword(e.target.value); setSad(false) }} /></label>
+            {signup && <small id={hint} className="signin-hint" data-ok={!short || undefined}>
+              {short ? `Minimal ${NEW_PASSWORD_MIN} karakter${password ? ` · kurang ${NEW_PASSWORD_MIN - password.length}` : ''}.` : 'Panjang kata sandi sudah cukup.'} Setelah daftar, buka tautan konfirmasi di email Anda.
+            </small>}
+            <button className="button primary signin-submit" type="submit" aria-disabled={short || undefined}>{signup ? 'Buat akun' : 'Masuk'}</button>
+            {!signup && onForgot && <button type="button" className="link-button signin-forgot" onClick={() => void onForgot(email.trim())}>Lupa kata sandi?</button>}
+            <small className="signin-switch">{signup ? 'Sudah punya akun? ' : 'Belum punya akun? '}
+              <button type="button" className="link-button" onClick={() => pick(signup ? 'signin' : 'signup')}>{signup ? 'Masuk' : 'Daftar sekarang'}</button>
+            </small>
+          </fieldset>
+        </form>
       </>}
       <ol className="signin-steps" aria-label="Langkah memulai">
-        <li aria-current="step">Masuk</li><li>Siapkan pot</li><li>Amankan akun dengan 2FA</li>
+        <li aria-current="step">{signup ? 'Daftar' : 'Masuk'}</li><li>Siapkan pot</li><li>Amankan akun dengan 2FA</li>
       </ol>
     </div>
   </div>

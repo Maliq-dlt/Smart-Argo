@@ -48,7 +48,8 @@ export function stairCover(blocks: HTMLElement[], cols: number, rows: number, tr
 const TILES = 6 // mosaic tiles across one square
 const STOPS: [number, number[]][] = [[0, [195, 223, 149]], [.45, [111, 150, 86]], [1, [47, 90, 60]]]
 const IN = 70, SOLID = 160, DISSOLVE = 260, HOLD = 520, OUT = 520 // ms
-export function pixelTrail(section: HTMLElement, canvas: HTMLCanvasElement, video: HTMLVideoElement) {
+/** `source` returns what the hero shows right now: the live 3D canvas, or its poster before that. */
+export function pixelTrail(section: HTMLElement, canvas: HTMLCanvasElement, source: () => HTMLCanvasElement | HTMLImageElement | null) {
   if (!matchMedia('(pointer: fine) and (min-width: 768px) and (prefers-reduced-motion: no-preference)').matches) return () => {}
   const ctx = canvas.getContext('2d')!
   const mosaic = document.createElement('canvas'), mctx = mosaic.getContext('2d')!
@@ -75,14 +76,19 @@ export function pixelTrail(section: HTMLElement, canvas: HTMLCanvasElement, vide
   // One small draw of the whole frame per animation frame; each square then copies its own tiles.
   const paintMosaic = () => {
     mctx.globalCompositeOperation = 'source-over'
-    const vw = video.videoWidth, vh = video.videoHeight
-    if (video.readyState >= 2 && vw && vh) {
-      const sr = section.getBoundingClientRect(), vr = video.getBoundingClientRect(), k = TILES / cell
+    // The 3D layer is transparent around the device, so the sage stage goes down first; otherwise the tint below
+    // shows raw (highlighter lime). The device is already saturated, so only a little contrast is added.
+    mctx.fillStyle = '#a7b29c'; mctx.fillRect(0, 0, mosaic.width, mosaic.height)
+    const media = source()
+    const vw = media instanceof HTMLImageElement ? media.naturalWidth : media?.width ?? 0
+    const vh = media instanceof HTMLImageElement ? media.naturalHeight : media?.height ?? 0
+    if (media && vw && vh) {
+      const sr = section.getBoundingClientRect(), vr = media.getBoundingClientRect(), k = TILES / cell
       const s = Math.max(vr.width / vw, vr.height / vh), w = vw * s, h = vh * s
-      mctx.filter = 'contrast(1.25) saturate(1.3)'
-      mctx.drawImage(video, (vr.left - sr.left + (vr.width - w) / 2) * k, (vr.top - sr.top + (vr.height - h) / 2) * k, w * k, h * k)
+      mctx.filter = 'contrast(1.1)'
+      mctx.drawImage(media, (vr.left - sr.left + (vr.width - w) / 2) * k, (vr.top - sr.top + (vr.height - h) / 2) * k, w * k, h * k)
       mctx.filter = 'none'
-    } else { mctx.fillStyle = '#a7b29c'; mctx.fillRect(0, 0, mosaic.width, mosaic.height) }
+    }
     mctx.globalCompositeOperation = 'soft-light'
     mctx.fillStyle = tint!
     mctx.fillRect(0, 0, mosaic.width, mosaic.height)

@@ -22,6 +22,18 @@ test('guests use the app until they ask to sign in', () => {
   assert.equal(entryView({ ...base, guest: true, hash: '#masuk' }), 'gate')
 })
 
+test('a guest who signs in finishes the authenticator step at the gate', () => {
+  // Google returned a session that still needs its TOTP code: the guest flag must not skip the form.
+  assert.equal(entryView({ ...base, guest: true, mfaPending: true }), 'gate')
+  assert.equal(entryView({ ...base, guest: true, mfaPending: true, hash: '#profil' }), 'gate')
+})
+
+test('a sign-in return waits for its outcome before a guest enters', () => {
+  assert.equal(entryView({ ...base, guest: true, returning: true, ready: false }), 'loading')
+  assert.equal(entryView({ ...base, guest: true, returning: true }), 'app', 'a failed return leaves the guest where they were')
+  assert.equal(entryView({ ...base, guest: true, returning: true, signedIn: true }), 'app')
+})
+
 test('signed-in people never see the gate', () => assert.equal(entryView({ ...base, signedIn: true, hash: '#masuk' }), 'app'))
 
 test('gate and profile are simulator routes', () => {

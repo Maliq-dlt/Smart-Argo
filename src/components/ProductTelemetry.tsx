@@ -1,4 +1,5 @@
 import ProductExplanation from './ProductExplanation'
+import ProductCareHistory from './ProductCareHistory'
 import { useEffect, useRef, useState } from 'react'
 import type { OwnedProduct } from '../lib/productAccountClient'
 import { parseDeviceUnits, parseDeviceReadings, parsePublishedProfiles, type DeviceUnit, type DeviceReading, type PublishedProfile, type TelemetryClient } from '../lib/deviceTelemetryClient'
@@ -8,7 +9,7 @@ const names = { moisture: 'Indeks kelembapan', soil_temperature: 'Suhu tanah', s
 const states = { ok: 'Dilaporkan OK', error: 'Galat', not_measured: 'Tidak diukur' }
 const time = (value: string) => new Date(value).toLocaleString('id-ID', { timeZone: 'UTC' }) + ' UTC'
 
-export default function ProductTelemetry({ client, products, onSessionExpired }: { client: TelemetryClient; products: OwnedProduct[]; onSessionExpired: () => void }) {
+export default function ProductTelemetry({ client, products, onSessionExpired, version = 0, onUnitsChanged }: { client: TelemetryClient; products: OwnedProduct[]; onSessionExpired: () => void; version?: number; onUnitsChanged?: () => void }) {
   const [units,setUnits] = useState<DeviceUnit[]>([])
   const [profiles,setProfiles] = useState<PublishedProfile[]>([])
   const [selected,setSelected] = useState('')
@@ -35,12 +36,14 @@ export default function ProductTelemetry({ client, products, onSessionExpired }:
     Promise.all([client.rpc('my_device_units'),client.rpc('published_profile_versions')]).then(([u,p]) => {
       const nextUnits = parseDeviceUnits(u.units), nextProfiles = parsePublishedProfiles(p.profiles)
       if (generation.current !== request) return
-      setUnits(nextUnits); setProfiles(nextProfiles); setProfile(nextProfiles[0]?.id ?? '')
+      setUnits(nextUnits); setProfiles(nextProfiles); setProfile(current => nextProfiles.some(p => p.id === current) ? current : nextProfiles[0]?.id ?? '')
+      // A unit renamed, archived or re-placed elsewhere may no longer match the selected pair.
+      setSelected(current => nextUnits.some(u => `${u.unit_id}:${u.device_id}` === current) ? current : '')
     }).catch(err => failure(err,request)).finally(() => { if (generation.current===request) setPending(false) })
     return () => { requestCounter.current++ }
-    // The client remains stable for the lifetime of the signed-in panel.
+    // The client remains stable for the lifetime of the signed-in panel; `version` follows unit edits in ProductUnits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[client])
+  },[client, version])
 
   async function refresh(key: string) {
     const request = ++generation.current
@@ -73,6 +76,7 @@ export default function ProductTelemetry({ client, products, onSessionExpired }:
         </div></li>)}
       </ul></details>}
       {active && <ProductExplanation key={selected} client={client} unitId={active.unit_id} deviceId={active.device_id} onSessionExpired={onSessionExpired} />}
+      {active && <ProductCareHistory key={active.unit_id} client={client} unitId={active.unit_id} onSessionExpired={onSessionExpired} />}
       <form onSubmit={event => {
         event.preventDefault()
         const request = ++generation.current
@@ -82,7 +86,7 @@ export default function ProductTelemetry({ client, products, onSessionExpired }:
             if (!products.some(p => p.product_id===selectedProduct) || !profiles.some(p => p.id===profile) || !label.trim() || label.trim().length>120) throw new Error('Pilih produk, profil terbit, dan label unit yang valid.')
             await client.rpc('create_my_unit',{p_product_id:selectedProduct,p_profile_version_id:profile,p_label:label.trim()})
             const result = await client.rpc('my_device_units'); const nextUnits = parseDeviceUnits(result.units)
-            if (generation.current===request) { setUnits(nextUnits); setLabel(''); setMessage('Unit berhasil dibuat. Pilih unit untuk membaca data perangkat.') }
+            if (generation.current===request) { setUnits(nextUnits); setLabel(''); setMessage('Unit berhasil dibuat. Pilih unit untuk membaca data perangkat.'); onUnitsChanged?.() }
           } catch(err) { failure(err,request) } finally { if (generation.current===request) setPending(false) }
         })()
       }}><fieldset className="product-account-form" disabled={pending || !profiles.length || !products.length}><legend>Buat unit dari profil terbit</legend>

@@ -65,6 +65,8 @@ try{
   assert.equal(sql(`SELECT status FROM ownership_transfer WHERE product_id='${id}' ORDER BY created_at DESC LIMIT 1;`),'cancelled')
   report.push('public status, re-authenticated transfer code and cancellation passed')
   await ecosystemTab(page,'Unit & sensor')
+  const unitsReady=()=>page.waitForFunction(()=>document.getElementById('unit-overview-heading')?.closest('section')?.getAttribute('aria-busy')==='false')
+  await unitsReady()
   const devicePanel=telemetry(page)
   await pick(devicePanel,'Produk',id)
   await pick(devicePanel,'Profil tanaman',profileId)
@@ -89,6 +91,8 @@ try{
   assert.equal(await devicePanel.getByText(/belum tersinkron.*Usang/).count(),3)
   assert.equal(await devicePanel.getByText(/Diukur .* UTC · Diterima .* UTC/).count(),3)
   await page.reload(); await curtainOpen(page); await ecosystemTab(page,'Unit & sensor')
+  // The unit overview above loads in parallel and moves this panel; open the list once it has settled.
+  await unitsReady()
   await pick(devicePanel,'Unit & perangkat milik saya',unitKey)
   await devicePanel.locator('summary').filter({hasText:'3 bacaan terakhir'}).click()
   await devicePanel.getByText('Galat perangkat: Synthetic probe error',{exact:true}).waitFor()
