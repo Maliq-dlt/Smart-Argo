@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { motion } from './plantScene/kit.ts'
+import type { SimWeather } from '../lib/weather.ts'
 import type { SceneSpecies } from './plantScene/plants.ts'
 import { Scene, type SceneReadings } from './plantScene/scene.ts'
 import './plantScene/plantScene.css'
@@ -12,13 +13,15 @@ interface Props {
   hour: number
   /** When given, the three readings are written beside the part they describe. */
   readings?: SceneReadings
+  /** The sky over the pot; leave it out for a pot that does not see the weather. */
+  weather?: SimWeather
   /** A watering shows the can once per new id; an effect that is already running when the stage mounts is not replayed. */
   careEffect?: CareEffect | null
   label: string
 }
 
 /** The pot stage: a React shell around the imperative drawing in `plantScene/`. The drawing is driven only by these props. */
-export default function PlantScene({ species, day, planted, moisture, contact, hour, readings, careEffect, label }: Props) {
+export default function PlantScene({ species, day, planted, moisture, contact, hour, readings, weather, careEffect, label }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const sceneRef = useRef<Scene | null>(null)
   const fresh = useRef(false)
@@ -59,7 +62,7 @@ export default function PlantScene({ species, day, planted, moisture, contact, h
   useEffect(() => {
     const scene = sceneRef.current
     if (!scene) return
-    scene.set({ species, day, planted, moisture, contact, hour, readings })
+    scene.set({ species, day, planted, moisture, contact, hour, readings, weather })
     if (fresh.current) { fresh.current = false; scene.frame(0, performance.now() / 1000) }
   })
 

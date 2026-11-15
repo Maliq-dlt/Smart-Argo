@@ -26,6 +26,10 @@
 .dash-stage .reading-status { margin-top: 0; background: var(--st-plate); border-color: var(--st-line); color: var(--st-ink); }
 .dash-stage .reading-status[data-alert] { color: var(--warn); }
 .dash-stage .stage-scene { position: relative; z-index: 2; margin: 1rem 1.25rem 0; }
+.dash-stage .stage-weather { position: relative; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin: .75rem 1.25rem 0; color: var(--st-soft); font-size: .8125rem; }
+.dash-stage .stage-weather .segment-options { background: var(--st-plate); border-color: var(--st-line); }
+.dash-stage .stage-weather .segment-label { min-height: 2.25rem; padding: 0 .75rem; }
+.dash-stage .stage-weather-note { position: relative; z-index: 2; margin: .5rem 1.25rem 0; color: var(--st-soft); font-size: .875rem; }
 
 /* The clock sits at the foot of the stage like a player. */
 .dash-stage .dashboard-clock { position: relative; z-index: 2; margin: auto 1.25rem 1.25rem; padding: .625rem 1.125rem .625rem .625rem; display: grid; grid-template-columns: auto auto minmax(3rem, 1fr) auto; align-items: center; gap: .625rem 1rem; border-radius: 1.75rem; background: var(--st-plate); border: 1px solid var(--st-line); color: var(--st-ink); box-shadow: none; }
@@ -163,6 +167,7 @@
 @container (max-width: 40rem) {
   .dash-stage .plant-heading { padding: 1.125rem 1.125rem 0; }
   .dash-stage .stage-scene { margin: .75rem .75rem 0; }
+  .dash-stage .stage-weather, .dash-stage .stage-weather-note { margin-inline: .75rem; }
   .dash-stage .dashboard-clock { grid-template-columns: auto minmax(0, 1fr) auto; margin: .75rem .75rem .75rem; }
   .dash-stage .sample-wave { display: none; }
   .clock-time strong { font-size: 1.5rem; }

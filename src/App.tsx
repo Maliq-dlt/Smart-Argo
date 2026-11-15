@@ -15,6 +15,8 @@ import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription, SheetC
 import { SelectField } from './components/ui/select'
 import PlantPotVisualizer, { type CareEffect } from './components/PlantPotVisualizer'
 import type { SceneReadings } from './components/PlantScene'
+import { simulatedWeather, weatherNote, type SimWeather } from './lib/weather'
+import { readSimWeather, saveSimWeather } from './lib/weatherStore'
 import PlantMood from './components/PlantMood'
 import AgroMark from './components/AgroMark'
 import SessionReport from './components/SessionReport'
@@ -113,6 +115,8 @@ function Simulator() {
   useEffect(() => { if (account.signedIn && hash === '#masuk') location.replace('#statistik') }, [account.signedIn, hash])
   const currentPage = pages.find(p => p.id === page)!
   const [careEffect, setCareEffect] = useState<CareEffect | null>(null)
+  const [weather, setWeatherState] = useState<SimWeather>(readSimWeather)
+  const setWeather = (kind: SimWeather) => { setWeatherState(kind); saveSimWeather(kind) }
   const careId = useRef(0)
   const showCareEffect = (kind: CareEffect['kind']) => setCareEffect({ kind, id: ++careId.current })
   useEffect(() => {
@@ -371,6 +375,8 @@ function Simulator() {
   const awaitingPlant = journey && !sim.planted
   const { slope_per_h, eta_h, low } = result.evidence
   // The three readings the pot stage writes beside the part they describe; the same numbers the instruments below show.
+  // ponytail: every pot is treated as outdoors until Fase 4 gives each site its own placement (indoor pots then get no note).
+  const weatherLine = weatherNote(simulatedWeather(weather), 'outdoor')
   const sceneReadings: SceneReadings = {
     kelembapan: last.valid ? `${last.moisture.toLocaleString('id-ID')}/100` : 'Gagal',
     suhu: last.valid ? `${one(last.temp_c)} °C` : 'Gagal',
@@ -460,7 +466,7 @@ function Simulator() {
         </div>
         <div className="studio-grid">
           <div className="visual-stack"><SimulationOverview data={data} decision={result} />
-            <PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} species={species} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} readings={sceneReadings} />
+            <PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} species={species} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} readings={sceneReadings} weather={weather} />
             {!journey && <section className="panel timeline" aria-label="Ilustrasi fase tanaman"><div className="timeline-label"><span>Ilustrasi fase</span><strong>Hari <b>{String(day).padStart(2, '0')}</b><small> / {maxDay} HST</small></strong></div>
               <div className="timeline-controls"><button className={`icon-button play-button ${playing ? 'playing' : ''}`} aria-label={playing ? 'Jeda timelapse' : 'Putar timelapse'} onClick={() => { if (day >= maxDay) setDay(0); setPlaying(!playing) }}>{playing ? <Pause weight="fill" aria-hidden="true" /> : <Play weight="fill" aria-hidden="true" />}</button><button className="icon-button" aria-label="Reset timelapse" onClick={() => { setDay(0); setPlaying(false) }}><ArrowCounterClockwise aria-hidden="true" /></button></div>
               <div className="timeline-track"><input aria-label="Hari setelah tanam" type="range" min="0" max={maxDay} step="1" value={day} style={{ '--fill': `${day / maxDay * 100}%` } as CSSProperties} onChange={e => { setDay(Number(e.target.value)); setPlaying(false) }} /><div className="timeline-phases"><span>Awal tanam</span><span>Vegetatif</span><span>{species === 'bawang' ? 'Pembentukan umbi' : 'Berbunga'}</span><span>{species === 'bawang' ? 'Pematangan' : 'Berbuah'}</span></div></div>
@@ -484,7 +490,8 @@ function Simulator() {
         <div className="dash">
           <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, species)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
             species={species} day={developmentDay} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
-            hour={clockHour(data.now_h, session.clock)} period={skyPeriod(clockHour(data.now_h, session.clock))} readings={sceneReadings} careEffect={careEffect}>
+            hour={clockHour(data.now_h, session.clock)} period={skyPeriod(clockHour(data.now_h, session.clock))} readings={sceneReadings} careEffect={careEffect}
+            weather={weather} onWeather={setWeather} weatherNote={weatherLine}>
             <SessionClockCard samples={data.samples} time={clockTime(session.clock, data.now_h).slice(0, 5)} period={scenePeriod(data.now_h, session.clock)}
               state={awaitingPlant ? 'Menunggu bibit ditanam' : running ? 'Timelapse berjalan' : 'Waktu dijeda'} note={playbackNote} rate={sim.rate}
               running={running} disabled={simulationStopped(session)} onToggle={toggleRunning} />

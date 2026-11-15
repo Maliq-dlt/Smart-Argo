@@ -4,16 +4,17 @@ import { phaseAt } from '../lib/agronomyEngine'
 import { curated, phaseRanges, type CuratedId } from '../lib/species'
 import { type SessionClock } from '../lib/sessionClock'
 import { clockHour, scenePeriod, worldTime } from '../lib/simulation'
+import type { SimWeather } from '../lib/weather'
 
 export type { CareEffect }
-interface Props { careEffect?: CareEffect | null; clock: SessionClock; day: number; developmentDay?: number; elapsed?: number; planted?: boolean; journey?: boolean; species: CuratedId; moisture: number; contact: boolean; readings?: SceneReadings }
-export default function PlantPotVisualizer({ careEffect, clock, day: age, developmentDay: day = age, elapsed = 0, planted = true, journey = false, species, moisture, contact, readings }: Props) {
+interface Props { careEffect?: CareEffect | null; clock: SessionClock; day: number; developmentDay?: number; elapsed?: number; planted?: boolean; journey?: boolean; species: CuratedId; moisture: number; contact: boolean; readings?: SceneReadings; weather?: SimWeather }
+export default function PlantPotVisualizer({ careEffect, clock, day: age, developmentDay: day = age, elapsed = 0, planted = true, journey = false, species, moisture, contact, readings, weather }: Props) {
   const period = scenePeriod(elapsed, clock), phase = planted ? phaseAt(day, species) : 'Belum ditanam'
   return <section className="panel plant-panel" aria-labelledby="plant-heading">
     <div className="panel-heading"><h2 id="plant-heading"><Plant />Ilustrasi fase tanaman</h2><span>{age} HST</span></div>
     <div className="plant-scene-heading"><span className="scene-clock">{period} · {worldTime(elapsed, clock)}</span><span className="phase-label"><span className="status-dot" />{phase}</span></div>
     <div className="plant-stage-frame">
-      <PlantScene species={species} day={day} planted={planted} moisture={moisture} contact={contact} hour={clockHour(elapsed, clock)} readings={readings} careEffect={careEffect}
+      <PlantScene species={species} day={day} planted={planted} moisture={moisture} contact={contact} hour={clockHour(elapsed, clock)} readings={readings} weather={weather} careEffect={careEffect}
         label={`Pot ${curated(species).name.toLowerCase()}, ${phase}, hari ke-${age}.`} />
     </div>
     <p className="panel-footnote"><Info />{journey ? 'Model latihan: waktu dan perawatan memengaruhi perkembangan visual. Bukan prediksi tanaman nyata.' : 'Fase tumbuh ilustratif. Bentuk tanaman bukan hasil prediksi sensor.'}</p>

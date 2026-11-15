@@ -80,6 +80,8 @@
 
 ## Fase 3: Cuaca
 
+> Selesai 2026-11-15. Deviasi: tanpa antarmuka `WeatherProvider` (belum ada implementasinya; muncul saat fungsi diaktifkan di Fase 8); `isSimWeather`, `simKind`, `conditionFromWmo`, `SIM_WEATHERS` dan `src/lib/weatherStore.ts` (kunci `smart-agro.weather`) ditambahkan; tampilan tiap cuaca ada di `LOOKS` (`plantScene/sky.ts`); fungsi dipecah `handler.ts` + `index.ts` seperti fungsi lain, memuat `fromOpenMeteo` dari `src/lib/weather.ts`; semua pot dianggap `outdoor` untuk catatan sampai Fase 4 memberi tiap situs penempatannya.
+
 ### Tugas 3.1: Model dan penyedia cuaca
 
 **Files:**
@@ -88,24 +90,24 @@
 **Interfaces:**
 - Produces: `type Condition = 'cerah' | 'berawan' | 'mendung' | 'hujan' | 'badai'`; `type SimWeather = 'cerah' | 'berawan' | 'mendung' | 'hujan' | 'terik'`; `interface WeatherSnapshot { at: string; condition: Condition; tempC: number; humidity: number; cloud: number; windMs: number; rainMm: number; forecast: { inHours: number; condition: Condition; rainMm: number; tempC: number }[] }`; `interface WeatherProvider { snapshot(place: { lat: number; lon: number }): Promise<WeatherSnapshot> }`; `simulatedWeather(kind: SimWeather): WeatherSnapshot`; `fromOpenMeteo(json: unknown): WeatherSnapshot` (adapter murni, kode WMO ke `Condition`, nilai tak dikenal jatuh ke `berawan`); `weatherNote(w: WeatherSnapshot, placement: 'indoor' | 'outdoor' | 'rooftop'): string | null` (dalam ruangan `null`; `hujan ±N jam lagi: pertimbangkan menunda siram`; terik: `suhu tinggi: periksa media lebih sering`).
 
-- [ ] **Step 1:** Tes merah: adapter terhadap fixture rekaman Open-Meteo (kondisi, suhu, 6 jam prakiraan), kode WMO 0,1,2,3,45,51-67,80-82,95-99 dan nilai asing (`999`, `null`) tanpa melempar, `weatherNote` dalam ruangan selalu `null`, dan tidak menyebut dosis atau angka di luar snapshot.
-- [ ] **Step 2:** Implementasikan; tulis `docs/cuaca.md` (syarat tiap penyedia: Open-Meteo non-komersial 10.000/hari, BMKG izin tertulis dan atribusi, WeatherAPI.com 100.000/bulan komersial, MET Norway User-Agent) dan jalankan tes. Commit.
+- [x] **Step 1:** Tes merah: adapter terhadap fixture rekaman Open-Meteo (kondisi, suhu, 6 jam prakiraan), kode WMO 0,1,2,3,45,51-67,80-82,95-99 dan nilai asing (`999`, `null`) tanpa melempar, `weatherNote` dalam ruangan selalu `null`, dan tidak menyebut dosis atau angka di luar snapshot.
+- [x] **Step 2:** Implementasikan; tulis `docs/cuaca.md` (syarat tiap penyedia: Open-Meteo non-komersial 10.000/hari, BMKG izin tertulis dan atribusi, WeatherAPI.com 100.000/bulan komersial, MET Norway User-Agent) dan jalankan tes. Commit.
 
 ### Tugas 3.2: Lapisan cuaca di panggung dan kontrol demo
 
 **Files:**
 - Modify: `src/components/plantScene/scene.ts` (lapisan: awan menebal, tetes hujan, sinar dan riak panas, goyang angin), `src/components/plantScene/PlantScene.tsx` (prop `weather?: SimWeather`), `src/components/dashboard/PlantStage.tsx` (kontrol "Cuaca simulasi" sebagai segmented control, catatan konteks dari `weatherNote`), `tests/plantScene.test.ts`, `tests/plant-scene-browser.mjs`
 
-- [ ] **Step 1:** Tes merah (unit): `Scene.set({ weather })` menerima kelima nilai; `hujan` menaikkan jumlah tetes aktif; `cerah` nol tetes. Browser: tiap kondisi menghasilkan tangkapan tanpa error konsol; pilihan cuaca tersimpan di `localStorage` kunci `smart-agro.weather`.
-- [ ] **Step 2:** Implementasikan dan jalankan tes; tangkapan layar kelima kondisi siang/malam. Commit dan push.
+- [x] **Step 1:** Tes merah (unit): `Scene.set({ weather })` menerima kelima nilai; `hujan` menaikkan jumlah tetes aktif; `cerah` nol tetes. Browser: tiap kondisi menghasilkan tangkapan tanpa error konsol; pilihan cuaca tersimpan di `localStorage` kunci `smart-agro.weather`.
+- [x] **Step 2:** Implementasikan dan jalankan tes; tangkapan layar kelima kondisi siang/malam. Commit dan push.
 
 ### Tugas 3.3: Edge function `weather-forecast` (tidak di-deploy)
 
 **Files:**
 - Create: `supabase/functions/weather-forecast/index.ts`, `tests/weatherForecast.test.ts`
 
-- [ ] **Step 1:** Tes merah: validasi masukan (lat/lon di rentang, bukan angka ditolak), CORS terkunci ke `APP_ORIGIN`, galat penyedia menjadi `{ code: 'weather_unavailable' }`, dan **tidak ada** pemanggilan jaringan di tes (fetch disuntikkan, fixture rekaman).
-- [ ] **Step 2:** Implementasikan memakai `fromOpenMeteo` (impor `.ts` murni), tidak ditambahkan ke skrip deploy mana pun; catat di `docs/cuaca.md`. Commit.
+- [x] **Step 1:** Tes merah: validasi masukan (lat/lon di rentang, bukan angka ditolak), CORS terkunci ke `APP_ORIGIN`, galat penyedia menjadi `{ code: 'weather_unavailable' }`, dan **tidak ada** pemanggilan jaringan di tes (fetch disuntikkan, fixture rekaman).
+- [x] **Step 2:** Implementasikan memakai `fromOpenMeteo` (impor `.ts` murni), tidak ditambahkan ke skrip deploy mana pun; catat di `docs/cuaca.md`. Commit.
 
 ---
 

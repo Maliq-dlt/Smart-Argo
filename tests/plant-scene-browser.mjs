@@ -105,6 +105,33 @@ try {
   const lightest = Math.max(...sky.map(s => s.light)), night = sky.find(s => s.period === 'malam')
   ok(night && night.light < lightest * .6, `Night is darker than day: ${JSON.stringify(sky)}`)
 
+  // The demo weather: every sky draws, rain falls only in the rain, the note speaks only about rain and heat, and the choice is remembered.
+  {
+    const page = await open('#statistik', { seed: leafy })
+    const pick = name => page.locator('.stage-weather').getByRole('radio', { name, exact: true }).check()
+    const skyIs = kind => page.waitForFunction(k => document.querySelector('.plant-scene svg')?.getAttribute('data-weather') === k, kind)
+    for (const [name, kind, note] of [['Berawan', 'berawan', null], ['Mendung', 'mendung', null], ['Hujan', 'hujan', /sedang hujan/i], ['Terik', 'terik', /suhu tinggi/i], ['Cerah', 'cerah', null]]) {
+      await pick(name); await skyIs(kind)
+      await page.waitForTimeout(1800) // the springs settle
+      const drops = Number(await page.locator('.plant-scene svg').getAttribute('data-drops'))
+      ok(kind === 'hujan' ? drops > 0 : drops === 0, `${kind}: ${drops} streaks of rain`)
+      const lines = await page.locator('.stage-weather-note').allTextContents()
+      ok(note ? note.test(lines.join(' ')) : lines.length === 0, `${kind}: note ${JSON.stringify(lines)}`)
+      await page.locator('.plant-scene').screenshot({ path: `${output}/weather-${kind}.png` })
+    }
+    await pick('Hujan'); await skyIs('hujan')
+    ok(await page.evaluate(() => localStorage.getItem('smart-agro.weather')) === 'hujan', 'The choice is stored')
+    await page.reload(); await curtainOpen(page); await page.locator('.plant-scene svg').waitFor()
+    await skyIs('hujan')
+    ok(await page.locator('.stage-weather input[value=hujan]').isChecked(), 'The choice survives a reload')
+    ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'The weather control does not widen the page')
+    await page.close()
+    const narrow = await open('#statistik', { width: 320, seed: leafy, text: true, reducedMotion: 'reduce' })
+    ok(await narrow.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'The weather control fits at 320px with text at 200%')
+    await narrow.locator('.dash-stage').screenshot({ path: `${output}/stage-320-text200.png` })
+    await narrow.close()
+  }
+
   // Text at 200% never pushes the page wider than a phone.
   for (const width of [375, 320]) {
     const page = await open('#statistik', { width, seed: cabai, text: true, reducedMotion: 'reduce' })

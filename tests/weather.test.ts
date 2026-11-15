@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { conditionFromWmo, fromOpenMeteo, simKind, simulatedWeather, weatherNote, type SimWeather } from '../src/lib/weather.ts'
+import { conditionFromWmo, fromOpenMeteo, isSimWeather, simKind, simulatedWeather, weatherNote, type SimWeather } from '../src/lib/weather.ts'
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/open-meteo-forecast.json', import.meta.url), 'utf8'))
 const KINDS: SimWeather[] = ['cerah', 'berawan', 'mendung', 'hujan', 'terik']
@@ -71,4 +71,9 @@ test('a note quotes only numbers that are in the snapshot and never a dose', () 
     assert.ok(!/\bml\b|liter|dosis|gram/i.test(note), `no dose in: ${note}`)
     for (const digits of note.match(/\d+/g) ?? []) assert.ok(w.forecast.some(f => String(f.inHours) === digits), `"${digits}" is not an hour from the forecast: ${note}`)
   }
+})
+
+test('only the five demo skies are accepted from storage, and prototype keys are not', () => {
+  for (const kind of KINDS) assert.ok(isSimWeather(kind), kind)
+  for (const odd of ['badai', 'constructor', '__proto__', 'toString', '', ' cerah', null, undefined, 3, {}]) assert.ok(!isSimWeather(odd), String(odd))
 })

@@ -6,6 +6,9 @@ export type Condition = 'cerah' | 'berawan' | 'mendung' | 'hujan' | 'badai'
 /** What the demo control offers; `terik` is a clear sky that is also hot. */
 export type SimWeather = 'cerah' | 'berawan' | 'mendung' | 'hujan' | 'terik'
 export type Placement = 'indoor' | 'outdoor' | 'rooftop'
+export const SIM_WEATHERS: readonly SimWeather[] = ['cerah', 'berawan', 'mendung', 'hujan', 'terik']
+/** True for one of the five demo skies; a stored or typed value that is anything else is not. */
+export const isSimWeather = (x: unknown): x is SimWeather => typeof x === 'string' && (SIM_WEATHERS as readonly string[]).includes(x)
 
 export interface ForecastHour { inHours: number; condition: Condition; rainMm: number; tempC: number }
 export interface WeatherSnapshot {

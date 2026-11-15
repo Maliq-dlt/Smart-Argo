@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Spring, motion, ribbon, SH } from '../src/components/plantScene/kit.ts'
-import { nightFactor, orbit, paletteAt, unwrapHour } from '../src/components/plantScene/sky.ts'
+import { LOOKS, dropCount, nightFactor, orbit, paletteAt, unwrapHour } from '../src/components/plantScene/sky.ts'
 
 test('the session clock passing midnight moves the scene forward through dawn, never backwards through noon', () => {
   assert.ok(Math.abs(unwrapHour(23.9, 0.1) - 24.1) < 1e-9)
@@ -61,4 +61,15 @@ test('a spring lands on its target at once with reduced motion, and without it s
   let top = 0
   for (let i = 0; i < 180; i++) { bouncy.step(1 / 60); top = Math.max(top, bouncy.x) }
   assert.ok(top > 10.2, 'a low damping ratio does overshoot, so the parameter is real')
+})
+
+test('each weather has a look: rain only when it rains, the sky dims as it clouds over, and a hot day has no clouds to speak of', () => {
+  assert.deepEqual(Object.keys(LOOKS).sort(), ['berawan', 'cerah', 'hujan', 'mendung', 'terik'])
+  assert.equal(dropCount(LOOKS.cerah.rain), 0)
+  assert.equal(dropCount(LOOKS.mendung.rain), 0)
+  assert.ok(dropCount(LOOKS.hujan.rain) > 0)
+  assert.ok(dropCount(.5) > 0 && dropCount(.5) < dropCount(1), 'the number of streaks follows the rain')
+  assert.ok(LOOKS.cerah.dim < LOOKS.berawan.dim && LOOKS.berawan.dim < LOOKS.mendung.dim && LOOKS.mendung.dim < LOOKS.hujan.dim)
+  assert.ok(LOOKS.terik.cloud < LOOKS.cerah.cloud && LOOKS.terik.heat > 0 && LOOKS.cerah.heat === 0)
+  for (const look of Object.values(LOOKS)) for (const v of Object.values(look)) assert.ok(Number.isFinite(v) && v >= 0)
 })

@@ -1,3 +1,4 @@
+import type { SimWeather } from '../../lib/weather.ts'
 import { clamp, mix, smooth } from './kit.ts'
 
 /** Sky colours by hour: top, middle, bottom, far hills, near hills. The last row repeats the first so midnight closes the loop. */
@@ -31,3 +32,16 @@ export const nightFactor = (hour: number) => {
 /** The same clock hour on the day number closest to `current`, so the scene runs on through midnight (23.9 then 0.1
  * becomes 23.9 then 24.1) instead of rewinding through noon. */
 export const unwrapHour = (current: number, next: number) => next + Math.round((current - next) / 24) * 24
+
+/** How each weather changes the sky: cloud cover (0..1, six clouds in all), how far the sky and hills dim, rain, heat and the
+ * strength of the breeze. `cerah` is the stage as it was drawn before weather existed (three clouds, a bright sky). */
+export interface SkyLook { cloud: number; dim: number; rain: number; heat: number; wind: number }
+export const LOOKS: Record<SimWeather, SkyLook> = {
+  cerah: { cloud: .5, dim: 0, rain: 0, heat: 0, wind: 1 },
+  berawan: { cloud: .8, dim: .15, rain: 0, heat: 0, wind: 1.1 },
+  mendung: { cloud: 1, dim: .5, rain: 0, heat: 0, wind: 1.3 },
+  hujan: { cloud: 1, dim: .8, rain: 1, heat: 0, wind: 1.7 },
+  terik: { cloud: .17, dim: 0, rain: 0, heat: 1, wind: .6 },
+}
+/** Streaks of rain drawn for a rain strength, out of `max` prepared ones. */
+export const dropCount = (rain: number, max = 70) => Math.round(clamp(rain) * max)
