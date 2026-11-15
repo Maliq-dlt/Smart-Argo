@@ -1,4 +1,4 @@
-/** Pure helpers behind the dashboard: moisture zones, the sky's sun and moon, growth-phase steps and short "ago" labels. */
+/** Pure helpers behind the dashboard: moisture zones, the sky period, growth-phase steps and short "ago" labels. (The sun and moon are drawn by the pot stage, `components/plantScene/sky.ts`.) */
 import { curated, type CuratedId } from './species.ts'
 
 export type Zone = 'dry' | 'ok' | 'wet'
@@ -8,13 +8,6 @@ export const ZONE_NAME: Record<Zone, string> = { dry: 'kering', ok: 'ideal', wet
 export type SkyPeriod = 'pagi' | 'siang' | 'sore' | 'malam'
 /** Same boundaries as `scenePeriod` in simulation.ts (a test keeps them equal). */
 export const skyPeriod = (hour: number): SkyPeriod => hour < 5 || hour >= 19 ? 'malam' : hour < 10 ? 'pagi' : hour < 16 ? 'siang' : 'sore'
-
-/** A body along an arc, in percent of the stage. `hours` is time since it rose; it is visible for 12 hours. */
-export function orbit(hours: number) {
-  const p = Math.min(1, Math.max(0, hours / 12))
-  return { x: 28 + p * 68, y: 78 - Math.sin(p * Math.PI) * 60, opacity: hours < 0 || hours > 12 ? 0 : Math.min(1, hours * 2, (12 - hours) * 2) }
-}
-export const skyOrbits = (hour: number) => ({ sun: orbit(hour - 6), moon: orbit((hour + 6) % 24) })
 
 /** The journey's phases for a curated species, from the catalog (species.ts); `phaseAt` in agronomyEngine.ts reads the same table. */
 export function phaseSteps(id: CuratedId) {

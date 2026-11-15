@@ -1,30 +1,20 @@
-import { Info, Plant, Scan } from '@phosphor-icons/react'
-import { useState } from 'react'
-import PlantIllustration from './PlantIllustration'
-import SegmentedControl from './ui/segmented-control'
+import { Info, Plant } from '@phosphor-icons/react'
+import PlantScene, { type CareEffect, type SceneReadings } from './PlantScene'
 import { phaseAt } from '../lib/agronomyEngine'
-import { phaseRanges, type CuratedId } from '../lib/species'
+import { curated, phaseRanges, type CuratedId } from '../lib/species'
 import { type SessionClock } from '../lib/sessionClock'
-import SkyScene from './SkyScene'
-import { scenePeriod, worldTime } from '../lib/simulation'
+import { clockHour, scenePeriod, worldTime } from '../lib/simulation'
 
-export type CareEffect = { kind: 'plant' | 'water'; id: number }
-interface Props { careEffect?: CareEffect | null; clock: SessionClock; running: boolean; rate: number; day: number; developmentDay?: number; elapsed?: number; planted?: boolean; journey?: boolean; species: CuratedId; moisture: number; contact: boolean }
-export default function PlantPotVisualizer({ careEffect, clock, running, rate, day: age, developmentDay: day = age, elapsed = 0, planted = true, journey = false, species, moisture, contact }: Props) {
-  const [view, setView] = useState('plant')
-  const showSensors = view === 'roots'
-  const period = scenePeriod(elapsed, clock)
+export type { CareEffect }
+interface Props { careEffect?: CareEffect | null; clock: SessionClock; day: number; developmentDay?: number; elapsed?: number; planted?: boolean; journey?: boolean; species: CuratedId; moisture: number; contact: boolean; readings?: SceneReadings }
+export default function PlantPotVisualizer({ careEffect, clock, day: age, developmentDay: day = age, elapsed = 0, planted = true, journey = false, species, moisture, contact, readings }: Props) {
+  const period = scenePeriod(elapsed, clock), phase = planted ? phaseAt(day, species) : 'Belum ditanam'
   return <section className="panel plant-panel" aria-labelledby="plant-heading">
     <div className="panel-heading"><h2 id="plant-heading"><Plant />Ilustrasi fase tanaman</h2><span>{age} HST</span></div>
-    <div className="plant-scene-heading"><span className="scene-clock">{period} · {worldTime(elapsed, clock)}</span><span className="phase-label"><span className="status-dot" />{planted ? phaseAt(day, species) : 'Belum ditanam'}</span></div>
-    <div className="plant-canvas" data-period={period}>
-      <SkyScene key={`${clock.startedAtMs}-${clock.offsetMinutes}`} worldClock={clock} elapsed={elapsed} running={running} rate={rate} />
-      <PlantIllustration day={day} age={age} species={species} moisture={moisture} contact={contact} planted={planted} showSensors={showSensors} shellOpacity={showSensors ? 0 : 1} careEffect={careEffect} />
-      {/* Spatial Product Showcase: https://21st.dev/@daiwiikharihar/components/spatial-product-showcase */}
-      <div className="plant-view-switch"><SegmentedControl label="Tampilan pot" value={view} onValueChange={setView} options={[
-        { value: 'plant', label: <><Plant aria-hidden="true" />Tanaman</> },
-        { value: 'roots', label: <><Scan aria-hidden="true" />Penampang</> },
-      ]} /></div>
+    <div className="plant-scene-heading"><span className="scene-clock">{period} · {worldTime(elapsed, clock)}</span><span className="phase-label"><span className="status-dot" />{phase}</span></div>
+    <div className="plant-stage-frame">
+      <PlantScene species={species} day={day} planted={planted} moisture={moisture} contact={contact} hour={clockHour(elapsed, clock)} readings={readings} careEffect={careEffect}
+        label={`Pot ${curated(species).name.toLowerCase()}, ${phase}, hari ke-${age}.`} />
     </div>
     <p className="panel-footnote"><Info />{journey ? 'Model latihan: waktu dan perawatan memengaruhi perkembangan visual. Bukan prediksi tanaman nyata.' : 'Fase tumbuh ilustratif. Bentuk tanaman bukan hasil prediksi sensor.'}</p>
     <details className="phase-guide"><summary>Acuan fase per HST</summary><div>

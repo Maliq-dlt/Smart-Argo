@@ -1,0 +1,12 @@
+/* The pot stage. The drawing is an illustration and carries its own sky and palette (see plantScene/*.ts); this file only
+ * sizes it. On a narrow container the picture is cropped at the sides (the SVG uses `slice`) and the readings grow, so the
+ * numbers stay legible at phone width. */
+.plant-scene { container-type: inline-size; min-width: 0; overflow: hidden; border-radius: 1.25rem; line-height: 0; background: #14242c; }
+.plant-scene > svg { display: block; width: 100%; height: auto; aspect-ratio: 800 / 560; }
+.plant-scene :where(.rl, .rv) { font-family: var(--font-ui); font-variant-numeric: lining-nums tabular-nums; }
+.plant-scene .rv { letter-spacing: -.01em; }
+@container (max-width: 34rem) {
+  .plant-scene > svg { aspect-ratio: 4 / 3.4; }
+  .plant-scene .rl { font-size: 20px; transform: translateY(-2px); }
+  .plant-scene .rv { font-size: 30px; transform: translateY(6px); }
+}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { phaseAt } from '../src/lib/agronomyEngine.ts'
-import { agoLabel, orbit, phaseIndex, phaseSteps, skyOrbits, skyPeriod, zoneOf } from '../src/lib/dashboardFacts.ts'
+import { agoLabel, phaseIndex, phaseSteps, skyPeriod, zoneOf } from '../src/lib/dashboardFacts.ts'
 import { scenePeriod } from '../src/lib/simulation.ts'
 
 test('zones split at the profile thresholds: below low is dry, above wet is wet, the limits themselves are ideal', () => {
@@ -16,14 +16,6 @@ test('the sky period uses the same boundaries as the simulator scene for every h
     const elapsed = (hour - 6 + 24) % 24 // with no clock, clockHour is (6 + elapsed) % 24
     assert.equal(skyPeriod(hour), scenePeriod(elapsed).toLowerCase(), `hour ${hour}`)
   }
-})
-
-test('the sun is up between 06 and 18 and the moon between 18 and 06, never both at full opacity', () => {
-  assert.equal(skyOrbits(12).sun.opacity, 1)
-  assert.equal(skyOrbits(12).moon.opacity, 0)
-  assert.equal(skyOrbits(0).moon.opacity, 1)
-  assert.equal(skyOrbits(0).sun.opacity, 0)
-  assert.ok(orbit(6).y < orbit(0).y, 'noon is higher than sunrise')
 })
 
 test('phase steps agree with phaseAt on both sides of every boundary, for chili and shallot', () => {

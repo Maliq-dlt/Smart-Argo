@@ -14,6 +14,7 @@ import { Popover, PopoverTrigger, PopoverContent, PopoverClose } from './compone
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription, SheetClose } from './components/ui/sheet'
 import { SelectField } from './components/ui/select'
 import PlantPotVisualizer, { type CareEffect } from './components/PlantPotVisualizer'
+import type { SceneReadings } from './components/PlantScene'
 import PlantMood from './components/PlantMood'
 import AgroMark from './components/AgroMark'
 import SessionReport from './components/SessionReport'
@@ -158,7 +159,6 @@ function Simulator() {
   const result = evaluate(data), last = data.samples.at(-1)!
   const species = speciesOfCrop(data.profile.crop), maxDay = curated(species).maxDay
   const phase = phaseAt(day, species), phRow = [...data.samples].reverse().find(r => r.valid && r.ph !== null)
-  const phFresh = phRow && data.now_h - phRow.t_h <= 24 && data.profile.ph_validated
   const ageMinutes = Math.round((data.now_h - last.t_h) * 60)
   const dataGood = last.valid && data.now_h - last.t_h <= 5 / 60 && result.decision !== 'PERIKSA_SENSOR'
   const blocked = ['KALIBRASI_LOKAL', 'PULIHKAN_DATA', 'PERIKSA_SENSOR'].includes(result.decision)
@@ -370,6 +370,13 @@ function Simulator() {
   // Dashboard facts, all straight from the engine and the session; nothing here is estimated for display.
   const awaitingPlant = journey && !sim.planted
   const { slope_per_h, eta_h, low } = result.evidence
+  // The three readings the pot stage writes beside the part they describe; the same numbers the instruments below show.
+  const sceneReadings: SceneReadings = {
+    kelembapan: last.valid ? `${last.moisture.toLocaleString('id-ID')}/100` : 'Gagal',
+    suhu: last.valid ? `${one(last.temp_c)} °C` : 'Gagal',
+    ph: phRow?.ph != null ? one(phRow.ph) : '—',
+    alert: { kelembapan: !last.valid || last.moisture <= low, suhu: !last.valid || last.temp_c >= data.profile.hot_c },
+  }
   const validShare = data.samples.length ? Math.round(data.samples.filter(s => s.valid).length / data.samples.length * 100) : 0
   const openCare = (event: MouseEvent<HTMLAnchorElement>) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) pendingCare.current = true }
   // At most three facts, in order of use; the current readings are on the stage and in the chart already.
@@ -453,7 +460,7 @@ function Simulator() {
         </div>
         <div className="studio-grid">
           <div className="visual-stack"><SimulationOverview data={data} decision={result} />
-            <PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} running={running} rate={sim.rate} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} species={species} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} />
+            <PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} species={species} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} readings={sceneReadings} />
             {!journey && <section className="panel timeline" aria-label="Ilustrasi fase tanaman"><div className="timeline-label"><span>Ilustrasi fase</span><strong>Hari <b>{String(day).padStart(2, '0')}</b><small> / {maxDay} HST</small></strong></div>
               <div className="timeline-controls"><button className={`icon-button play-button ${playing ? 'playing' : ''}`} aria-label={playing ? 'Jeda timelapse' : 'Putar timelapse'} onClick={() => { if (day >= maxDay) setDay(0); setPlaying(!playing) }}>{playing ? <Pause weight="fill" aria-hidden="true" /> : <Play weight="fill" aria-hidden="true" />}</button><button className="icon-button" aria-label="Reset timelapse" onClick={() => { setDay(0); setPlaying(false) }}><ArrowCounterClockwise aria-hidden="true" /></button></div>
               <div className="timeline-track"><input aria-label="Hari setelah tanam" type="range" min="0" max={maxDay} step="1" value={day} style={{ '--fill': `${day / maxDay * 100}%` } as CSSProperties} onChange={e => { setDay(Number(e.target.value)); setPlaying(false) }} /><div className="timeline-phases"><span>Awal tanam</span><span>Vegetatif</span><span>{species === 'bawang' ? 'Pembentukan umbi' : 'Berbunga'}</span><span>{species === 'bawang' ? 'Pematangan' : 'Berbuah'}</span></div></div>
@@ -476,12 +483,8 @@ function Simulator() {
       {page === 'statistics' && <div className="statistics-page">
         <div className="dash">
           <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, species)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
-            species={species} day={developmentDay} age={day} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
-            hour={clockHour(data.now_h, session.clock)} period={skyPeriod(clockHour(data.now_h, session.clock))} readings={{
-              moisture: { label: 'Kelembapan media', value: last.valid ? last.moisture.toLocaleString('id-ID') : 'Gagal', unit: last.valid ? '/100' : undefined, note: `Batas siram ${low} · basah ${result.evidence.wet}`, alert: !last.valid || last.moisture <= low },
-              temperature: { label: 'Suhu tanah', value: last.valid ? one(last.temp_c) : 'Gagal', unit: last.valid ? '°C' : undefined, note: `Batas panas ${one(data.profile.hot_c)} °C`, alert: !last.valid || last.temp_c >= data.profile.hot_c },
-              ph: { label: 'pH zona akar', value: phRow?.ph != null ? one(phRow.ph) : '—', note: !phRow ? 'Belum diukur' : !data.profile.ph_validated ? 'Belum tervalidasi' : phFresh ? 'Tervalidasi' : 'Lebih dari 24 jam lalu' },
-            }}>
+            species={species} day={developmentDay} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
+            hour={clockHour(data.now_h, session.clock)} period={skyPeriod(clockHour(data.now_h, session.clock))} readings={sceneReadings} careEffect={careEffect}>
             <SessionClockCard samples={data.samples} time={clockTime(session.clock, data.now_h).slice(0, 5)} period={scenePeriod(data.now_h, session.clock)}
               state={awaitingPlant ? 'Menunggu bibit ditanam' : running ? 'Timelapse berjalan' : 'Waktu dijeda'} note={playbackNote} rate={sim.rate}
               running={running} disabled={simulationStopped(session)} onToggle={toggleRunning} />

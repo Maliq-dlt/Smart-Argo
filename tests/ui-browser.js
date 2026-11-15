@@ -76,8 +76,7 @@ try {
   await plantButton.focus(); await page.keyboard.down('Space')
   await page.waitForFunction(() => Math.abs(new DOMMatrixReadOnly(getComputedStyle(document.querySelector('.plant-seed')).transform).a - .97) < .001)
   await page.keyboard.up('Space')
-  await page.locator('.planting-animation').waitFor()
-  assert.equal(await page.locator('.plant-growth').evaluate(e => getComputedStyle(e).animationName), 'sprout-in')
+  await page.locator('.plant-scene svg').waitFor()
   assert.equal((await active(page)).simulation.planted, true)
   await choose(page, 'Laju waktu sensor', 'Cepat')
   const before = (await active(page)).data.now_h
@@ -109,7 +108,7 @@ try {
   assert((await active(page)).data.now_h > beforeNavigation, 'Page navigation must keep simulation time running')
   const beforeWater = await active(page)
   await page.getByRole('button', { name: 'Siram 150 mL', exact: true }).click()
-  await page.locator('.watering-animation').waitFor()
+  await page.locator('.plant-scene svg[data-pouring]').waitFor()
   const afterWater = await active(page)
   assert.deepEqual(afterWater.data.samples, beforeWater.data.samples)
   assert.equal(afterWater.simulation.growthHours, beforeWater.simulation.growthHours)
@@ -123,8 +122,8 @@ try {
   assert.equal(new URL(page.url()).hash, '#terminal')
   assert.equal(await page.locator('.analysis-toolbar, .device-panel, .session-comparison').count(), 0)
   await page.goBack()
-  await page.locator('.plant-canvas').waitFor()
-  assert.equal(await page.locator('.care-animation').count(), 0, 'Navigation must not replay an old care effect')
+  await page.locator('.plant-scene svg').waitFor()
+  assert.equal(await page.locator('.plant-scene [data-pouring]').count(), 0, 'Navigation must not replay an old care effect')
 
 
   await page.getByRole('button', { name: 'Pengaturan waktu & sampel', exact: true }).click()
@@ -277,7 +276,8 @@ try {
     assert.equal(await mobilePlant.evaluate(e => new DOMMatrixReadOnly(getComputedStyle(e).transform).a), 1)
     await mobile.keyboard.up('Space')
     await mobile.getByRole('button', { name: 'Jeda', exact: true }).click()
-    assert.equal(await mobile.locator('.care-animation').evaluate(e => getComputedStyle(e).display), 'none')
+    assert.equal(await mobile.locator('.plant-scene svg[data-pouring]').count(), 0, 'Reduced motion plays no pouring animation')
+    assert.equal(await mobile.locator('.plant-scene svg').evaluate(e => e.scrollWidth <= e.parentElement.clientWidth + 1), true)
     // Observe a second sample before checking the analysis disclosure.
     await mobile.getByRole('button', { name: 'Pengaturan waktu & sampel', exact: true }).click()
     await mobile.getByRole('button', { name: '+30 menit', exact: true }).click()

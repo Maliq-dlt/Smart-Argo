@@ -37,10 +37,8 @@
   --soil-dry: #998169; --soil-wet: #4a3b32; --soil-grain: #baa081; --soil-layer: #8e745e; --root: #dbc49d;
   --stem: #5b7a52; --leaf: #52714b; --leaf-light: #789367; --leaf-edge: #3f624d; --leaf-vein: #a3b383;
   --flower: #f9f7de; --flower-edge: #a6aa7b; --flower-center: #d5b463; --chili-ripe: #bd513d; --onion: #b57681; --onion-dark: #8e5368;
-  --wire: #5a625d; --steel: #c2c8c5; --sensor-green: #3e6261; --sensor-edge: #244d45; --sensor-mark: #d0b87a; --sensor-head: #74766d;
-  --label-rule: #b5bab0; --plant-shadow: rgb(24 33 27 / .1); --forest-line: rgb(24 33 27 / .1);
-  --sky-day: #dfe9e6; --sky-horizon: #f1f2e8; --sky-night: #263845; --sky-night-horizon: #465560;
-  --sky-sun: #f2cf73; --sky-moon: #e6ecd1; --sky-cloud: #ffffff; --scene-ink: #293f3e; --scene-muted: #405c58;
+ --steel: #c2c8c5; --sensor-green: #3e6261; --sensor-edge: #244d45; --sensor-mark: #d0b87a; --sensor-head: #74766d;
+ --plant-shadow: rgb(24 33 27 / .1); --forest-line: rgb(24 33 27 / .1);
 }
 :root[data-theme=dark] {
   color-scheme: dark;
@@ -55,9 +53,7 @@
   --shadow-sm: 0 1px 2px rgb(0 0 0 / .3);
   --shadow: 0 1px 2px rgb(0 0 0 / .25), 0 16px 36px -18px rgb(0 0 0 / .6);
   --shadow-pop: 0 24px 60px -18px rgb(0 0 0 / .7), 0 2px 8px rgb(0 0 0 / .3);
-  --label-rule: #6f8980; --plant-shadow: rgb(0 0 0 / .28); --forest-line: rgb(232 237 230 / .1);
-  --sky-day: #5d7378; --sky-horizon: #78817a; --sky-night: #15222c; --sky-night-horizon: #2f3d45;
-  --scene-ink: #eef2ed; --scene-muted: #dce4de;
+ --plant-shadow: rgb(0 0 0 / .28); --forest-line: rgb(232 237 230 / .1);
 }
 
 /* ─── Base ───────────────────────────────────────────────────────────────── */
@@ -334,40 +330,6 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .reading-status i::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: inherit; animation: ping 2.4s var(--ease) infinite; }
 .reading-status[data-alert] { color: var(--warn); } .reading-status[data-alert] i { background: var(--warn); }
 @keyframes ping { 70%, 100% { transform: scale(2.6); opacity: 0; } }
-.plant-stage { position: relative; aspect-ratio: 900 / 560; margin-top: -1.5rem; }
-.stage-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.stage-lines path { fill: none; stroke: var(--line-strong); stroke-width: 1.25; vector-effect: non-scaling-stroke; }
-.stage-dot { fill: var(--raised); stroke: var(--primary); stroke-width: 2; vector-effect: non-scaling-stroke; }
-.stage-dot-halo { fill: color-mix(in srgb, var(--accent-2) 40%, transparent); }
-.stage-lines [data-alert] .stage-dot { stroke: var(--warn); }
-.stage-lines [data-alert] .stage-dot-halo { fill: color-mix(in srgb, var(--warn) 20%, transparent); }
-.lens-orbit { fill: none; stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 2 7; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; animation: orbit 90s linear infinite; }
-@keyframes orbit { to { rotate: 360deg; } }
-.stage-figure { position: absolute; z-index: 1; }
-.stage-figure > svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.lens { position: absolute; z-index: 2; margin: 0; aspect-ratio: 1; border-radius: 50%; padding: 4%; background: radial-gradient(circle at 32% 24%, rgb(255 255 255 / .85), rgb(255 255 255 / .28) 62%); border: 1px solid rgb(255 255 255 / .75); box-shadow: 0 0 0 .625rem rgb(255 255 255 / .22), 0 0 0 calc(.625rem + 1px) var(--line), 0 28px 60px -24px rgb(24 33 27 / .45); backdrop-filter: blur(8px); }
-:root[data-theme=dark] .lens { background: radial-gradient(circle at 32% 24%, rgb(255 255 255 / .16), rgb(255 255 255 / .04) 62%); border-color: rgb(255 255 255 / .14); box-shadow: 0 0 0 .625rem rgb(255 255 255 / .04), 0 0 0 calc(.625rem + 1px) var(--line), 0 28px 60px -24px rgb(0 0 0 / .7); }
-.lens-glass { width: 100%; height: 100%; overflow: hidden; border-radius: 50%; background: var(--surface); box-shadow: inset 0 2px 14px rgb(24 33 27 / .16); }
-.lens-glass > svg { display: block; width: 100%; height: 100%; }
-.lens .svg-labels { display: none; }
-.stage-callout { position: absolute; z-index: 3; translate: 0 -100%; display: grid; gap: .125rem; padding-bottom: .5rem; max-width: 22%; }
-.stage-callout small { color: var(--muted); font-size: .75rem; white-space: nowrap; }
-.stage-callout strong { display: flex; align-items: baseline; font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100; font-size: clamp(1.5rem, 3.6cqi, 2.375rem); line-height: 1.05; letter-spacing: -.025em; font-variant-numeric: lining-nums; white-space: nowrap; }
-.stage-callout strong span { margin-left: .25rem; font-family: var(--font-ui); font-size: .8125rem; font-weight: 500; letter-spacing: 0; color: var(--muted); }
-.stage-callout em { font-style: normal; color: var(--faint); font-size: .75rem; }
-.stage-callout[data-alert] strong { color: var(--warn); }
-.stage-callout.is-lens { max-width: 30%; }
-@container (max-width: 40rem) {
-  .plant-stage { aspect-ratio: auto; margin-top: .75rem; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-areas: "lens figure" "facts facts"; align-items: center; gap: 1rem .5rem; }
-  .stage-lines { display: none; }
-  .stage-figure { position: relative; grid-area: figure; inset: auto !important; width: 100% !important; height: auto !important; aspect-ratio: 320 / 410; max-height: 20rem; }
-  .lens { position: relative; grid-area: lens; inset: auto !important; width: 100% !important; max-width: 11rem; justify-self: center; }
-  .stage-callout { position: relative; inset: auto !important; translate: none; max-width: none; padding: .75rem .875rem; border-radius: var(--r-tile); background: var(--raised); border: 1px solid var(--line); }
-  .plant-stage { grid-template-areas: "lens figure" "moisture moisture" "temperature ph"; }
-  .callout-moisture { grid-area: moisture; } .callout-temperature { grid-area: temperature; } .callout-ph { grid-area: ph; }
-  .stage-callout small { white-space: normal; }
-  .stage-callout.is-lens { max-width: none; } /* the desktop 30% cap would otherwise outrank the reset above */
-}
 
 .pending-water { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding: .875rem .875rem .875rem 1.125rem; border-radius: var(--r-tile); background: var(--water-soft); border: 1px solid color-mix(in srgb, var(--water) 22%, transparent); }
 .pending-water > div { display: flex; align-items: center; gap: .625rem; min-width: 0; }
@@ -512,13 +474,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .plant-panel { overflow: hidden; }
 .plant-scene-heading { display: flex; justify-content: space-between; gap: 1rem; padding: .375rem 1.5rem 0; color: var(--muted); font-size: .8125rem; }
 .phase-label { display: inline-flex; align-items: center; gap: .5rem; }
-.plant-canvas { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 32rem; margin: .875rem .875rem 0; border-radius: 1.375rem; color: var(--scene-ink); }
-.plant-canvas > svg { position: relative; z-index: 1; display: block; width: 100%; max-height: 30rem; transition: filter 1s linear; }
-.plant-canvas[data-period=Malam] > svg { filter: brightness(.78) saturate(.8); }
-.plant-canvas .svg-labels { fill: var(--scene-muted); font-family: var(--font-ui); font-size: 11px; }
-.plant-canvas[data-period=Malam] { --scene-ink: #e4ede5; --scene-muted: #c3d0cb; --wire: #c3d0cb; --label-rule: #c3d0cb; }
-.plant-view-switch { position: absolute; left: 50%; bottom: 1rem; z-index: 3; translate: -50% 0; }
-.plant-view-switch .segment-options { background: var(--glass); backdrop-filter: blur(10px); box-shadow: var(--shadow); }
+.plant-stage-frame { margin: .625rem 1rem 0; }
 .panel-footnote { display: flex; align-items: flex-start; gap: .5rem; padding: .875rem 1.5rem; color: var(--muted); font-size: .75rem; }
 .panel-footnote svg { width: 1rem; height: 1rem; margin-top: .0625rem; }
 .phase-guide { border-top: 1px solid var(--line); }
@@ -528,34 +484,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .phase-guide li { display: grid; padding: .625rem .75rem; border-radius: var(--r-tile); background: var(--surface); }
 .phase-guide li strong { color: var(--ink); font-weight: 500; }
 
-.sky-world, .sky-day-layer, .sky-night-layer { position: absolute; inset: 0; pointer-events: none; }
-.sky-world { z-index: 0; overflow: clip; }
-.sky-day-layer { background: linear-gradient(var(--sky-day), var(--sky-horizon) 88%); }
-.sky-night-layer { background: linear-gradient(var(--sky-night), var(--sky-night-horizon)); }
-.sky-orbit { position: absolute; top: 4rem; left: 1.5rem; right: 1.5rem; height: 12rem; }
-.orb { position: absolute; top: 0; margin-left: -1.25rem; }
-.orb svg { width: 2.5rem; height: 2.5rem; }
-.sun-orb { color: var(--sky-sun); filter: drop-shadow(0 0 1rem var(--sky-sun)); }
-.moon-orb { color: var(--sky-moon); }
-.sky-stars { position: absolute; top: 4rem; left: 25%; right: 12%; text-align: center; font-size: 1.5rem; letter-spacing: 1.4rem; color: var(--sky-moon); }
-.scene-cloud { position: absolute; width: 5.75rem; height: 3rem; color: var(--sky-cloud); opacity: .75; animation: cloud-float 36s ease-in-out infinite alternate; }
-.cloud-one { top: 8rem; left: 12%; } .cloud-two { top: 5rem; right: 12%; animation-delay: -13s; } .cloud-three { top: 11rem; right: 36%; scale: .7; animation-delay: -24s; }
-.plant-canvas[data-period=Malam] .scene-cloud { opacity: .18; }
-@keyframes cloud-float { from { transform: translateX(-1rem); } to { transform: translateX(1.5rem); } }
-.plant-growth { transform-origin: 225px 311px; animation: sway 5s ease-in-out infinite alternate; }
-.plant-growth.is-planting { animation: sprout-in 1.1s var(--ease) both; }
-.care-animation { pointer-events: none; }
-.planting-seed { transform-origin: 226px 308px; animation: seed-in .75s var(--ease) both; }
-.watering-can { transform-origin: 352px 210px; animation: can-pour 1.5s var(--ease) both; }
-.water-drop { opacity: 0; animation: water-fall .8s linear both; }
-.soil-ripple { transform-box: fill-box; transform-origin: center; opacity: 0; animation: soil-ripple .8s .55s var(--ease) both; }
-.plant-canvas .plant-shell { transition: opacity .24s ease; }
 @keyframes sway { from { transform: rotate(-1deg); } to { transform: rotate(1deg); } }
-@keyframes seed-in { 0% { opacity: 0; transform: translateY(-65px) rotate(-35deg); } 25% { opacity: 1; } 75% { opacity: 1; transform: translateY(0) rotate(0); } 100% { opacity: 0; transform: translateY(4px); } }
-@keyframes sprout-in { 0%, 40% { opacity: 0; transform: scale(.05); } 100% { opacity: 1; transform: scale(1); } }
-@keyframes can-pour { 0% { opacity: 0; transform: translate(14px, -12px) rotate(10deg); } 20%, 70% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translate(10px, -8px) rotate(8deg); } }
-@keyframes water-fall { 0% { opacity: 0; transform: translate(0, 0) scale(.7); } 15%, 80% { opacity: .85; } 100% { opacity: 0; transform: translate(-42px, 104px) scale(.8); } }
-@keyframes soil-ripple { 15% { opacity: .6; } 100% { opacity: 0; transform: scaleX(1.8); } }
 
 .timeline { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: .75rem 1.25rem; padding: 1.125rem 1.375rem; }
 .timeline-label { display: grid; gap: .125rem; font-size: .8125rem; color: var(--muted); }
@@ -1098,7 +1027,7 @@ a.menu-item { text-decoration: none; }
   .studio-reading strong { font-size: 1.5rem; }
   .timeline { grid-template-columns: auto minmax(0, 1fr); }
   .timeline-track { grid-column: 1 / -1; }
-  .plant-canvas { min-height: 24rem; margin: .625rem .625rem 0; }
+  .plant-stage-frame { margin: .625rem .625rem 0; }
   .phase-guide ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .point-detail { grid-template-columns: minmax(0, 1fr); }
   .log-line { grid-template-columns: minmax(0, 1fr); gap: 0; }
@@ -1132,12 +1061,10 @@ a.menu-item { text-decoration: none; }
      would make every property transition, e.g. html font-size lagging a text-size change. */
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
   .button:active:not(:disabled), .icon-button:active:not(:disabled), .ui-select-trigger:active { transform: none; }
-  .care-animation { display: none; }
-  .plant-growth, .plant-growth.is-planting, .scene-cloud, .lens-orbit { animation: none !important; }
   .spotlight-card::after { content: none; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .ui-overlay, .app-rail, .lens, .plant-view-switch .segment-options { backdrop-filter: none; }
+  .ui-overlay, .app-rail { backdrop-filter: none; }
   .app-rail { background: var(--raised); }
 }
 
