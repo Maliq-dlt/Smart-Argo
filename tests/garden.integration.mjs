@@ -171,4 +171,47 @@ await test('Garden: private sites, slots and plant cycles, one history, and numb
     assert.equal((await addSite(d, { p_name: 'Kebun terlalu besar', p_kind: 'garden', p_placement: 'outdoor', p_zones: ['Z'] })).code, 'limit_reached', '61 slots are too many')
     assert.equal(sql(`SELECT count(*) FROM garden_slot WHERE account_id='${d.id}'`), '60')
   })
+
+  // Plant numbers are one supply for the whole service (the code is a single integer), so nobody may be able to use them all up.
+  // The filler rows are closed cycles written straight into the table, numbered high above anything a real plant gets, and marked as failures.
+  const fill = (who, slot, species, count, age) => sql(`INSERT INTO plant_cycle(slot_id, account_id, species_id, plant_no, nickname, planted_on, ended_on, outcome, created_at)
+    SELECT '${slot}', '${who.id}', ${species}, (SELECT greatest(coalesce(max(plant_no), 0), 500000) FROM plant_cycle WHERE species_id = ${species}) + g, 'Isi ' || g, current_date - 9, current_date - 5, 'gagal', clock_timestamp() - interval '${age}'
+    FROM generate_series(1, ${count}) g`)
+
+  await t.test('at most 30 new plants a day, and a refused replacement leaves the growing plant alone', async () => {
+    const e = await account('daily'), pot = await addSite(e, { p_name: 'Pot harian' }), slot = pot.slot_ids[0]
+    fill(e, slot, 4, 29, '1 hour')
+    const thirtieth = await plant(e, slot, { p_species_id: 4 })
+    assert.equal(thirtieth.ok, true, JSON.stringify(thirtieth))
+    const refused = await swap(e, slot, { p_species_id: 2 })
+    assert.equal(refused.code, 'limit_reached'); assert.match(refused.message, /30 new plants a day/)
+    assert.deepEqual((await mine(e)).cycles.filter(x => x.slot_id === slot && x.ended_on === null).map(x => x.id), [thirtieth.cycle.id], 'the plant is still growing')
+    assert.equal(sql(`SELECT count(*) FROM plant_cycle WHERE account_id='${e.id}'`), '30')
+  })
+
+  await t.test('at most 300 plants per account over its whole life', async () => {
+    const f = await account('total'), site = await addSite(f, { p_name: 'Kebun penuh', p_kind: 'garden', p_placement: 'outdoor', p_zones: Array.from({ length: 6 }, (_, i) => `Z${i}`) })
+    for (const slot of site.slot_ids) fill(f, slot, 4, 50, '3 days')
+    assert.equal(sql(`SELECT count(*) FROM plant_cycle WHERE account_id='${f.id}'`), '300')
+    const refused = await plant(f, site.slot_ids[0])
+    assert.equal(refused.code, 'limit_reached'); assert.match(refused.message, /300 plants/)
+    assert.equal(sql(`SELECT count(*) FROM plant_cycle WHERE account_id='${f.id}'`), '300', 'nothing was opened')
+  })
+
+  await t.test('a species whose numbers have run out refuses with a reason, and the other species carry on', async () => {
+    const g = await account('numbers'), site = await addSite(g, { p_name: 'Dua pot', p_kind: 'garden', p_placement: 'outdoor', p_zones: ['A', 'B'] })
+    const before = sql('SELECT next_no FROM plant_counter WHERE species_id = 3')
+    sql('INSERT INTO plant_counter(species_id, next_no) VALUES (3, 1000000) ON CONFLICT (species_id) DO UPDATE SET next_no = 1000000')
+    try {
+      const refused = await plant(g, site.slot_ids[0], { p_species_id: 3 })
+      assert.equal(refused.code, 'limit_reached'); assert.match(refused.message, /no plant numbers left/)
+      assert.equal((await plant(g, site.slot_ids[1], { p_species_id: 1 })).ok, true, 'another species is not affected')
+    } finally {
+      sql(before === '' ? 'DELETE FROM plant_counter WHERE species_id = 3' : `UPDATE plant_counter SET next_no = ${before} WHERE species_id = 3`)
+    }
+  })
+  await t.test('the quota helper is not callable by a signed-in user', async () => {
+    sqlFails('SET ROLE authenticated; SELECT public.cycle_quota_message(gen_random_uuid(), 1)', /permission denied/)
+    assert((await api('/rest/v1/rpc/cycle_quota_message', a.token, { p_account_id: a.id, p_species_id: 1 })).status >= 400)
+  })
 })
