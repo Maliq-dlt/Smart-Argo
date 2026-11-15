@@ -24,6 +24,7 @@ import GardenSummary from './components/garden/GardenSummary'
 import LearningCard from './components/dashboard/LearningCard'
 import { THRESHOLDS, dryingRate, evidenceLevel, healthyMoistureRange, observe, waterResponse, wateringTimes, type InspectionState } from './lib/observation'
 import { learningEvidence, learningTemplate, type LearningText } from './lib/learningExplanation'
+import { features } from './lib/appMode'
 import { activeCycle, addGarden, addPersonalPot, bindSession, demoGarden, emptyGarden, switchPlant, type GardenBook, type Outcome, type Slot } from './lib/garden'
 import { createSlotSession, loadScenario, loadSpeciesScenario } from './lib/gardenSessions'
 import { browserStorage, readGarden, saveGarden } from './lib/gardenStore'
@@ -82,7 +83,8 @@ const pages = [
 // Short words under the rail icons; the long labels stay as the accessible names.
 const RAIL_TEXT: Record<string, string> = { statistics: 'Dashboard', simulation: 'Ruang tanam', comparison: 'Bandingkan', devices: 'Perangkat', ecosystem: 'Ekosistem', terminal: 'Terminal' }
 const GUEST_KEY = 'smart-agro.guest'
-const pageFromHash = () => pages.find(p => p.hash === location.hash)?.id ?? 'simulation'
+// The live app has no Ruang tanam: its address and the default page lead to the dashboard.
+const pageFromHash = () => { const found = pages.find(p => p.hash === location.hash)?.id; return features.playground ? found ?? 'simulation' : found === undefined || found === 'simulation' ? 'statistics' : found }
 const one = (value: number) => value.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
 function restoreSessions() {
@@ -459,7 +461,7 @@ function Simulator() {
   const { slope_per_h, eta_h, low } = result.evidence
   // The three readings the pot stage writes beside the part they describe; the same numbers the instruments below show.
   // A pot indoors does not see the sky: no weather control, no note, a clear window. A session outside any slot counts as outdoors.
-  const placement = siteOfSession?.placement ?? 'outdoor', outdoors = placement !== 'indoor'
+  const placement = siteOfSession?.placement ?? 'outdoor', outdoors = placement !== 'indoor', skyChoice = outdoors && features.simulatedWeather
   const weatherLine = weatherNote(simulatedWeather(weather), placement)
   const gardenSummary = siteOfSession?.kind === 'garden'
     ? <GardenSummary site={siteOfSession} slots={garden.slots.filter(s => s.siteId === siteOfSession.id)} activeSlotId={slotOfSession?.id ?? null} status={zoneStatus} onSelect={openSlot} />
@@ -509,7 +511,7 @@ function Simulator() {
       <a className="rail-brand" href="#" aria-label="Smart Agro · Beranda"><AgroMark /></a>
       {/* Rail with a sliding active marker, after "Rail Panel Sidebar" by dhxwhy: https://21st.dev/@dhxwhy/components/rail-panel-sidebar */}
       <nav className="rail-nav" aria-label="Navigasi utama">
-        {pages.filter(p => !('hidden' in p)).map(({ id, hash, label, icon: Icon }) => <a key={id} href={hash} className="rail-link" data-label={label} aria-label={label} aria-current={page === id ? 'page' : undefined} onClick={() => { if (page === id) scrollTo(0) }}>
+        {pages.filter(p => !('hidden' in p) && (features.playground || p.id !== 'simulation')).map(({ id, hash, label, icon: Icon }) => <a key={id} href={hash} className="rail-link" data-label={label} aria-label={label} aria-current={page === id ? 'page' : undefined} onClick={() => { if (page === id) scrollTo(0) }}>
           {page === id && <motion.span className="rail-active" layoutId="rail-active" transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }} aria-hidden="true" />}
           <Icon weight={page === id ? 'fill' : 'regular'} aria-hidden="true" /><span className="rail-text">{RAIL_TEXT[id]}</span>
         </a>)}
@@ -520,7 +522,7 @@ function Simulator() {
     <header className="app-topbar">
       <a className="topbar-brand" href="#" aria-label="Smart Agro · Beranda"><AgroMark /></a>
       <h1 className="page-title"><i aria-hidden="true" />{currentPage.title}</h1>
-      <div className="session-pill"><SlotPicker book={{ ...garden, activeSlotId: slotOfSession?.id ?? null }} describe={describeSlot} canSwitch={!!slotOfSession} canLoadDemo={garden.sites.length === 0} onSelect={openSlot} onAdd={() => setGardenDialog('add')} onSwitch={() => setGardenDialog('switch')} onDemo={loadDemo}><PlantMood mood={!sim.planted ? 'ready' : mood} /><span><strong>{session.name}</strong><small>Simulasi · {!journey ? 'Eksperimen' : sim.planted ? `Hari ke-${day}` : 'Belum ditanam'}</small></span></SlotPicker>
+      <div className="session-pill"><SlotPicker book={{ ...garden, activeSlotId: slotOfSession?.id ?? null }} describe={describeSlot} canSwitch={!!slotOfSession} canLoadDemo={garden.sites.length === 0 && features.demoGarden} onSelect={openSlot} onAdd={() => setGardenDialog('add')} onSwitch={() => setGardenDialog('switch')} onDemo={loadDemo}><PlantMood mood={!sim.planted ? 'ready' : mood} /><span><strong>{session.name}</strong><small>Simulasi · {!journey ? 'Eksperimen' : sim.planted ? `Hari ke-${day}` : 'Belum ditanam'}</small></span></SlotPicker>
         <span className={`save-status ${saveState.error ? 'save-failed' : ''}`} role="status"><i aria-hidden="true" />{saveState.error ? 'Belum tersimpan' : saveState.book === book ? 'Tersimpan' : 'Menyimpan…'}</span></div>
       <div className="topbar-tools">
         <ClockSettings clock={session.clock} hour={data.now_h} onChange={clock => { setRunning(false); setPauseNote('Zona waktu diubah. Tekan Lanjutkan waktu.'); edit({ clock }) }} />
@@ -558,7 +560,7 @@ function Simulator() {
         </div>
         <div className="studio-grid">
           <div className="visual-stack"><SimulationOverview data={data} decision={result} />
-            <PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} species={species} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} readings={sceneReadings} weather={outdoors ? weather : undefined} />
+            <PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} species={species} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} readings={sceneReadings} weather={skyChoice ? weather : undefined} />
             {!journey && <section className="panel timeline" aria-label="Ilustrasi fase tanaman"><div className="timeline-label"><span>Ilustrasi fase</span><strong>Hari <b>{String(day).padStart(2, '0')}</b><small> / {maxDay} HST</small></strong></div>
               <div className="timeline-controls"><button className={`icon-button play-button ${playing ? 'playing' : ''}`} aria-label={playing ? 'Jeda timelapse' : 'Putar timelapse'} onClick={() => { if (day >= maxDay) setDay(0); setPlaying(!playing) }}>{playing ? <Pause weight="fill" aria-hidden="true" /> : <Play weight="fill" aria-hidden="true" />}</button><button className="icon-button" aria-label="Reset timelapse" onClick={() => { setDay(0); setPlaying(false) }}><ArrowCounterClockwise aria-hidden="true" /></button></div>
               <div className="timeline-track"><input aria-label="Hari setelah tanam" type="range" min="0" max={maxDay} step="1" value={day} style={{ '--fill': `${day / maxDay * 100}%` } as CSSProperties} onChange={e => { setDay(Number(e.target.value)); setPlaying(false) }} /><div className="timeline-phases"><span>Awal tanam</span><span>Vegetatif</span><span>{species === 'bawang' ? 'Pembentukan umbi' : 'Berbunga'}</span><span>{species === 'bawang' ? 'Pematangan' : 'Berbuah'}</span></div></div>
@@ -583,7 +585,7 @@ function Simulator() {
           <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, species)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
             species={species} day={developmentDay} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
             hour={clockHour(data.now_h, session.clock)} period={skyPeriod(clockHour(data.now_h, session.clock))} readings={sceneReadings} careEffect={careEffect}
-            weather={outdoors ? { kind: weather, onChange: setWeather, note: weatherLine } : null} summary={gardenSummary}>
+            weather={skyChoice ? { kind: weather, onChange: setWeather, note: weatherLine } : null} summary={gardenSummary}>
             <SessionClockCard samples={data.samples} time={clockTime(session.clock, data.now_h).slice(0, 5)} period={scenePeriod(data.now_h, session.clock)}
               state={awaitingPlant ? 'Menunggu bibit ditanam' : running ? 'Timelapse berjalan' : 'Waktu dijeda'} note={playbackNote} rate={sim.rate}
               running={running} disabled={simulationStopped(session)} onToggle={toggleRunning} />

@@ -166,12 +166,14 @@
 
 ## Fase 6: Persistensi server dan mode `live` (tidak aktif)
 
+> Selesai 2026-11-15, **hanya repo dan DB lokal; cloud tidak berubah.** Deviasi: `garden_pot` tidak pernah ada di migrasi, jadi tabelnya dibuat baru (`garden_site`, `garden_slot` dengan `unit_id` opsional dan belum dipakai, `plant_cycle`, `plant_species`, `plant_counter`); fungsi: `my_garden`, `add_my_site`, `plant_in_my_slot`, `switch_my_plant` (+ pembantu tertutup `open_plant_cycle`, `next_plant_no`, `cycle_json`, `plant_cycle_guard`); koordinat disimpan dua desimal; nama otomatis menghitung tanaman milik pemilih sendiri ("Cabai 2") sedangkan kode memakai nomor global; mode `live` lewat `src/lib/appMode.ts`, `.env.live` (hanya bendera) dan `build:live`, ditambah `tests/live-mode-browser.mjs` yang membangun dan menyajikan build `live` terpisah; klien aplikasi belum membaca atau menulis kebun ke server (itu bagian aktivasi Fase 8). Dua bug nyata ditemukan tes: NULL pada `p_outcome`, `p_kind`, `p_placement` lolos dari penjaga (perbandingan dengan NULL) dan jatuh jadi galat mentah; diperbaiki dengan `IS NULL OR`.
+
 **Files:**
 - Create: `supabase/migrations/20261115100000_garden_sites_cycles.sql`, `tests/garden.integration.mjs`, `tests/liveMode.test.ts`
 - Modify: `package.json` (`build:live`), `vite.config.ts` atau `src/lib/appMode.ts` (`VITE_APP_MODE=demo|live`), tes yang memeriksa tampilan `live`
 
-- [ ] **Step 1:** Tes integrasi merah (pola tahap 6–12: `tests/*.integration.mjs` memakai backend lokal): tabel `site`, `plant_cycle`, perluasan `garden_pot` (`site_id`, `unit_id` opsional, `placement`); RLS menolak membaca milik pengguna lain; RPC `SECURITY DEFINER` dengan `search_path` terkunci dan hak EXECUTE hanya `authenticated`; mengganti tanaman menutup siklus lama secara atomik; `plant_no` global unik per spesies dan kode muat integer.
-- [ ] **Step 2:** Tulis migrasi dan jalankan suite backend penuh dari basis data baru (Docker). Tes unit mode `live`: tamu, Ruang tanam, dan cuaca simulasi tersembunyi. Pastikan **tidak ada** perubahan ke cloud. Commit.
+- [x] **Step 1:** Tes integrasi merah (pola tahap 6–12: `tests/*.integration.mjs` memakai backend lokal): tabel `site`, `plant_cycle`, perluasan `garden_pot` (`site_id`, `unit_id` opsional, `placement`); RLS menolak membaca milik pengguna lain; RPC `SECURITY DEFINER` dengan `search_path` terkunci dan hak EXECUTE hanya `authenticated`; mengganti tanaman menutup siklus lama secara atomik; `plant_no` global unik per spesies dan kode muat integer.
+- [x] **Step 2:** Tulis migrasi dan jalankan suite backend penuh dari basis data baru (Docker). Tes unit mode `live`: tamu, Ruang tanam, dan cuaca simulasi tersembunyi. Pastikan **tidak ada** perubahan ke cloud. Commit.
 
 ---
 

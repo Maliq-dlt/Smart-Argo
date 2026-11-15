@@ -10,6 +10,7 @@ tests/playback-browser.js
 .DS_Store
 .env*
 !.env.cloud
+!.env.live
 
 .serena/
 

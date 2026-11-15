@@ -10,12 +10,13 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "build:cloud": "tsc --noEmit && vite build --mode cloud",
+    "build:live": "tsc --noEmit && vite build --mode live",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "preview": "vite preview --host 127.0.0.1",
     "backend:local": "node scripts/phase1-local.mjs",
-    "test:backend": "node --test --test-concurrency=1 tests/account-activation.integration.mjs tests/telemetry.integration.mjs tests/curation.integration.mjs tests/explanations.integration.mjs tests/energy.integration.mjs tests/reward.integration.mjs tests/ai-explanation.integration.mjs tests/transfer.integration.mjs tests/care-journal.integration.mjs tests/history-reporting.integration.mjs tests/knowledge-workspace.integration.mjs tests/privileged-access.integration.mjs tests/device-lifecycle.integration.mjs tests/reward-cases.integration.mjs tests/ownership-recovery.integration.mjs tests/unit-lifecycle.integration.mjs tests/unit-overview.integration.mjs tests/product-provision.integration.mjs tests/mfa-recovery.integration.mjs tests/chain-worker.integration.mjs"
+    "test:backend": "node --test --test-concurrency=1 tests/account-activation.integration.mjs tests/telemetry.integration.mjs tests/curation.integration.mjs tests/explanations.integration.mjs tests/energy.integration.mjs tests/reward.integration.mjs tests/ai-explanation.integration.mjs tests/transfer.integration.mjs tests/care-journal.integration.mjs tests/garden.integration.mjs tests/history-reporting.integration.mjs tests/knowledge-workspace.integration.mjs tests/privileged-access.integration.mjs tests/device-lifecycle.integration.mjs tests/reward-cases.integration.mjs tests/ownership-recovery.integration.mjs tests/unit-lifecycle.integration.mjs tests/unit-overview.integration.mjs tests/product-provision.integration.mjs tests/mfa-recovery.integration.mjs tests/chain-worker.integration.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

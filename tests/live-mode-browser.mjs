@@ -1,0 +1,68 @@
+// The live build (VITE_APP_MODE=live): no guest visit, no Ruang tanam, no simulated weather, no demo garden. Auth is scripted
+// (no Docker). Build it apart from the demo and serve that folder:
+//   npx vite build --mode live --outDir .tmp/dist-live && npx vite preview --outDir .tmp/dist-live --port 4175 --host 127.0.0.1
+import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
+import { gate } from './entry-helpers.mjs'
+import { mockAuth, mockSession } from './mock-auth.mjs'
+
+const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
+const base = process.env.TEST_URL || 'http://127.0.0.1:4175/'
+const POT = { name: 'Pot teras', crop: 'cabai', device: false }
+const browser = await chromium.launch({ headless: true, channel: 'chrome' })
+const curtainOpen = page => page.waitForFunction(() => { const c = document.querySelector('.curtain'); return !c || c.dataset.state === 'open' })
+const errors = []
+let checks = 0
+const ok = (value, message) => { assert(value, message); checks++ }
+
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  page.on('pageerror', error => { if (!/Transition was skipped/.test(error.message)) errors.push(error.message) })
+  // "Transition was skipped" is the browser saying a page transition was replaced by the next one (here, the old Ruang tanam address
+  // sent to the dashboard that is already open); it is not an error of the app.
+  page.on('console', message => { if (message.type() === 'error' && !/ERR_CONNECTION_REFUSED|ERR_FAILED|127\.0\.0\.1:54321|Transition was skipped/.test(message.text())) errors.push(message.text()) })
+  // A visitor who once chose "guest" in a demo has that flag; the live app must not honour it.
+  await page.addInitScript(() => { try { localStorage.setItem('smart-agro.guest', '1') } catch { /* blocked */ } })
+  await mockAuth(page, {
+    'POST /auth/v1/token?grant_type=password': () => mockSession({ pot: POT }),
+    'POST /auth/v1/token?grant_type=refresh_token': () => mockSession({ pot: POT }),
+  })
+  await page.goto(new URL('#masuk', base).href); await curtainOpen(page)
+  await gate(page).waitFor()
+  ok(await page.getByRole('button', { name: /Coba tanpa akun/ }).count() === 0, 'The gate offers no guest visit')
+  ok(await page.locator('.app-shell').count() === 0, 'A stored guest flag does not open the app')
+
+  await gate(page).getByLabel('Email', { exact: true }).fill('pot@contoh.test')
+  await gate(page).getByLabel('Kata sandi', { exact: true }).fill('cukup-panjang-12')
+  await gate(page).getByRole('button', { name: 'Masuk', exact: true }).click()
+  await page.locator('.app-shell').waitFor({ timeout: 20000 })
+  await page.locator('.plant-scene svg').waitFor()
+
+  const rail = await page.locator('.rail-nav a').evaluateAll(links => links.map(a => a.getAttribute('aria-label')))
+  ok(rail.includes('Dashboard') && rail.includes('Bandingkan sesi') && rail.includes('Ekosistem'), `The rest of the app is there: ${rail}`)
+  ok(!rail.includes('Simulasi') && !rail.some(name => /Ruang tanam/i.test(name ?? '')), `There is no Ruang tanam in the rail: ${rail}`)
+  ok(await page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true }).count() === 1, 'The app opens on the dashboard')
+
+  // Its old address and the care link lead to the dashboard, not to a room that does not exist.
+  const settled = () => page.waitForFunction(() => !document.documentElement.hasAttribute('data-site-transition'))
+  await settled()
+  await page.evaluate(() => { location.hash = '#simulasi' })
+  await page.waitForTimeout(500); await settled()
+  ok(await page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true }).count() === 1, '#simulasi shows the dashboard')
+  ok(await page.getByRole('heading', { level: 1, name: 'Ruang tanam', exact: true }).count() === 0 && await page.locator('.studio').count() === 0, 'Ruang tanam is not rendered')
+
+  ok(await page.locator('.stage-weather').count() === 0, 'No simulated weather control')
+  ok(await page.locator('.stage-weather-note').count() === 0, 'No weather note')
+  ok(await page.locator('.plant-scene svg').getAttribute('data-weather') !== 'hujan', 'The sky is not one the visitor picked')
+  await page.locator('.session-pill .pill-trigger').click()
+  await page.locator('.slot-picker').waitFor()
+  ok(await page.locator('.slot-picker').getByRole('button', { name: 'Muat contoh kebun' }).count() === 0, 'No demo garden to load')
+  ok(await page.locator('.slot-picker').getByRole('button', { name: 'Tambah pot atau kebun' }).count() === 1, 'A person can still add their own pot or garden')
+  await page.keyboard.press('Escape')
+  ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal overflow')
+
+  assert.deepEqual(errors, [], `Console errors: ${errors.join(' | ')}`)
+  console.log(`live-mode-browser: ${checks} checks passed`)
+} finally {
+  await browser.close()
+}

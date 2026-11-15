@@ -105,6 +105,8 @@ For static hosting, run `npm run build` and publish `dist/`. Set `VITE_SUPABASE_
 
 `npm run build:cloud` builds against the hosted Supabase project in `.env.cloud` (public URL and publishable key only). Since 2026-11-14 that build keeps the guest option too (`VITE_SIGN_IN_REQUIRED=false`); set it to `true` to make every visitor sign in. The hosted functions accept one origin, set as the `APP_ORIGIN` secret, and have no AI key: a router on your machine is unreachable from the cloud, so explanations come from the rule engine.
 
+`npm run build:live` builds the live app (`VITE_APP_MODE=live`, from `.env.live`): a real user must sign in, and the guest visit, Ruang tanam, the simulated weather and the demo garden are not shown. The mode is fixed when the app is built; any other value is the demo. Put the backend URL and publishable key of the hosted project in `.env.live.local` (ignored by Git) when it is activated. Nothing in the repository activates it: the cloud project is unchanged, and the migration `20261115100000_garden_sites_cycles.sql` (pots, gardens and plant cycles on the server, with private functions and a history that cannot change) and the `weather-forecast` function are written and tested locally only.
+
 ### Production deployment
 
 Pushes to `main` run the application and Docker checks. Once both pass, [Deploy Cloudflare Pages](.github/workflows/deploy-pages.yml) checks out that exact commit, runs `npm run build:cloud`, and publishes `dist/` to `smart-agro-demo.pages.dev`. The Pages project uses Direct Upload through GitHub Actions. Deployment requires the repository secret `CLOUDFLARE_API_TOKEN`, scoped to Pages Write on the configured account. No Supabase administrator credential is used by the frontend deployment.

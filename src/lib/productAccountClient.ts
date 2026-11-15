@@ -1,3 +1,4 @@
+import { features } from './appMode.ts'
 import { normalizeDisplayName, normalizeEmailCode } from './signupForm.ts'
 import { isCuratedId, type CuratedId } from './species.ts'
 export interface ProductSession { access_token: string; refresh_token: string; expires_at: number }
@@ -109,7 +110,7 @@ export const productAccountConfigured = Boolean(endpoint && anonKey && (() => {
 })())
 /** Set `VITE_SIGN_IN_REQUIRED=true` to make every visitor sign in (the gate then offers no guest visit). The hosted
  * demo leaves it off since 2026-11-14, so visitors can try the simulator first. */
-export const signInRequired = productAccountConfigured && env?.VITE_SIGN_IN_REQUIRED === 'true'
+export const signInRequired = productAccountConfigured && (env?.VITE_SIGN_IN_REQUIRED === 'true' || !features.guest)
 
 export class ProductAccountClient {
   session: ProductSession | null = null
