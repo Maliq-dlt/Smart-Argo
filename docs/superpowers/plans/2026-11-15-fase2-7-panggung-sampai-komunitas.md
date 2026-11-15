@@ -113,6 +113,8 @@
 
 ## Fase 4: Pot pribadi dan kebun
 
+> Selesai 2026-11-15. Deviasi: komponen di `src/components/garden/` (`SlotPicker`, `SlotWizard`, `SwitchPlantDialog`, `SpeciesSearch`, `GardenSummary`); pemilih adalah pil pot di topbar dan kini tetap tampil di ponsel; `searchSpecies`, `plantNickname`, `speciesById`, `speciesByCode`, `PLANTABLE`, `sceneOf` di `species.ts`; `speciesOfCrop` kini mengembalikan `SpeciesId` (anggrek dan peoni dikenali dari teks tanaman); spesies belajar punya satu fase "Mengamati" dan sesinya `validated: false`; `peoni` ada di katalog tetapi belum punya gambar sehingga belum bisa ditanam; tanggal tanam yang lebih awal membuat simulator menumbuhkan tanaman sampai hari ini (maksimum 60 hari, tanaman dianggap dirawat baik); lingkup penyimpanan akun memakai email (identitas tidak punya id); tes akun lain diwakili tes unit isolasi lingkup (`gardenStore.test.ts`), bukan akun tiruan di browser.
+
 ### Tugas 4.1: Model kebun, slot, dan siklus (murni)
 
 **Files:**
@@ -121,8 +123,8 @@
 **Interfaces:**
 - Produces: `type Placement = 'indoor' | 'outdoor' | 'rooftop'`; `interface Site { id: string; name: string; kind: 'pot' | 'garden'; placement: Placement; location?: { lat: number; lon: number } }`; `interface Cycle { id: string; speciesId: number; plantNo: number; nickname: string; plantedOn: string; endedOn?: string; outcome?: 'berhasil' | 'gagal' | 'dihentikan' }`; `interface Slot { id: string; siteId: string; name: string; sessionId: string | null; cycles: Cycle[] }`; `interface GardenBook { sites: Site[]; slots: Slot[]; activeSlotId: string | null; nextPlantNo: Record<number, number> }`; `addPersonalPot(book, input): GardenBook`; `addGarden(book, input): GardenBook`; `addSlot(book, siteId, name): GardenBook`; `plantInSlot(book, slotId, speciesId, plantedOn, nickname?): GardenBook` (nama otomatis "Cabai 1, 2, 3"; kode = `plantCode(speciesId, plantNo)`); `switchPlant(book, slotId, speciesId, on, outcome?): GardenBook` (menutup siklus aktif dengan hasil `dihentikan` bila tak ditentukan, membuka siklus baru; tidak mengubah siklus lama); `activeCycle(slot)`; `plantCode(speciesId, plantNo): number`; `parseGarden(raw: unknown): GardenBook` (validasi masukan penyimpanan lokal, tolak/bersihkan yang rusak); `demoGarden(): GardenBook` (satu pot anggrek dan satu kebun dua zona).
 
-- [ ] **Step 1:** Tes merah: nama otomatis berurut per spesies; kode `plantCode(3, 7) === 3_000_007` dan `speciesId` di luar 1..2146 atau `plant_no` > 999.999 ditolak; mengganti tanaman 5 kali meninggalkan 5 siklus berhasil terurut, tepat satu aktif, dan riwayat lama tak berubah; mengganti ke spesies yang sama pada hari yang sama tidak membuat siklus ganda; `parseGarden` menolak JSON rusak, id ganda, dan slot yang menunjuk situs tak ada; `demoGarden` memuat pot anggrek dan kebun dua zona.
-- [ ] **Step 2:** Implementasikan dan jalankan. Commit.
+- [x] **Step 1:** Tes merah: nama otomatis berurut per spesies; kode `plantCode(3, 7) === 3_000_007` dan `speciesId` di luar 1..2146 atau `plant_no` > 999.999 ditolak; mengganti tanaman 5 kali meninggalkan 5 siklus berhasil terurut, tepat satu aktif, dan riwayat lama tak berubah; mengganti ke spesies yang sama pada hari yang sama tidak membuat siklus ganda; `parseGarden` menolak JSON rusak, id ganda, dan slot yang menunjuk situs tak ada; `demoGarden` memuat pot anggrek dan kebun dua zona.
+- [x] **Step 2:** Implementasikan dan jalankan. Commit.
 
 ### Tugas 4.2: Penyimpanan, pemilih, dan wizard
 
@@ -130,8 +132,8 @@
 - Create: `src/lib/gardenStore.ts` (kunci `smart-agro.garden.v1.<akun atau tamu>`), `src/components/SlotPicker.tsx`, `src/components/SlotWizard.tsx`, `src/components/SwitchPlantDialog.tsx`, `tests/garden-browser.mjs`
 - Modify: `src/App.tsx` (slot aktif menentukan sesi yang dibuka; `PotSetup` tetap sebagai langkah pertama setelah masuk dan membuat slot pertama), `src/lib/species.ts` (`searchSpecies(query)` dengan nama dan alias; `plantNickname`), `tests/species.test.ts`
 
-- [ ] **Step 1:** Tes merah browser (tamu dan akun tiruan): pemilih menampilkan situs dan slot; "Tambah" membuka wizard (Pot pribadi atau Kebun, penempatan, lokasi hanya bila luar ruang, tanaman lewat kolom cari, tanggal tanam); mengganti tanaman menampilkan dialog yang menjelaskan siklus lama ditutup dan riwayatnya disimpan, lalu membuka siklus baru; muat ulang mempertahankan semuanya; akun lain tidak melihat slot akun ini; `pot-setup-browser` yang ada tetap lulus tanpa perubahan.
-- [ ] **Step 2:** Implementasikan; mode Kebun menampilkan ringkasan zona di atas panggung; penempatan dalam ruangan menyembunyikan kontrol cuaca. Jalankan semua tes browser terkait dan tangkapan layar. Commit dan push.
+- [x] **Step 1:** Tes merah browser (tamu dan akun tiruan): pemilih menampilkan situs dan slot; "Tambah" membuka wizard (Pot pribadi atau Kebun, penempatan, lokasi hanya bila luar ruang, tanaman lewat kolom cari, tanggal tanam); mengganti tanaman menampilkan dialog yang menjelaskan siklus lama ditutup dan riwayatnya disimpan, lalu membuka siklus baru; muat ulang mempertahankan semuanya; akun lain tidak melihat slot akun ini; `pot-setup-browser` yang ada tetap lulus tanpa perubahan.
+- [x] **Step 2:** Implementasikan; mode Kebun menampilkan ringkasan zona di atas panggung; penempatan dalam ruangan menyembunyikan kontrol cuaca. Jalankan semua tes browser terkait dan tangkapan layar. Commit dan push.
 
 ---
 

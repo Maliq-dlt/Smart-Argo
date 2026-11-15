@@ -1,5 +1,5 @@
 import { addSample, evaluate, parseCase, phaseAt, recordWatering, type PotCase } from './agronomyEngine.ts'
-import { curated, speciesOfCrop } from './species.ts'
+import { speciesById, speciesOfCrop } from './species.ts'
 import { createSession, sessionTime, type Session, type LogEntry } from './sessionStore.ts'
 import { clockTime, localHour, type SessionClock } from './sessionClock.ts'
 
@@ -44,7 +44,7 @@ export const simulationStopReason = (s: Session) => {
   const sim = simulationOf(s)
   if (!sim.planted) return 'Tanam bibit untuk memulai waktu.'
   if (s.data.samples.length >= 10000) return 'Batas 10.000 sampel tercapai. Ekspor sesi atau mulai pot baru.'
-  if (sim.mode === 'journey' && s.data.now_h >= curated(speciesOfCrop(s.data.profile.crop)).maxDay * 24) return 'Perjalanan selesai. Mulai pot baru untuk melanjutkan.'
+  if (sim.mode === 'journey' && s.data.now_h >= speciesById(speciesOfCrop(s.data.profile.crop)).maxDay * 24) return 'Perjalanan selesai. Mulai pot baru untuk melanjutkan.'
   return sim.source === 'manual' ? 'Mode manual: waktu maju saat Tambah sampel ditekan.' : ''
 }
 export const simulationStopped = (s: Session) => Boolean(simulationStopReason(s))

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { phaseAt } from '../src/lib/agronomyEngine.ts'
 import { phaseIndex, phaseSteps } from '../src/lib/dashboardFacts.ts'
-import { CURATED_IDS, curated, speciesOfCrop } from '../src/lib/species.ts'
+import { CURATED_IDS, speciesById, speciesOfCrop } from '../src/lib/species.ts'
 
 // The functions exactly as they were before the species catalog (agronomyEngine.ts and dashboardFacts.ts at ecbbdf2).
 // The catalog replaced the `onion` flag; these oracles prove the journey did not change by a single day.
@@ -36,5 +36,5 @@ test('phaseSteps and phaseIndex equal the pre-catalog dashboard helpers', () => 
 
 test('the last day of the journey follows the crop named in saved sessions, as the old "bawang" check did', () => {
   const scenarios: { profile: { crop: string } }[] = JSON.parse(readFileSync(new URL('../src/lib/scenarios.json', import.meta.url), 'utf8'))
-  for (const { profile } of scenarios) assert.equal(curated(speciesOfCrop(profile.crop)).maxDay, profile.crop.toLowerCase().includes('bawang') ? 65 : 90, profile.crop)
+  for (const { profile } of scenarios) assert.equal(speciesById(speciesOfCrop(profile.crop)).maxDay, profile.crop.toLowerCase().includes('bawang') ? 65 : 90, profile.crop)
 })

@@ -1,4 +1,4 @@
-import { curated, type CuratedId } from './species.ts'
+import { speciesById, type SpeciesId } from './species.ts'
 export interface Profile {
   pot_id: string; crop: string; media: string; phase: string
   validated: boolean; ph_validated: boolean
@@ -169,8 +169,8 @@ export function evaluate(input: unknown): Decision {
 }
 
 /** The reference phase on day `day` (HST) of a curated species' journey; the phase table lives in species.ts. */
-export function phaseAt(day: number, id: CuratedId) {
-  const { phases } = curated(id)
+export function phaseAt(day: number, id: SpeciesId) {
+  const { phases } = speciesById(id)
   return phases.reduce((name, phase) => day >= phase.start ? phase.name : name, phases[0].name)
 }
 

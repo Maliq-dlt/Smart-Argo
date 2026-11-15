@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { CURATED_IDS, SPECIES, curated, isCuratedId, phaseRanges, speciesOfCrop } from '../src/lib/species.ts'
+import { CURATED_IDS, PLANTABLE, SPECIES, curated, isCuratedId, phaseRanges, plantNickname, sceneOf, searchSpecies, speciesById, speciesOfCrop } from '../src/lib/species.ts'
 
 const scenarios: { profile: { crop: string } }[] = JSON.parse(readFileSync(new URL('../src/lib/scenarios.json', import.meta.url), 'utf8'))
 
@@ -33,9 +33,50 @@ test('a curated species opens the scenario whose profile names it', () => {
   for (const id of CURATED_IDS) assert.equal(speciesOfCrop(scenarios[curated(id).scenario].profile.crop), id)
 })
 
-test('old sessions name their crop in free text; only "bawang" selects the shallot, anything else is chili', () => {
+test('sessions name their crop in free text: "bawang" is the shallot, "anggrek" and "peoni" are the learning species, anything else is chili', () => {
   for (const text of ['Bawang merah', 'BAWANG', 'bawang', 'Bawang merah (varietas Bima)']) assert.equal(speciesOfCrop(text), 'bawang', text)
-  for (const text of ['Cabai', '', 'Synthetic test crop', 'anggrek']) assert.equal(speciesOfCrop(text), 'cabai', text)
+  for (const text of ['Anggrek bulan', 'ANGGREK', 'Anggrek (belajar)']) assert.equal(speciesOfCrop(text), 'anggrek', text)
+  assert.equal(speciesOfCrop('Peoni merah'), 'peoni')
+  for (const text of ['Cabai', '', 'Synthetic test crop', 'Tomat']) assert.equal(speciesOfCrop(text), 'cabai', text)
+})
+
+test('every species has a journey: curated ones their phases, learning ones only "Mengamati"', () => {
+  for (const species of SPECIES) {
+    assert.ok(species.maxDay > 0 && species.growthDays > 0 && species.growthDays <= species.maxDay, species.id)
+    assert.equal(species.phases[0].start, 0, species.id)
+    assert.equal(speciesById(species.id), species)
+  }
+  for (const id of ['anggrek', 'peoni'] as const) assert.deepEqual(speciesById(id).phases.map(p => p.name), ['Mengamati'], id)
+  assert.deepEqual(phaseRanges('anggrek'), [['0–180', 'Mengamati']])
+})
+
+test('only species with a drawing can be planted, and an undrawn one still has a scene to fall back on', () => {
+  assert.deepEqual(PLANTABLE.map(s => s.id), ['cabai', 'bawang', 'anggrek'])
+  assert.deepEqual(['cabai', 'bawang', 'anggrek', 'peoni'].map(id => sceneOf(id as never)), ['cabai', 'bawang', 'anggrek', 'anggrek'])
+})
+
+test('search finds a plant by its name, an alias or its Latin name, ignoring case and accents, best match first', () => {
+  const ids = (query: string) => searchSpecies(query).map(s => s.id)
+  assert.deepEqual(ids(''), ['cabai', 'bawang', 'anggrek', 'peoni'])
+  assert.deepEqual(ids('   '), ['cabai', 'bawang', 'anggrek', 'peoni'])
+  assert.deepEqual(ids('cab'), ['cabai'])
+  assert.deepEqual(ids('CABE'), ['cabai'])
+  assert.deepEqual(ids('lombok'), ['cabai'])
+  assert.deepEqual(ids('bawang'), ['bawang'])
+  assert.deepEqual(ids('shallot'), ['bawang'])
+  assert.deepEqual(ids('merah'), ['cabai', 'bawang'], 'a word of an alias or a name counts')
+  assert.deepEqual(ids('Phalaenopsis'), ['anggrek'])
+  assert.deepEqual(ids('paeonia'), ['peoni'])
+  assert.deepEqual(ids('bulan anggrek'), ['anggrek'], 'word order does not matter')
+  assert.deepEqual(ids('capsicum annuum'), ['cabai'])
+  assert.deepEqual(ids('xyz'), [])
+  assert.deepEqual(ids('Cabaí'), ['cabai'], 'an accent on a typed letter does not stop a match')
+  assert.deepEqual(ids('cabai   merah'), ['cabai'])
+})
+
+test('a plant with no name given is called by its species and its number', () => {
+  assert.equal(plantNickname(speciesById('cabai'), 3), 'Cabai 3')
+  assert.equal(plantNickname(speciesById('bawang'), 1), 'Bawang merah 1')
 })
 
 test('only own catalog ids count as curated, never inherited object keys', () => {

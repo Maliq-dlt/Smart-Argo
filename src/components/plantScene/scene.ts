@@ -259,7 +259,7 @@ export class Scene {
   }
 
   private paintReadings(s: Slot, alpha: number, night: number) {
-    s.chips?.removeAttribute('display'); s.chips?.setAttribute('opacity', f1(clamp(alpha)))
+    s.chips?.removeAttribute('display'); s.chips?.setAttribute('opacity', f1(clamp(alpha) ** 3)) // cubed: while two pots cross-fade, the old and new readings must not stand over each other
     const r = this.readings
     if (!r || !s.texts) return
     const dark = night > .5
