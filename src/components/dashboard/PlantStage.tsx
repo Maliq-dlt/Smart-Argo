@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import PlantIllustration from '../PlantIllustration'
+import type { CuratedId } from '../../lib/species'
 import { skyOrbits, type SkyPeriod } from '../../lib/dashboardFacts'
 
 /* The dashboard's centrepiece: the pot, three readings pointed at the part of the pot they describe, and a lens that
@@ -30,8 +31,8 @@ const STARS = (() => {
 const CHILI = [[778, 92], [798, 112], [810, 142], [806, 176], [794, 206], [774, 230], [754, 242], [740, 238]] as const
 
 interface Reading { label: string; value: string; unit?: string; note: string; alert?: boolean }
-export default function PlantStage({ crop, sub, status, onion, day, age, planted, moisture, contact, readings, hour, period, children }: {
-  crop: string; sub: string; status: { ok: boolean; text: string }; onion: boolean; day: number; age: number; planted: boolean; moisture: number; contact: boolean
+export default function PlantStage({ crop, sub, status, species, day, age, planted, moisture, contact, readings, hour, period, children }: {
+  crop: string; sub: string; status: { ok: boolean; text: string }; species: CuratedId; day: number; age: number; planted: boolean; moisture: number; contact: boolean
   readings: { moisture: Reading; temperature: Reading; ph: Reading }; hour: number; period: SkyPeriod; children?: ReactNode
 }) {
   const { sun, moon } = skyOrbits(hour)
@@ -68,11 +69,11 @@ export default function PlantStage({ crop, sub, status, onion, day, age, planted
         </g>)}
       </svg>
       <div className="stage-figure" style={{ left: `${FIGURE.x / 9}%`, top: `${FIGURE.y / 5.6}%`, width: `${FIGURE.w / 9}%`, height: `${FIGURE.h / 5.6}%` }}>
-        <PlantIllustration viewBox={`${CROP.x} ${CROP.y} ${CROP.w} ${CROP.h}`} day={day} age={age} onion={onion} moisture={moisture} contact={contact} planted={planted} shellOpacity={1} />
+        <PlantIllustration viewBox={`${CROP.x} ${CROP.y} ${CROP.w} ${CROP.h}`} day={day} age={age} species={species} moisture={moisture} contact={contact} planted={planted} shellOpacity={1} />
       </div>
       <figure className="lens" style={{ left: `${(LENS.cx - LENS.r) / 9}%`, top: `${(LENS.cy - LENS.r) / 5.6}%`, width: `${LENS.r * 2 / 9}%` }}>
         <div className="lens-glass" aria-hidden="true">
-          <PlantIllustration viewBox="163 316 126 126" day={day} age={age} onion={onion} moisture={moisture} contact={contact} planted={planted} showSensors shellOpacity={0} />
+          <PlantIllustration viewBox="163 316 126 126" day={day} age={age} species={species} moisture={moisture} contact={contact} planted={planted} showSensors shellOpacity={0} />
         </div>
         <figcaption className="sr-only">Penampang zona akar dengan probe kelembapan, suhu, dan pH di dalam media.</figcaption>
       </figure>

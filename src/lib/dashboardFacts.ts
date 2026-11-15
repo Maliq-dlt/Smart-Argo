@@ -1,4 +1,5 @@
 /** Pure helpers behind the dashboard: moisture zones, the sky's sun and moon, growth-phase steps and short "ago" labels. */
+import { curated, type CuratedId } from './species.ts'
 
 export type Zone = 'dry' | 'ok' | 'wet'
 export const zoneOf = (value: number, low: number, wet: number): Zone => value < low ? 'dry' : value > wet ? 'wet' : 'ok'
@@ -15,13 +16,12 @@ export function orbit(hours: number) {
 }
 export const skyOrbits = (hour: number) => ({ sun: orbit(hour - 6), moon: orbit((hour + 6) % 24) })
 
-/** The journey's phases, matching `phaseAt` in agronomyEngine.ts (chili 0/≤30/≤55/after, 90 days; shallot 0/≤25/≤50/after, 65 days). */
-export function phaseSteps(onion: boolean) {
-  return onion
-    ? { names: ['Awal tanam', 'Vegetatif', 'Pembentukan umbi', 'Pematangan umbi'], starts: [0, 1, 26, 51], total: 65 }
-    : { names: ['Awal tanam', 'Vegetatif', 'Berbunga', 'Berbuah'], starts: [0, 1, 31, 56], total: 90 }
+/** The journey's phases for a curated species, from the catalog (species.ts); `phaseAt` in agronomyEngine.ts reads the same table. */
+export function phaseSteps(id: CuratedId) {
+  const { phases, maxDay } = curated(id)
+  return { names: phases.map(p => p.name), starts: phases.map(p => p.start), total: maxDay }
 }
-export const phaseIndex = (day: number, onion: boolean) => phaseSteps(onion).starts.reduce((index, start, i) => day >= start ? i : index, 0)
+export const phaseIndex = (day: number, id: CuratedId) => phaseSteps(id).starts.reduce((index, start, i) => day >= start ? i : index, 0)
 
 /** "30 m", "1 j 30 m", "2 hr 3 j": how long before now a reading was taken. */
 export function agoLabel(hours: number) {

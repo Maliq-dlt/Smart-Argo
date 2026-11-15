@@ -1,4 +1,5 @@
 import { addSample, evaluate, parseCase, phaseAt, recordWatering, type PotCase } from './agronomyEngine.ts'
+import { curated, speciesOfCrop } from './species.ts'
 import { createSession, sessionTime, type Session, type LogEntry } from './sessionStore.ts'
 import { clockTime, localHour, type SessionClock } from './sessionClock.ts'
 
@@ -43,7 +44,7 @@ export const simulationStopReason = (s: Session) => {
   const sim = simulationOf(s)
   if (!sim.planted) return 'Tanam bibit untuk memulai waktu.'
   if (s.data.samples.length >= 10000) return 'Batas 10.000 sampel tercapai. Ekspor sesi atau mulai pot baru.'
-  if (sim.mode === 'journey' && s.data.now_h >= (s.data.profile.crop.toLowerCase().includes('bawang') ? 65 : 90) * 24) return 'Perjalanan selesai. Mulai pot baru untuk melanjutkan.'
+  if (sim.mode === 'journey' && s.data.now_h >= curated(speciesOfCrop(s.data.profile.crop)).maxDay * 24) return 'Perjalanan selesai. Mulai pot baru untuk melanjutkan.'
   return sim.source === 'manual' ? 'Mode manual: waktu maju saat Tambah sampel ditekan.' : ''
 }
 export const simulationStopped = (s: Session) => Boolean(simulationStopReason(s))
@@ -81,8 +82,8 @@ export function advanceSimulation(session: Session, steps = 1): Session {
     const ph = Math.floor(now / 24) > Math.floor(s.data.now_h / 24) ? round(6.2 + (random() - .5) * .4) : null
     const oldResult = evaluate(s.data)
     const wasFeedingDue = feedingDue(s)
-    const onion = s.data.profile.crop.toLowerCase().includes('bawang')
-    const oldPhase = phaseAt(Math.floor(sim.growthHours / 24), onion)
+    const species = speciesOfCrop(s.data.profile.crop)
+    const oldPhase = phaseAt(Math.floor(sim.growthHours / 24), species)
     const data = addSample(s.data, { moisture, temp_c, ph, valid: true })
     const comfortable = moisture >= oldResult.evidence.low && moisture < oldResult.evidence.wet && temp_c < data.profile.hot_c
     sim = { ...sim, pendingWater: 0, waterUndo: undefined, growthHours: sim.growthHours + (sim.mode === 'journey' ? (comfortable ? .5 : .1) : 0) }
@@ -92,8 +93,8 @@ export function advanceSimulation(session: Session, steps = 1): Session {
     const result = evaluate(data)
     if (result.decision !== oldResult.decision) s = logEvent(s, `${result.action}. ${result.reason}`, 'rule')
     if (s.day !== oldDay && sim.mode === 'journey') s = logEvent(s, `HST ${s.day}: kelembapan ${moisture}, suhu ${temp_c} °C. ${comfortable ? 'Kondisi mendukung perkembangan dalam model latihan.' : 'Perkembangan dalam model melambat; periksa kondisi media.'}`, 'system')
-    if (sim.mode === 'journey' && phaseAt(s.day, onion) !== phaseAt(oldDay, onion)) s = logEvent(s, `Acuan HST ${s.day}: ${phaseAt(s.day, onion)}. Cocokkan dengan varietas dan pengamatan; fase ini tidak dideteksi sensor.`, 'system')
-    const newPhase = phaseAt(Math.floor(sim.growthHours / 24), onion)
+    if (sim.mode === 'journey' && phaseAt(s.day, species) !== phaseAt(oldDay, species)) s = logEvent(s, `Acuan HST ${s.day}: ${phaseAt(s.day, species)}. Cocokkan dengan varietas dan pengamatan; fase ini tidak dideteksi sensor.`, 'system')
+    const newPhase = phaseAt(Math.floor(sim.growthHours / 24), species)
     if (sim.mode === 'journey' && newPhase !== oldPhase) s = logEvent(s, `Fase model beralih: ${newPhase}.`, 'system')
     if (!wasFeedingDue && feedingDue(s)) s = logEvent(s, 'Pengingat jadwal pupuk pribadi tiba. Periksa rencana perawatan sebelum bertindak; ini bukan deteksi kebutuhan pupuk.', 'system')
     if (shouldPause(s, before)) break

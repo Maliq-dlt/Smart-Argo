@@ -5,13 +5,14 @@ import { SelectField } from './ui/select'
 import { feedingDue, scenePeriod, worldTime, simulationOf, simulationStopped, sampleIntervalMs, type SimulationState } from '../lib/simulation'
 import { clockDate, utcLabel, logClock } from '../lib/sessionClock'
 import type { Session } from '../lib/sessionStore'
+import { curated, speciesOfCrop } from '../lib/species'
 
 export default function SimulationControls({ session, running, pauseNote, recommendation, waterStatus, waterPending, onChange, onRun, onAdvance, onPlant, onWater, onFeed }: {
   session: Session; running: boolean; pauseNote: string; recommendation: ReactNode; waterStatus: ReactNode; waterPending: boolean; onChange: (change: Partial<SimulationState>) => void
   onRun: () => void; onAdvance: (steps: number) => void; onPlant: () => void; onWater: () => void; onFeed: () => void
 }) {
   const sim = simulationOf(session), journey = sim.mode === 'journey'
-  const complete = journey && session.day >= (session.data.profile.crop.toLowerCase().includes('bawang') ? 65 : 90)
+  const complete = journey && session.day >= curated(speciesOfCrop(session.data.profile.crop)).maxDay
   const events = session.logs.filter(l => l.kind !== 'data').slice(-3).reverse()
   return <section className="panel simulation-controls" tabIndex={-1} aria-labelledby="simulation-control-heading">
     <div className="panel-heading"><h2 id="simulation-control-heading">Waktu & perawatan</h2><span className="playback-state"><i className={running ? 'running-dot' : ''} />{running ? 'Berjalan' : sim.planted ? 'Dijeda' : 'Siap'}</span></div>

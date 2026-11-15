@@ -2,6 +2,7 @@ import { evaluate, parseCase, type PotCase, type Sample } from './agronomyEngine
 import type { SimulationState } from './simulation.ts'
 import { defaultClock, parseClock, type SessionClock } from './sessionClock.ts'
 import { parseTelemetry, type DeviceSnapshot } from './telemetry.ts'
+import { curated, speciesOfCrop } from './species.ts'
 
 export interface LogEntry { id: number; time: string; kind: 'data' | 'action' | 'rule' | 'system' | 'fault'; message: string }
 export type Reading = Omit<Sample, 't_h'>
@@ -48,7 +49,7 @@ export function parseSession(input: unknown): Session {
     parseTelemetry(input.deviceSnapshot.packet)
     if (typeof input.deviceSnapshot.importedAt !== 'number' || !Number.isSafeInteger(input.deviceSnapshot.importedAt) || input.deviceSnapshot.importedAt < 0 || input.deviceSnapshot.importedAt > 8.64e15) throw new Error('Waktu impor paket tidak valid.')
   }
-  const maxDay = data.profile.crop.toLowerCase().includes('bawang') ? 65 : 90
+  const maxDay = curated(speciesOfCrop(data.profile.crop)).maxDay
   if (typeof input.day !== 'number' || !Number.isInteger(input.day) || input.day < 0 || input.day > maxDay || ![1, 2, 5, 10].includes(input.speed as number))
     throw new Error('Posisi ilustrasi tidak valid.')
   object(input.reading)

@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Selesai bila:** semua tes yang ada lulus tanpa mengubah asersinya, dan DOM halaman identik sebelum dan sesudah (Tugas 4). Satu pengecualian yang dinyatakan: `tests/dashboardFacts.test.ts` hanya mengganti argumen `true/false` menjadi `'bawang'/'cabai'` karena tanda tangan fungsi yang diuji berubah; asersinya tetap.
+- **Selesai bila:** semua tes yang ada lulus tanpa mengubah asersinya, dan DOM halaman identik sebelum dan sesudah (Tugas 4). Dua pengecualian yang dinyatakan: `tests/dashboardFacts.test.ts` dan `tests/engine.test.ts` hanya mengganti argumen `false/true` menjadi `'cabai'/'bawang'` karena tanda tangan `phaseAt`/`phaseSteps`/`phaseIndex` berubah; nilai yang diasersikan tetap. (`engine.test.ts` baru ketahuan saat tes unit dijalankan: peta awal hanya menyisir `src/`.)
 - ID katalog untuk spesies kurasi tetap `cabai` dan `bawang` (sama dengan nilai yang sudah tersimpan di token/sesi), jadi tidak ada alias atau migrasi. Nama tampilan tetap "Cabai" dan "Bawang merah".
 - Spesies `belajar` belum bisa dibuka di aplikasi (belum ada alur "Mengamati", Fase 4): `parsePot` menolaknya. Perlebar di Fase 4.
 - `speciesId` bilangan bulat positif, unik, **permanen** begitu kode tanaman terbit (Fase 4): `code = speciesId * 1_000_000 + plant_no` harus muat di `integer` Postgres, jadi `speciesId ≤ 2146`. Huruf tampilan ("E") belum ditentukan; menunggu jawaban pengguna, jadi tidak ada di katalog.

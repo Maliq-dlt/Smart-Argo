@@ -1,3 +1,4 @@
+import { curated, type CuratedId } from './species.ts'
 export interface Profile {
   pot_id: string; crop: string; media: string; phase: string
   validated: boolean; ph_validated: boolean
@@ -167,10 +168,10 @@ export function evaluate(input: unknown): Decision {
   return result('AMATI', 'Lanjutkan pengamatan sesuai jadwal', 'Belum ada kondisi terkonfirmasi yang membutuhkan tindakan; ketiadaan peringatan bukan jaminan tanaman sehat.')
 }
 
-export function phaseAt(day: number, onion: boolean) {
-  if (day === 0) return 'Awal tanam'
-  if (onion) return day <= 25 ? 'Vegetatif' : day <= 50 ? 'Pembentukan umbi' : 'Pematangan umbi'
-  return day <= 30 ? 'Vegetatif' : day <= 55 ? 'Berbunga' : 'Berbuah'
+/** The reference phase on day `day` (HST) of a curated species' journey; the phase table lives in species.ts. */
+export function phaseAt(day: number, id: CuratedId) {
+  const { phases } = curated(id)
+  return phases.reduce((name, phase) => day >= phase.start ? phase.name : name, phases[0].name)
 }
 
 /** Appending is explicit: sliders never rewrite recorded observations. */

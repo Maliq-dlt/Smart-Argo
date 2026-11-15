@@ -27,9 +27,9 @@ test('the sun is up between 06 and 18 and the moon between 18 and 06, never both
 })
 
 test('phase steps agree with phaseAt on both sides of every boundary, for chili and shallot', () => {
-  for (const onion of [false, true]) {
-    const { names, starts, total } = phaseSteps(onion)
-    for (let day = 0; day <= total; day++) assert.equal(names[phaseIndex(day, onion)], phaseAt(day, onion), `${onion ? 'shallot' : 'chili'} day ${day}`)
+  for (const id of ['cabai', 'bawang'] as const) {
+    const { names, starts, total } = phaseSteps(id)
+    for (let day = 0; day <= total; day++) assert.equal(names[phaseIndex(day, id)], phaseAt(day, id), `${id} day ${day}`)
     assert.equal(starts.length, names.length)
   }
 })

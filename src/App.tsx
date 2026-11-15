@@ -26,7 +26,7 @@ import ConditionBand from './components/dashboard/ConditionBand'
 import AnswerCard, { type AnswerRow } from './components/dashboard/AnswerCard'
 import Instruments from './components/dashboard/Instruments'
 import { agoLabel, skyPeriod } from './lib/dashboardFacts'
-import { curated } from './lib/species'
+import { CURATED_IDS, curated, isCuratedId, speciesOfCrop } from './lib/species'
 import './components/dashboard/dashboard.css'
 import SessionClockCard from './components/dashboard/SessionClockCard'
 import { appendSession, createSession, exportSession as encodeSession, importSession as decodeSession, readBook, saveBook, sessionTime, STORAGE_KEY, type Session, type SessionBook, type LogEntry } from './lib/sessionStore'
@@ -156,8 +156,8 @@ function Simulator() {
     target?.focus({ preventScroll: true })
   }
   const result = evaluate(data), last = data.samples.at(-1)!
-  const onion = data.profile.crop.toLowerCase().includes('bawang'), maxDay = onion ? 65 : 90
-  const phase = phaseAt(day, onion), phRow = [...data.samples].reverse().find(r => r.valid && r.ph !== null)
+  const species = speciesOfCrop(data.profile.crop), maxDay = curated(species).maxDay
+  const phase = phaseAt(day, species), phRow = [...data.samples].reverse().find(r => r.valid && r.ph !== null)
   const phFresh = phRow && data.now_h - phRow.t_h <= 24 && data.profile.ph_validated
   const ageMinutes = Math.round((data.now_h - last.t_h) * 60)
   const dataGood = last.valid && data.now_h - last.t_h <= 5 / 60 && result.decision !== 'PERIKSA_SENSOR'
@@ -287,7 +287,7 @@ function Simulator() {
   function changeMode(mode: SimulationState['mode']) {
     const previous = [...book.sessions].reverse().find(s => simulationOf(s).mode === mode)
     if (previous) resume(previous.id)
-    else openNew(mode === 'journey' ? createJourney(loadScenario(onion ? 7 : 0).data) : loadScenario(onion ? 7 : 0))
+    else openNew(mode === 'journey' ? createJourney(loadScenario(curated(species).scenario).data) : loadScenario(curated(species).scenario))
     location.hash = 'simulasi'
   }
   function configureSimulation(change: Partial<SimulationState>) {
@@ -443,24 +443,24 @@ function Simulator() {
           <Sheet open={setupOpen} onOpenChange={setSetupOpen}><SheetTrigger asChild><button id="plant-settings" className="button setup-trigger"><SlidersHorizontal aria-hidden="true" />Atur tanaman & skenario</button></SheetTrigger><SheetContent onCloseAutoFocus={event => {
             if (pendingProfile.current) { event.preventDefault(); pendingProfile.current = false; openModal('profile', document.getElementById('plant-settings')) }
           }}><header className="sheet-heading"><SheetTitle>Tanaman & skenario</SheetTitle><SheetDescription>Sesuaikan ruang tanam dengan eksplorasimu.</SheetDescription></header>
-            <section className="settings-section"><label className="settings-field"><span>Tanaman</span><SelectField label="Profil tanaman" value={onion ? 'bawang' : 'cabai'} onValueChange={value => { const i = value === 'bawang' ? 7 : 0; if (journey) openNew(createJourney(loadScenario(i).data)); else reset(i) }} options={[{ value: 'cabai', label: 'Cabai' }, { value: 'bawang', label: 'Bawang merah' }]} /></label>
+            <section className="settings-section"><label className="settings-field"><span>Tanaman</span><SelectField label="Profil tanaman" value={species} onValueChange={value => { const i = isCuratedId(value) ? curated(value).scenario : 0; if (journey) openNew(createJourney(loadScenario(i).data)); else reset(i) }} options={CURATED_IDS.map(id => ({ value: id, label: curated(id).name }))} /></label>
             <p className="section-hint">{data.profile.media} · Pot 3–5 L</p>
             {!journey && <label className="settings-field"><span>Skenario</span><SelectField label="Skenario simulasi" value={scenario} onValueChange={value => { if (value !== 'custom') reset(Number(value)) }} options={[...(scenario === 'custom' ? [{ value: 'custom', label: 'Eksplorasi manual' }] : []), ...scenarios.map((s, i) => ({ value: String(i), label: `${String(i + 1).padStart(2, '0')} · ${s.name}` }))]} /></label>}
             <button className="settings-row" onClick={() => { setProfileVersion(v => v + 1); pendingProfile.current = true; setSetupOpen(false) }}><SlidersHorizontal aria-hidden="true" /><span>Acuan lokal</span><ArrowUpRight aria-hidden="true" /></button></section>
-            <section className="settings-section"><h3>Mulai lagi</h3><p className="section-hint">Sesi sebelumnya tetap tersimpan untuk perbandingan.</p><SheetClose asChild><button className="button" onClick={() => openNew(journey ? createJourney(loadScenario(onion ? 7 : 0).data) : loadScenario(onion ? 7 : 0))}><Plant aria-hidden="true" />{journey ? 'Pot baru' : 'Eksperimen baru'}</button></SheetClose></section>
+            <section className="settings-section"><h3>Mulai lagi</h3><p className="section-hint">Sesi sebelumnya tetap tersimpan untuk perbandingan.</p><SheetClose asChild><button className="button" onClick={() => openNew(journey ? createJourney(loadScenario(curated(species).scenario).data) : loadScenario(curated(species).scenario))}><Plant aria-hidden="true" />{journey ? 'Pot baru' : 'Eksperimen baru'}</button></SheetClose></section>
             <SheetClose asChild><button className="button primary sheet-done">Selesai</button></SheetClose>
           </SheetContent></Sheet>
         </div>
         <div className="studio-grid">
           <div className="visual-stack"><SimulationOverview data={data} decision={result} />
-            <PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} running={running} rate={sim.rate} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} onion={onion} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} />
+            <PlantPotVisualizer careEffect={careEffect} clock={session.clock} key={session.id} running={running} rate={sim.rate} day={day} developmentDay={developmentDay} elapsed={data.now_h} planted={!journey || sim.planted} journey={journey} species={species} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'} />
             {!journey && <section className="panel timeline" aria-label="Ilustrasi fase tanaman"><div className="timeline-label"><span>Ilustrasi fase</span><strong>Hari <b>{String(day).padStart(2, '0')}</b><small> / {maxDay} HST</small></strong></div>
               <div className="timeline-controls"><button className={`icon-button play-button ${playing ? 'playing' : ''}`} aria-label={playing ? 'Jeda timelapse' : 'Putar timelapse'} onClick={() => { if (day >= maxDay) setDay(0); setPlaying(!playing) }}>{playing ? <Pause weight="fill" aria-hidden="true" /> : <Play weight="fill" aria-hidden="true" />}</button><button className="icon-button" aria-label="Reset timelapse" onClick={() => { setDay(0); setPlaying(false) }}><ArrowCounterClockwise aria-hidden="true" /></button></div>
-              <div className="timeline-track"><input aria-label="Hari setelah tanam" type="range" min="0" max={maxDay} step="1" value={day} style={{ '--fill': `${day / maxDay * 100}%` } as CSSProperties} onChange={e => { setDay(Number(e.target.value)); setPlaying(false) }} /><div className="timeline-phases"><span>Awal tanam</span><span>Vegetatif</span><span>{onion ? 'Pembentukan umbi' : 'Berbunga'}</span><span>{onion ? 'Pematangan' : 'Berbuah'}</span></div></div>
+              <div className="timeline-track"><input aria-label="Hari setelah tanam" type="range" min="0" max={maxDay} step="1" value={day} style={{ '--fill': `${day / maxDay * 100}%` } as CSSProperties} onChange={e => { setDay(Number(e.target.value)); setPlaying(false) }} /><div className="timeline-phases"><span>Awal tanam</span><span>Vegetatif</span><span>{species === 'bawang' ? 'Pembentukan umbi' : 'Berbunga'}</span><span>{species === 'bawang' ? 'Pematangan' : 'Berbuah'}</span></div></div>
               <label className="speed-label"><span className="sr-only">Kecepatan timelapse</span><SelectField label="Kecepatan timelapse" value={speed} onValueChange={value => setSpeed(Number(value))} options={[1, 2, 5, 10].map(value => ({ value, label: `${value}×` }))} /></label>
               <p className="timeline-explanation">Hari setelah tanam (HST) hanya mengubah gambar. Waktu sensor maju saat sampel ditambahkan.</p>
             </section>}
-            {journey && <div className="journey-progress"><span>{sim.planted ? `HST ${day} / ${maxDay}` : 'Bibit siap ditanam'}</span><progress aria-label="Perjalanan tanam" max={maxDay} value={day} /><span>{phaseAt(developmentDay, onion)}</span></div>}
+            {journey && <div className="journey-progress"><span>{sim.planted ? `HST ${day} / ${maxDay}` : 'Bibit siap ditanam'}</span><progress aria-label="Perjalanan tanam" max={maxDay} value={day} /><span>{phaseAt(developmentDay, species)}</span></div>}
           </div>
           <div className="control-stack"><SimulationControls waterStatus={sim.source !== 'manual' ? waterStatus : null} waterPending={undoAvailable} pauseNote={playbackNote} recommendation={recommendation} session={session} running={running} onChange={configureSimulation} onRun={toggleRunning} onAdvance={advance} onPlant={plantNow} onWater={() => recordWater(150)} onFeed={() => edit(recordFertilizer(session))} />
             {!journey && sim.source === 'manual' &&
@@ -475,8 +475,8 @@ function Simulator() {
 
       {page === 'statistics' && <div className="statistics-page">
         <div className="dash">
-          <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, onion)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
-            onion={onion} day={developmentDay} age={day} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
+          <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, species)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
+            species={species} day={developmentDay} age={day} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
             hour={clockHour(data.now_h, session.clock)} period={skyPeriod(clockHour(data.now_h, session.clock))} readings={{
               moisture: { label: 'Kelembapan media', value: last.valid ? last.moisture.toLocaleString('id-ID') : 'Gagal', unit: last.valid ? '/100' : undefined, note: `Batas siram ${low} · basah ${result.evidence.wet}`, alert: !last.valid || last.moisture <= low },
               temperature: { label: 'Suhu tanah', value: last.valid ? one(last.temp_c) : 'Gagal', unit: last.valid ? '°C' : undefined, note: `Batas panas ${one(data.profile.hot_c)} °C`, alert: !last.valid || last.temp_c >= data.profile.hot_c },
@@ -495,7 +495,7 @@ function Simulator() {
           </div>
           {!awaitingPlant && <>
             <ConditionBand key={session.id} samples={data.samples} now={data.now_h} low={low} wet={result.evidence.wet} slope={slope_per_h} />
-            <Instruments samples={data.samples} now={data.now_h} hot={data.profile.hot_c} phRange={data.profile.ph_range} phValidated={data.profile.ph_validated} day={developmentDay} onion={onion} awaitingPlant={awaitingPlant} />
+            <Instruments samples={data.samples} now={data.now_h} hot={data.profile.hot_c} phRange={data.profile.ph_range} phValidated={data.profile.ph_validated} day={developmentDay} species={species} awaitingPlant={awaitingPlant} />
           </>}
         </div>
         <StatisticsDashboard awaitingPlant={awaitingPlant} onPlant={plantNow} manual={sim.source === 'manual'} clock={session.clock} key={session.id} data={data} decision={result} logs={session.logs} />

@@ -1,16 +1,17 @@
 import { useId } from 'react'
 import { motion, type MotionValue } from 'framer-motion'
 import type { CareEffect } from './PlantPotVisualizer'
+import { curated, type CuratedId } from '../lib/species'
 
-interface Props { day: number; age?: number; onion: boolean; moisture: number; contact: boolean; planted?: boolean; showSensors?: boolean; careEffect?: CareEffect | null; shellOpacity?: number | MotionValue<number>; sensorOpacity?: number | MotionValue<number>; viewBox?: string }
-export default function PlantIllustration({ day, age = day, onion, moisture, contact, planted = true, showSensors = false, careEffect, shellOpacity = 0, sensorOpacity = 1, viewBox = '0 0 460 485' }: Props) {
+interface Props { day: number; age?: number; species: CuratedId; moisture: number; contact: boolean; planted?: boolean; showSensors?: boolean; careEffect?: CareEffect | null; shellOpacity?: number | MotionValue<number>; sensorOpacity?: number | MotionValue<number>; viewBox?: string }
+export default function PlantIllustration({ day, age = day, species, moisture, contact, planted = true, showSensors = false, careEffect, shellOpacity = 0, sensorOpacity = 1, viewBox = '0 0 460 485' }: Props) {
   const id = useId().replaceAll(':', '')
-  const growth = Math.min(1, .12 + day / (onion ? 48 : 62))
+  const growth = Math.min(1, .12 + day / curated(species).growthDays)
   const height = 214 * growth
   const leafCount = Math.min(7, 2 + Math.floor(day / 8))
   return (
 <svg viewBox={viewBox} role="img" aria-labelledby={`${id}-title ${id}-desc`}>
-  <title id={`${id}-title`}>{onion ? 'Bawang merah' : 'Cabai'} pada {age} hari setelah tanam</title>
+  <title id={`${id}-title`}>{curated(species).name} pada {age} hari setelah tanam</title>
   <desc id={`${id}-desc`}>Ilustrasi fase tumbuh, akar, pot dan tiga sensor lokal. Bukan model pertumbuhan atau diagnosis tanaman.</desc>
   <defs>
     <pattern id={`${id}-soil`} width="22" height="17" patternUnits="userSpaceOnUse"><circle cx="4" cy="5" r="1" fill="var(--soil-grain)" /><path d="m13 10 3 1m-11 4 2-1" stroke="var(--soil-grain)" strokeWidth="1" /></pattern>
@@ -34,7 +35,7 @@ export default function PlantIllustration({ day, age = day, onion, moisture, con
   <path d="M125 443Q226 454 328 442L335 449Q227 467 118 451Z" fill="var(--pot-dark)" />
   <g className={planted ? `plant-growth${careEffect?.kind === 'plant' ? ' is-planting' : ''}` : 'seed-waiting'} stroke="var(--stem)" strokeLinecap="round" fill="none">
     {!planted ? <g><ellipse cx="226" cy="308" rx="6" ry="3" fill="var(--root)" /><path d="M224 308h4" stroke="var(--soil-dry)" /></g> : <>
-    {onion ? <>
+    {species === 'bawang' ? <>
       {Array.from({ length: 9 }, (_, i) => <motion.path key={i} d={`M${218 + (i % 3) * 7} 312Q${190 + i * 7} ${265 - height * .3} ${163 + i * 16} ${308 - height + Math.abs(4 - i) * 16}`} strokeWidth={3 + i % 3} animate={{ pathLength: growth }} transition={{ duration: .6 }} />)}
       {day >= 26 && [0, 1, 2].map(i => <motion.ellipse key={i} cx={209 + i * 18} cy="314" rx="13" ry="20" fill="var(--onion)" stroke="var(--onion-dark)" strokeWidth="1.2" initial={{ scale: .2 }} animate={{ scale: Math.min(1, (day - 20) / 30) }} />)}
     </> : <>

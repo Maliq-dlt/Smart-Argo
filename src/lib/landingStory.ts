@@ -1,5 +1,6 @@
 import { evaluate, parseCase, type Sample } from './agronomyEngine.ts'
 import scenarios from './scenarios.json' with { type: 'json' }
+import { curated } from './species.ts'
 
 // ponytail: two built-in cases tell this story; add choices only when another decision needs explaining.
 export const landingExamples = [
@@ -25,7 +26,7 @@ export const storyPlants = [
 ]
 
 export function storyExamples(crop: StoryCrop) {
-  const dry = parseCase(scenarios[crop === 'bawang' ? 7 : 0])
+  const dry = parseCase(scenarios[curated(crop).scenario])
   const wet = { ...landingExamples[1].data, profile: { ...dry.profile } }
   return [dry, wet].map(data => ({ data, reading: data.samples.at(-1)!, decision: evaluate(data) }))
 }

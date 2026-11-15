@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { Check, Leaf } from '@phosphor-icons/react'
 import type { Sample } from '../../lib/agronomyEngine'
 import { phaseIndex, phaseSteps } from '../../lib/dashboardFacts'
+import type { CuratedId } from '../../lib/species'
 import { useWidth } from './useWidth'
 
 const one = (value: number) => value.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -11,11 +12,11 @@ const phPos = (value: number) => (clamp(value, PH_MIN, PH_MAX) - PH_MIN) / (PH_M
 
 /** Three instruments that add context instead of repeating the stage's numbers: where the plant is on its journey, the
  * last day of soil temperature against the heat limit, and the last three pH readings against the profile's range. */
-export default function Instruments({ samples, now, hot, phRange, phValidated, day, onion, awaitingPlant }: {
-  samples: Sample[]; now: number; hot: number; phRange: [number, number]; phValidated: boolean; day: number; onion: boolean; awaitingPlant: boolean
+export default function Instruments({ samples, now, hot, phRange, phValidated, day, species, awaitingPlant }: {
+  samples: Sample[]; now: number; hot: number; phRange: [number, number]; phValidated: boolean; day: number; species: CuratedId; awaitingPlant: boolean
 }) {
-  const { names, starts, total } = phaseSteps(onion)
-  const index = awaitingPlant ? -1 : phaseIndex(day, onion)
+  const { names, starts, total } = phaseSteps(species)
+  const index = awaitingPlant ? -1 : phaseIndex(day, species)
   const next = index < 0 ? 'Dimulai setelah bibit ditanam' : index >= names.length - 1 ? `Perjalanan selesai di hari ${total}` : `${names[index + 1]} mulai hari ${starts[index + 1]}`
 
   const temps = samples.filter(r => r.valid && r.t_h >= now - 24)
