@@ -2,7 +2,7 @@ import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode
 import { flushSync } from 'react-dom'
 import LandingPage from './components/LandingPage'
 import SiteCurtain, { type CurtainHandle } from './components/SiteCurtain'
-import { markRevealed } from './lib/curtainSignal'
+import { curtainHeld, markRevealed, registerCurtain } from './lib/curtainSignal'
 import { isSimulatorHash } from './lib/siteRoute'
 
 type SimulatorModule = typeof import('./App')
@@ -45,6 +45,8 @@ export default function Site() {
   const current = useRef(route), request = useRef(0), curtain = useRef<CurtainHandle>(null), booting = useRef(animated)
 
   useEffect(() => { if (!animated) markRevealed() }, [animated])
+  // Lets the app (the sign-in gate) run its own page changes behind the same loading screen.
+  useEffect(() => { registerCurtain(animated ? curtain.current : null); return () => registerCurtain(null) }, [animated])
   // The static first-paint loader in index.html hands over to the React curtain, which looks the same.
   useLayoutEffect(() => { document.getElementById('boot')?.remove() }, [])
 
@@ -74,7 +76,7 @@ export default function Site() {
       }
       if (!animated) return
       if (booting.current) { booting.current = false; await bootReady(simulator) } else await frames(2)
-      if (!stale()) await curtain.current?.reveal()
+      if (!stale() && !curtainHeld()) await curtain.current?.reveal()
     }
     window.addEventListener('hashchange', navigate)
     void navigate()

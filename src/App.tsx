@@ -40,6 +40,7 @@ const ProfilePage = lazy(() => import('./components/ProfilePage'))
 import AccountProvider from './components/AccountProvider'
 import { useAccount } from './components/accountContext'
 import AccountGate from './components/AccountGate'
+import { behindCurtain } from './lib/curtainSignal'
 import PotSetup from './components/PotSetup'
 import AccountMenu from './components/AccountMenu'
 import { entryView } from './lib/siteRoute'
@@ -384,11 +385,11 @@ function Simulator() {
   const plantNow = () => { edit(plantSeed(session)); showCareEffect('plant'); setNotice('Bibit ditanam. Waktu simulasi berjalan.'); setPauseNote(''); setRunning(true) }
   const view = entryView({ configured: productAccountConfigured, ready: account.ready, signedIn: account.signedIn, guest: guest && !signInRequired, hash, mfaPending: account.mfaPending, returning })
   if (view === 'loading') return <main className="site-initial-loading" role="status"><p>Memeriksa sesi akun…</p></main>
-  if (view === 'gate') return <AccountGate onGuest={signInRequired ? undefined : () => {
+  if (view === 'gate') return <AccountGate onGuest={signInRequired ? undefined : () => void behindCurtain('Menyiapkan ruang tanam…', () => {
     try { localStorage.setItem(GUEST_KEY, '1') } catch { /* storage blocked: guest for this visit only */ }
     setGuest(true)
     if (!location.hash || location.hash === '#masuk') location.hash = '#statistik'
-  }} />
+  })} />
   // Signed in for the first time (Google or email): set up the first pot, which opens its journey.
   if (account.signedIn && account.identity && !account.identity.pot) return <PotSetup onSaved={pot => {
     openNew({ ...createJourney(loadScenario(pot.crop === 'bawang' ? 7 : 0).data), name: pot.name })

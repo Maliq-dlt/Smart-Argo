@@ -67,3 +67,19 @@ test('renaming validates first, saves display_name, then refreshes the token so 
   assert.deepEqual(calls.map(c => `${c.method} ${c.path}`), ['PUT /auth/v1/user', 'POST /auth/v1/token?grant_type=refresh_token'])
   assert.deepEqual(calls[0].body, { data: { display_name: 'Maliq' } })
 })
+// Auth hides whether an address is taken: a repeated sign-up for a confirmed email answers 200 with a user that has
+// no identities (and sends no email), so the form would wait forever for a code that never comes. The client says so.
+test('a sign-up for a confirmed email (Auth answers a user without identities) is refused as already registered', async () => {
+  stub(() => ({ body: { id: 'u', email: 'tani@example.test', identities: [] } }))
+  await assert.rejects(new ProductAccountClient().authenticate('tani@example.test', 'x'.repeat(12), true, undefined, 'Maliq'),
+    (err: Error & { code?: string }) => err.code === 'email_exists' && /sudah terdaftar/.test(err.message))
+})
+test('a new or still unconfirmed address (identities present) goes on to the code step', async () => {
+  stub(() => ({ body: { id: 'u', identities: [{ provider: 'email' }] } }))
+  assert.equal(await new ProductAccountClient().authenticate('tani@example.test', 'x'.repeat(12), true, undefined, 'Maliq'), 'confirm')
+})
+test('the local Auth (auto-confirm) rejects a repeated sign-up outright; that gets the same code and wording', async () => {
+  stub(() => ({ status: 422, body: { code: 422, error_code: 'user_already_exists', msg: 'User already registered' } }))
+  await assert.rejects(new ProductAccountClient().authenticate('tani@example.test', 'x'.repeat(12), true, undefined, 'Maliq'),
+    (err: Error & { code?: string }) => err.code === 'email_exists' && /sudah terdaftar/.test(err.message))
+})

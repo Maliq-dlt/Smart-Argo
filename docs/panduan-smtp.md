@@ -61,13 +61,15 @@ Perbarui juga di Supabase (Authentication → URL Configuration) atau lewat Mana
 
 ## Templat email dan kode verifikasi
 
-Pendaftaran memakai kode 6 angka dari email (berlaku 10 menit); tautan "Konfirmasi lewat tautan" tetap ada di email sebagai cadangan. Email konfirmasi dan reset sandi ada di `supabase/templates/confirmation.html` dan `recovery.html` (berbahasa Indonesia, dengan gambar kepala `public/mail/header.png` yang dibuat `node scripts/build-mail-assets.mjs`).
+Pendaftaran memakai kode 6 angka dari email (berlaku 10 menit); email konfirmasi tidak memuat tautan (tautan verifikasi ke domain lain adalah sinyal phishing terkuat bagi filter spam, dan kode bekerja di perangkat mana pun). Email konfirmasi dan reset sandi ada di `supabase/templates/confirmation.html` dan `recovery.html`: berbahasa Indonesia, hanya teks hidup di atas warna solid, tanpa gambar dan tanpa teks tersembunyi (Gmail tidak memuat gambar untuk pesan yang ia anggap spam, dan teks tak terlihat adalah tanda spam klasik). Email reset sandi tetap memuat tautan karena memang tidak bisa bekerja tanpanya.
 
 1. Lihat hasilnya lebih dulu: `node scripts/preview-email.mjs` menulis PNG ke `design-previews/email-2026-11-15/`.
 2. Lihat apa yang akan berubah di cloud (hanya membaca): `node scripts/apply-auth-email.mjs`.
 3. Terapkan: `node scripts/apply-auth-email.mjs --apply`. Nilai lama disimpan dulu di `.tmp/cloud/backups/auth-email-<waktu>.json`, lalu hasilnya diverifikasi. Kembalikan dengan `node scripts/apply-auth-email.mjs --restore <berkas>`.
 
-Skrip ini mengatur kode OTP 6 angka (bukan 8) yang berlaku 10 menit (bukan 1 jam). Terapkan **sesudah** gambar kepala tayang di `smart-agro-demo.pages.dev/mail/header.png` (deploy hijau), supaya email tidak menampilkan gambar rusak. `apply-smtp.mjs` hanya mengatur SMTP.
+Skrip ini mengatur kode OTP 6 angka (bukan 8) yang berlaku 10 menit (bukan 1 jam). Templat tidak bergantung pada berkas di situs, jadi urutan terhadap deploy tidak penting. `apply-smtp.mjs` hanya mengatur SMTP.
+
+**Email masuk Spam?** Pengirim dari alamat `@gmail.com` lewat SMTP Gmail lulus SPF/DKIM atas nama gmail.com, tetapi pengirim baru dengan nama tampilan "Smart Agro" yang berbeda dari nama akunnya, tautan verifikasi ke domain lain, dan isi yang mirip "verifikasi akun" gampang dinilai mencurigakan. Isi email sudah dibersihkan dari yang bisa kami ubah (lihat di atas). Yang menentukan penempatan di kotak masuk adalah reputasi pengirim: pakai **domain sendiri** dengan SPF, DKIM, dan DMARC lewat layanan email transaksional (Resend, Brevo, Postmark, atau Amazon SES), lalu isi `smtp_admin_email` dengan alamat domain itu. Sampai itu ada, penerima bisa memilih "Bukan spam" pada email pertama supaya yang berikutnya masuk kotak masuk.
 
 **Kenapa pengirim tampil "saya"?** Nama pengirim di cloud sudah "Smart Agro". Gmail menamai email dari akun yang sama dengan penerimanya "saya". Uji dengan alamat penerima yang berbeda dari akun pengirim.
 

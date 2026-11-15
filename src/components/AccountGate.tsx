@@ -4,9 +4,9 @@ import AccountSignIn, { type GuardMood } from './AccountSignIn'
 import AgroMark from './AgroMark'
 import ThemeToggle from './ThemeToggle'
 import { useAccount } from './accountContext'
+import { behindCurtain } from '../lib/curtainSignal'
 
 const back = () => `${location.origin}${location.pathname}#statistik`
-const pause = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms))
 /** Auth answers in English; the common ones get a sentence that says what to do next. Others pass through. */
 const plain: [RegExp, string][] = [
   [/invalid login credentials/i, 'Email atau kata sandi salah. Belum punya akun? Pilih Daftar.'],
@@ -29,7 +29,8 @@ export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
   const [codeEmail, setCodeEmail] = useState<string | null>(null)
   const [codeWait, setCodeWait] = useState(0)
   const [welcome, setWelcome] = useState(false)
-  const [google, setGoogle] = useState<boolean | null>(null)
+  const [existing, setExisting] = useState<{ email: string } | null>(null)
+  const [google, setGoogle] = useState<boolean | null>(client.googleKnown)
 
   useEffect(() => {
     let active = true
@@ -42,11 +43,12 @@ export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
     try { await action() } catch (err) { setNotice({ error: true, text: friendly(err instanceof Error ? err.message : 'Permintaan gagal.') }) }
     finally { setPending(false) }
   }
-  /** The guard sprouts for a moment before the app opens (skipped with reduced motion). */
+  /** The guard sprouts while the loading screen closes over the gate, and the app opens behind it (with reduced motion
+   * there is no curtain: the app just opens). */
   async function opened(text: string) {
     setNotice({ error: false, text })
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { setWelcome(true); await pause(900) }
-    await account.refresh()
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setWelcome(true)
+    try { await behindCurtain('Menyiapkan ruang tanam…', account.refresh) } catch (err) { setWelcome(false); throw err }
   }
 
   const mood: GuardMood = pending ? 'busy' : welcome ? 'welcome' : notice?.error ? 'error' : 'idle'
@@ -54,8 +56,7 @@ export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
     {/* ThemeToggle also applies the stored theme, which the app topbar does once the gate is passed. */}
     <header className="entry-top"><a className="entry-home" href="#"><ArrowLeft aria-hidden="true" /><AgroMark /><span>Smart Agro</span></a><ThemeToggle /></header>
     <div className="entry-card">
-      {notice && <p className="entry-notice" role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
-      <AccountSignIn mood={mood} google={google} mfaStep={mfaStep} codeEmail={codeEmail} codeWait={codeWait}
+      <AccountSignIn mood={mood} google={google} mfaStep={mfaStep} codeEmail={codeEmail} codeWait={codeWait} notice={notice} existing={existing}
         onGoogle={() => void run(() => client.startGoogle(back()))}
         onGuest={onGuest}
         onPassword={(email, password, signup, name) => run(async () => {
@@ -63,6 +64,12 @@ export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
           try { result = await client.authenticate(email, password, signup, back(), name) } catch (err) {
             // Someone who never finished verifying gets the code step (with send again ready), not a dead end.
             if (!signup && err instanceof Error && /email not confirmed/i.test(err.message)) { setCodeWait(0); setCodeEmail(email) }
+            // An address that already has an account is not an error: move to "Masuk" with it filled in, and say why.
+            if (signup && (err as { code?: string }).code === 'email_exists') {
+              setExisting({ email })
+              setNotice({ error: false, text: `Email ini sudah terdaftar, jadi kami arahkan ke Masuk. Lupa kata sandinya? Pilih "Lupa kata sandi?".${google ? ' Dulu mendaftar lewat Google? Pilih "Lanjut dengan Google".' : ''}` })
+              return
+            }
             throw err
           }
           if (result === 'mfa') { setMfaStep(true); return }

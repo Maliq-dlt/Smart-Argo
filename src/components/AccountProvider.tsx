@@ -33,6 +33,8 @@ function identityOf(client: ProductAccountClient | null): Identity | null {
 
 export default function AccountProvider({ children }: { children: ReactNode }) {
   const [client] = useState(() => productAccountConfigured ? new ProductAccountClient() : null)
+  // Whether Google sign-in is on is one small request: ask now, so the gate is usually drawn in its final shape.
+  useEffect(() => { client?.googleEnabled().catch(() => undefined) }, [client])
   const [ready, setReady] = useState(!client)
   const [signedIn, setSignedIn] = useState(false)
   const [products, setProducts] = useState<OwnedProduct[]>([])

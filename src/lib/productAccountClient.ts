@@ -68,6 +68,7 @@ const GATE_TEXT: Record<string, string> = {
   serial_taken: 'Serial sudah terdaftar.',
   key_in_use: 'Salah satu kunci perangkat sudah terdaftar.',
   invalid_code: 'Kode tidak cocok.',
+  email_exists: 'Email ini sudah terdaftar.',
 }
 /** One wording for every failed account call: a known code gets the app's text, otherwise the server's message. */
 function accountError(value: unknown) {
@@ -165,7 +166,16 @@ export class ProductAccountClient {
     try { localStorage.setItem(signupPkceKey, verifier) } catch { /* storage blocked: the link still confirms, then sign in by password */ }
     const query = returnTo ? `?${new URLSearchParams({ redirect_to: returnTo })}` : ''
     const display = normalizeDisplayName(name)
-    const value = await this.request(`/auth/v1/signup${query}`, { email, password, ...(display ? { data: { display_name: display } } : {}), code_challenge: await pkceChallenge(verifier), code_challenge_method: 's256' })
+    let value: Record<string, unknown>
+    try { value = await this.request(`/auth/v1/signup${query}`, { email, password, ...(display ? { data: { display_name: display } } : {}), code_challenge: await pkceChallenge(verifier), code_challenge_method: 's256' }) } catch (err) {
+      // Local Auth (auto-confirm) refuses a repeated sign-up outright; hosted Auth answers it with an empty user, below.
+      if (err instanceof Error && /already (been )?registered/i.test(err.message)) throw accountError({ code: 'email_exists' })
+      throw err
+    }
+    // Hosted Auth hides whether an address is taken: for a confirmed one it answers 200 with a user without identities and
+    // sends no email, so the person would wait for a code that never comes. Say so instead (ponytail: this reveals
+    // that the address has an account, which the request asked for; Auth's own rate limits bound guessing).
+    if (!value.access_token && Array.isArray(value.identities) && value.identities.length === 0) throw accountError({ code: 'email_exists' })
     if (!value.access_token) return 'confirm'
     local.drop(signupPkceKey)
     return this.begin(value)
@@ -210,9 +220,15 @@ export class ProductAccountClient {
   }
 
   /** Whether this Auth server has Google sign-in configured (public settings, no session needed). */
-  async googleEnabled() {
-    const settings = await this.request('/auth/v1/settings', undefined, undefined, 'GET')
-    return record(settings.external) && settings.external.google === true
+  private googleSetting: Promise<boolean> | null = null
+  /** What the server said about Google sign-in; null until it has answered. The gate reads it when it is drawn, so it opens in its final shape. */
+  googleKnown: boolean | null = null
+  /** One request for the life of the page, started when the app starts (AccountProvider), so the gate usually knows already. */
+  googleEnabled(): Promise<boolean> {
+    this.googleSetting ??= this.request('/auth/v1/settings', undefined, undefined, 'GET').then(
+      settings => (this.googleKnown = record(settings.external) && settings.external.google === true),
+      err => { this.googleSetting = null; throw err })
+    return this.googleSetting
   }
 
   /** Google through Auth's PKCE flow: the browser leaves for Google and comes back to `returnTo` with ?code=. */

@@ -229,3 +229,18 @@ Fase 0 dulu (pengguna nyata sudah mendaftar di demo publik, dan fase ini tidak b
 6. Hanya empat spesies di awal.
 7. Fase 0: nama tampilan, bukan username unik; kode sebagai jalur utama dengan tautan sebagai cadangan; OTP 6 angka berlaku 10 menit.
 8. Pemeriksaan pembangun dilakukan sendiri (membaca dokumen sebagai pembangun) karena tidak ada subagen yang diminta.
+
+## 11. Tambahan pengguna (2026-11-15 siang): ringkasan, katalog, nama, dan kode tanaman
+
+Persyaratan dari pengguna. Dirancang rinci saat Fase 1 (katalog) dan Fase 4 (pot pribadi dan kebun), bukan sekarang.
+
+1. **Ringkasan = tempat berganti produk.** Satu akun bisa punya banyak produk. Satu persona bisa punya pot pribadi **dan** tanaman kebun, dan keduanya berbeda perlakuan. Dijelaskan dulu kepada pengguna: **produk untuk kebun belum ada**. Kebun berisi banyak tanaman, tidak mungkin menancapkan satu sensor per tanaman, dan sensornya pasti banyak. Di prototipe, kebun adalah data simulasi.
+2. **Memilih tanaman lewat pencarian.** Spesies akan banyak (bawang merah, bunga mawar, dan seterusnya); pengguna tidak memilih dari daftar panjang, melainkan lewat kolom cari. Katalog menyimpan nama umum, alias, dan nama Latin yang bisa dicari.
+3. **Nama panggilan.** Spesies tetap (bunga mawar), tetapi pengguna boleh memberi nama sendiri. Bila pengguna malas, sistem memberi nama berurutan ("Bunga mawar 1, 2, 3").
+4. **Kode unik per tanaman**, gabungan spesies dan urutan dari sistem (contoh: mawar berkode berawalan E). Disimpan sebagai **angka bulat, bukan string**, supaya mudah ke basis data dan membantu pengguna menyebut tanamannya.
+
+Interpretasi saya (**belum disetujui pengguna**, ditanyakan saat Fase 1):
+- Katalog memberi tiap spesies `species_id` (angka bulat) dan huruf tampilan. Tiap tanaman mendapat `plant_no`, angka berurut per akun dari sistem.
+- Yang disimpan satu angka bulat: `code = species_id * 1_000_000 + plant_no`. Huruf **hanya tampilan** ("E-000123"), diturunkan dari katalog, sehingga basis data tidak menyimpan string dan tidak ada ambiguitas.
+- Pertanyaan terbuka: apakah huruf "E" itu inisial spesies atau kode kategori? Dan apakah nomor berurut per akun atau global?
+- Nama panggilan bukan identitas (tidak unik, sama seperti nama tampilan akun); kode angka yang menjadi identitasnya.

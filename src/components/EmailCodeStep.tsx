@@ -32,6 +32,7 @@ export default function EmailCodeStep({ email, busy, waitSeconds, onVerify, onRe
     <fieldset className="signin-fields" disabled={busy}>
       <legend className="sr-only">Verifikasi email</legend>
       <p>Kami kirim kode 6 angka ke <b>{email}</b>. Berlaku 10 menit.</p>
+      <small>Belum ada di kotak masuk? Cek folder Spam atau Promosi, lalu pilih “Bukan spam” supaya email berikutnya masuk ke kotak masuk.</small>
       <label className="miro-field code-field"><span>Kode verifikasi</span>
         <input ref={input} inputMode="numeric" autoComplete="one-time-code" required pattern="\d{6}" value={code}
           onChange={event => { const next = normalizeEmailCode(event.target.value); setCode(next); void verify(next) }} />
