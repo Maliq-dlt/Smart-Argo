@@ -21,6 +21,9 @@ import SlotPicker from './components/garden/SlotPicker'
 import SlotWizard, { type WizardInput } from './components/garden/SlotWizard'
 import SwitchPlantDialog from './components/garden/SwitchPlantDialog'
 import GardenSummary from './components/garden/GardenSummary'
+import LearningCard from './components/dashboard/LearningCard'
+import { THRESHOLDS, dryingRate, evidenceLevel, healthyMoistureRange, observe, waterResponse, wateringTimes, type InspectionState } from './lib/observation'
+import { learningEvidence, learningTemplate, type LearningText } from './lib/learningExplanation'
 import { activeCycle, addGarden, addPersonalPot, bindSession, demoGarden, emptyGarden, switchPlant, type GardenBook, type Outcome, type Slot } from './lib/garden'
 import { createSlotSession, loadScenario, loadSpeciesScenario } from './lib/gardenSessions'
 import { browserStorage, readGarden, saveGarden } from './lib/gardenStore'
@@ -228,6 +231,21 @@ function Simulator() {
   const result = evaluate(data), last = data.samples.at(-1)!
   const species = speciesOfCrop(data.profile.crop), maxDay = speciesById(species).maxDay
   const phase = phaseAt(day, species), phRow = [...data.samples].reverse().find(r => r.valid && r.ph !== null)
+  // A plant without a curated profile is watched and learned from, not advised: its card shows what has been seen, and from level 1 the
+  // pattern of this pot (observation.ts). No model is asked in the demo; the card shows the rules' own words.
+  const learning = speciesById(species).tier === 'belajar'
+  const inspections = session.inspections ?? []
+  const observed = observe(data.samples, inspections, wateringTimes(session.logs))
+  const learnedLevel = evidenceLevel(observed)
+  const learnedRange = healthyMoistureRange(data.samples, inspections)
+  const learnedEvidence = learningEvidence(speciesById(species).name, learnedLevel, { days: observed.days, readings: observed.readings, waterings: observed.waterings, inspections: inspections.length },
+    { healthy: learnedRange, dryingPerHour: dryingRate(data.samples), waterRise: waterResponse(data.samples, wateringTimes(session.logs)) }, THRESHOLDS)
+  const learnedText: LearningText = learningTemplate(learnedEvidence)
+  function inspect(state: InspectionState) {
+    edit(s => ({ ...s, inspections: [...(s.inspections ?? []), { t_h: s.data.now_h, state }].slice(-200),
+      logs: [...s.logs, { id: (s.logs.at(-1)?.id ?? 0) + 1, time: sessionTime(s.data.now_h), kind: 'action' as const, message: `Pengecekan: ${state}.` }].slice(-500) }))
+    setNotice(`Pengecekan dicatat: ${state}.`)
+  }
   const ageMinutes = Math.round((data.now_h - last.t_h) * 60)
   const dataGood = last.valid && data.now_h - last.t_h <= 5 / 60 && result.decision !== 'PERIKSA_SENSOR'
   const blocked = ['KALIBRASI_LOKAL', 'PULIHKAN_DATA', 'PERIKSA_SENSOR'].includes(result.decision)
@@ -450,7 +468,8 @@ function Simulator() {
     kelembapan: last.valid ? `${last.moisture.toLocaleString('id-ID')}/100` : 'Gagal',
     suhu: last.valid ? `${one(last.temp_c)} °C` : 'Gagal',
     ph: phRow?.ph != null ? one(phRow.ph) : '—',
-    alert: { kelembapan: !last.valid || last.moisture <= low, suhu: !last.valid || last.temp_c >= data.profile.hot_c },
+    // A plant without a curated profile has no limits to alert on; only a failed reading is flagged.
+    alert: { kelembapan: !last.valid || (!learning && last.moisture <= low), suhu: !last.valid || (!learning && last.temp_c >= data.profile.hot_c) },
   }
   const validShare = data.samples.length ? Math.round(data.samples.filter(s => s.valid).length / data.samples.length * 100) : 0
   const openCare = (event: MouseEvent<HTMLAnchorElement>) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) pendingCare.current = true }
@@ -571,13 +590,15 @@ function Simulator() {
           </PlantStage>
           <div className="dash-side">
             {waterStatus}
-            <AnswerCard tone={calm ? 'calm' : blocked ? 'blocked' : 'care'} mood={!sim.planted ? 'ready' : mood} onOpen={openCare}
-              action={awaitingPlant ? 'Bibit siap memulai perjalanan' : result.action}
-              reason={awaitingPlant ? 'Tanam untuk memulai waktu, lalu amati perubahan media dan perkembangan tanaman.' : result.reason}
-              openLabel={awaitingPlant ? 'Mulai menanam' : 'Buka perawatan'} rows={answerRows} />
+            {learning && !awaitingPlant
+              ? <LearningCard mood={!sim.planted ? 'ready' : mood} speciesName={speciesById(species).name} evidence={learnedEvidence} explanation={learnedText} lastCheck={inspections.at(-1)?.state ?? null} onInspect={inspect} onOpen={openCare} />
+              : <AnswerCard tone={calm ? 'calm' : blocked ? 'blocked' : 'care'} mood={!sim.planted ? 'ready' : mood} onOpen={openCare}
+                action={awaitingPlant ? 'Bibit siap memulai perjalanan' : result.action}
+                reason={awaitingPlant ? 'Tanam untuk memulai waktu, lalu amati perubahan media dan perkembangan tanaman.' : result.reason}
+                openLabel={awaitingPlant ? 'Mulai menanam' : 'Buka perawatan'} rows={answerRows} />}
           </div>
           {!awaitingPlant && <>
-            <ConditionBand key={session.id} samples={data.samples} now={data.now_h} low={low} wet={result.evidence.wet} slope={slope_per_h} />
+            {(!learning || learnedRange) && <ConditionBand key={session.id} samples={data.samples} now={data.now_h} low={learning ? learnedRange![0] : low} wet={learning ? learnedRange![1] : result.evidence.wet} slope={slope_per_h} />}
             <Instruments samples={data.samples} now={data.now_h} hot={data.profile.hot_c} phRange={data.profile.ph_range} phValidated={data.profile.ph_validated} day={developmentDay} species={species} awaitingPlant={awaitingPlant} />
           </>}
         </div>

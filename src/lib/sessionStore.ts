@@ -2,6 +2,7 @@ import { evaluate, parseCase, type PotCase, type Sample } from './agronomyEngine
 import type { SimulationState } from './simulation.ts'
 import { defaultClock, parseClock, type SessionClock } from './sessionClock.ts'
 import { parseTelemetry, type DeviceSnapshot } from './telemetry.ts'
+import type { Inspection } from './observation.ts'
 import { speciesById, speciesOfCrop } from './species.ts'
 
 export interface LogEntry { id: number; time: string; kind: 'data' | 'action' | 'rule' | 'system' | 'fault'; message: string }
@@ -12,6 +13,8 @@ export interface Session {
   simulation?: SimulationState
   clock: SessionClock
   deviceSnapshot?: DeviceSnapshot
+  /** The owner's looks at the plant ("sehat", "biasa", "bermasalah"), which a plant without a curated profile learns from. */
+  inspections?: Inspection[]
 }
 export interface SessionBook { version: 1; activeId: string; sessions: Session[] }
 export const STORAGE_KEY = 'smart-agro.sessions.v1'
@@ -81,6 +84,14 @@ export function parseSession(input: unknown): Session {
     object(log); text(log.time, 40); text(log.message, 2000)
     if (typeof log.id !== 'number' || !Number.isSafeInteger(log.id) || log.id < 0 || !['data', 'action', 'rule', 'system', 'fault'].includes(log.kind as string))
       throw new Error('Entri log tidak valid.')
+  }
+  if (input.inspections !== undefined) {
+    if (!Array.isArray(input.inspections) || input.inspections.length > 200) throw new Error('Catatan pengecekan tidak valid.')
+    for (const item of input.inspections) {
+      object(item)
+      if (typeof item.t_h !== 'number' || !Number.isFinite(item.t_h) || item.t_h < 0 || item.t_h > data.now_h || !['sehat', 'biasa', 'bermasalah'].includes(item.state as string)
+        || (item.note !== undefined && (typeof item.note !== 'string' || item.note.length > 140))) throw new Error('Entri pengecekan tidak valid.')
+    }
   }
   const undo = (input.simulation as SimulationState | undefined)?.waterUndo
   if (undo) {

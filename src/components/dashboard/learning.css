@@ -1,0 +1,15 @@
+/* The card of a plant that is watched and learned from, in the place of the answer card. It borrows the answer card's frame
+ * (`.dashboard-care`) and only adds what is its own: the origin label, the progress rows and the three checks. */
+.learning-card { container-type: inline-size; }
+.learning-card .learning-label { color: var(--muted); font-size: .8125rem; }
+.learning-progress { list-style: none; margin: 0; padding: 0; display: grid; gap: .625rem; }
+.learning-progress li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .25rem .75rem; align-items: center; font-size: .8125rem; }
+.learning-progress li span { min-width: 0; overflow-wrap: anywhere; }
+.learning-progress li progress { grid-column: 1 / -1; grid-row: 2; }
+.learning-progress li b { font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.learning-next { font-size: .875rem; }
+.learning-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.learning-checks .button { padding-inline: .5rem; min-width: 0; white-space: normal; text-align: center; overflow-wrap: normal; word-break: normal; }
+.learning-last { margin: 0; }
+/* Too narrow for three side by side (a phone, or large text): one under another, each word whole. */
+@container (max-width: 22rem) { .learning-checks { grid-template-columns: minmax(0, 1fr); } }

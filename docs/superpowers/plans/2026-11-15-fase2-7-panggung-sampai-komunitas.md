@@ -139,6 +139,8 @@
 
 ## Fase 5: Mode belajar (tingkat 0 dan 1)
 
+> Selesai 2026-11-15. Deviasi: pengecekan memakai jam sesi (`t_h`), bukan `at` ISO, karena bacaan juga begitu; waktu siram diturunkan dari log sesi ("Siram N mL dicatat", bukan yang dibatalkan) tanpa mengubah skema simulasi; pengecekan disimpan di `Session.inspections` (divalidasi di `parseSession`, maksimum 200); penjelasan ada di `src/lib/learningExplanation.ts` (bukan `aiExplanation.ts`, yang melayani unit perangkat) dengan `LEARNING_PROMPT_VERSION = smart-agro.explain.v2`, templat aturan, prompt, pemeriksa keluaran, dan `explainLearning(evidence, ask?)`; demo tidak punya titik akhir model sehingga yang tampil adalah teks aturan (`explainLearning` belum dipanggil dari UI, siap untuk Fase 8); ambang ada di `observation.ts` (`THRESHOLDS`), bukan di katalog; pemeriksa angka membandingkan dengan himpunan angka bukti (angka yang kebetulan sama dengan angka lain di bukti lolos, dicatat sebagai ponytail); `LearningCard` dan `learning.css` di `src/components/dashboard/`.
+
 ### Tugas 5.1: Modul observasi deterministik
 
 **Files:**
@@ -147,8 +149,8 @@
 **Interfaces:**
 - Produces: `interface Inspection { at: string; state: 'sehat' | 'biasa' | 'bermasalah'; note?: string }`; `interface Observation { days: number; readings: number; waterings: number; inspections: Inspection[] }`; `evidenceLevel(o: Observation, thresholds?): 0 | 1`; `healthyMoistureRange(samples, inspections): [number, number] | null`; `dryingRate(samples): number | null` (poin kelembapan per jam, siang); `waterResponse(samples, wateringAt: string[]): number | null`; `remaining(o, thresholds): { days: number; inspections: number; waterings: number }` dengan ambang awal 7 hari, 3 pengecekan, 2 siraman terukur.
 
-- [ ] **Step 1:** Tes merah dengan data **sintetis berlabel**: kurang dari ambang selalu tingkat 0; tepat di ambang tingkat 1; rentang sehat hanya dari bacaan dalam 6 jam setelah pengecekan `sehat`; laju kering `null` bila kurang dari dua titik valid; bacaan tak valid diabaikan; hasil deterministik untuk masukan yang sama.
-- [ ] **Step 2:** Implementasikan dan jalankan. Commit.
+- [x] **Step 1:** Tes merah dengan data **sintetis berlabel**: kurang dari ambang selalu tingkat 0; tepat di ambang tingkat 1; rentang sehat hanya dari bacaan dalam 6 jam setelah pengecekan `sehat`; laju kering `null` bila kurang dari dua titik valid; bacaan tak valid diabaikan; hasil deterministik untuk masukan yang sama.
+- [x] **Step 2:** Implementasikan dan jalankan. Commit.
 
 ### Tugas 5.2: Penjelasan tingkat 1 dan kartu belajar
 
@@ -156,9 +158,9 @@
 - Create: `src/components/LearningCard.tsx`, `tests/learningPrompt.test.ts`, `tests/learning-browser.mjs`
 - Modify: `src/lib/aiExplanation.ts` (prompt `smart-agro.explain.v2` untuk tingkat 1 dan pemeriksa keluaran), `src/App.tsx` (spesies `belajar` menampilkan `LearningCard` sebagai ganti kartu jawaban mesin; sesi demo anggrek dengan data simulasi sendiri), `src/lib/species.ts` (ambang di katalog)
 
-- [ ] **Step 1:** Tes merah prompt: keluaran yang menyebut dosis, angka yang tidak ada di bukti, atau "optimal untuk spesies" ditolak oleh pemeriksa; label asal data ("Berdasarkan pola pot Anda, bukan standar tanaman") wajib ada; tingkat 0 tidak pernah memanggil model.
-- [ ] **Step 2:** Tes merah browser: kartu "Sedang belajar" menampilkan kemajuan, apa yang terekam, dan satu tindakan; mencatat pengecekan menaikkan hitungan; demo anggrek berpindah dari tingkat 0 ke 1 setelah ambang terpenuhi lewat data simulasi miliknya.
-- [ ] **Step 3:** Implementasikan; jalankan semua tes; tangkapan layar. Commit dan push.
+- [x] **Step 1:** Tes merah prompt: keluaran yang menyebut dosis, angka yang tidak ada di bukti, atau "optimal untuk spesies" ditolak oleh pemeriksa; label asal data ("Berdasarkan pola pot Anda, bukan standar tanaman") wajib ada; tingkat 0 tidak pernah memanggil model.
+- [x] **Step 2:** Tes merah browser: kartu "Sedang belajar" menampilkan kemajuan, apa yang terekam, dan satu tindakan; mencatat pengecekan menaikkan hitungan; demo anggrek berpindah dari tingkat 0 ke 1 setelah ambang terpenuhi lewat data simulasi miliknya.
+- [x] **Step 3:** Implementasikan; jalankan semua tes; tangkapan layar. Commit dan push.
 
 ---
 
