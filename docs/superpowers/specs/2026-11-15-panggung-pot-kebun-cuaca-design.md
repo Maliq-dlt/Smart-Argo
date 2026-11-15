@@ -245,3 +245,9 @@ Interpretasi saya (**belum disetujui pengguna**, ditanyakan saat Fase 1):
 - Yang disimpan satu angka bulat: `code = species_id * 1_000_000 + plant_no`. Huruf **hanya tampilan** ("E-000123"), diturunkan dari katalog, sehingga basis data tidak menyimpan string dan tidak ada ambiguitas.
 - Pertanyaan terbuka: apakah huruf "E" itu inisial spesies atau kode kategori? Dan apakah nomor berurut per akun atau global?
 - Nama panggilan bukan identitas (tidak unik, sama seperti nama tampilan akun); kode angka yang menjadi identitasnya.
+
+**Yang sudah diputuskan saat Fase 1 dikerjakan (2026-11-15, di `src/lib/species.ts`):**
+- `speciesId` sudah diberikan: cabai 1, bawang merah 2, anggrek bulan 3, peoni 4. Angka ini **permanen** begitu kode tanaman terbit; batas atas 2146 supaya `speciesId * 1_000_000 + plant_no` muat di `integer` Postgres (dijaga tes).
+- Huruf tampilan belum ada di katalog: menunggu jawaban pengguna atas pertanyaan di atas. Menambahnya nanti satu bidang data.
+- Alias dan nama Latin untuk pencarian belum dimasukkan (belum ada pemakainya); ditambahkan bersama kolom cari di Fase 4. Katalog kini hanya memuat bidang yang dipakai.
+- Id spesies kurasi tetap `cabai` dan `bawang` (nilai itu sudah tersimpan di token dan sesi pengguna), jadi tidak ada alias dan tidak ada migrasi. `parsePot` menolak anggrek dan peoni sampai Fase 4 menyediakan perjalanan "mengamati".
