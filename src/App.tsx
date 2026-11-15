@@ -26,6 +26,7 @@ import ConditionBand from './components/dashboard/ConditionBand'
 import AnswerCard, { type AnswerRow } from './components/dashboard/AnswerCard'
 import Instruments from './components/dashboard/Instruments'
 import { agoLabel, skyPeriod } from './lib/dashboardFacts'
+import { curated } from './lib/species'
 import './components/dashboard/dashboard.css'
 import SessionClockCard from './components/dashboard/SessionClockCard'
 import { appendSession, createSession, exportSession as encodeSession, importSession as decodeSession, readBook, saveBook, sessionTime, STORAGE_KEY, type Session, type SessionBook, type LogEntry } from './lib/sessionStore'
@@ -392,7 +393,7 @@ function Simulator() {
   })} />
   // Signed in for the first time (Google or email): set up the first pot, which opens its journey.
   if (account.signedIn && account.identity && !account.identity.pot) return <PotSetup onSaved={pot => {
-    openNew({ ...createJourney(loadScenario(pot.crop === 'bawang' ? 7 : 0).data), name: pot.name })
+    openNew({ ...createJourney(loadScenario(curated(pot.crop).scenario).data), name: pot.name })
     if (pot.device) location.hash = '#ekosistem' // activation by serial lives there
     else if (!location.hash || location.hash === '#masuk') location.hash = '#statistik'
   }} />

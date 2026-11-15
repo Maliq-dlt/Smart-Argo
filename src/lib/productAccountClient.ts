@@ -1,4 +1,5 @@
 import { normalizeDisplayName, normalizeEmailCode } from './signupForm.ts'
+import { isCuratedId, type CuratedId } from './species.ts'
 export interface ProductSession { access_token: string; refresh_token: string; expires_at: number }
 export interface OwnedProduct { ownership_id: string; product_id: string; serial_public: string; variant: 'single_pot' | 'garden'; start_at: string }
 export interface ProductChallenge { nonce_id: string; challenge: string; expires_at: string }
@@ -80,12 +81,13 @@ function accountError(value: unknown) {
 /** The RPCs the app calls (Supabase migrations define them). */
 type RpcName = 'append_my_care_journal' | 'read_my_care_journal' | 'read_my_measurement_history' |'compare_my_measurement_history' | 'open_reward_appeal' | 'my_reward_cases' | 'operator_reward_cases' | 'operator_take_reward_case' | 'operator_decide_reward_case' | 'open_ownership_recovery' | 'withdraw_ownership_recovery' | 'my_ownership_recoveries' | 'operator_recovery_cases' | 'operator_take_recovery_case' | 'operator_decide_recovery_case' | 'rename_my_unit' | 'archive_my_unit' | 'restore_my_unit' | 'place_my_device' | 'my_units' | 'my_unit_history' | 'my_unit_overview' | 'create_my_recovery_codes' | 'my_recovery_codes_status' | 'my_chain_proofs' | 'operator_outbox_status' | 'operator_rotate_device_key' | 'operator_revoke_device' | 'operator_revoke_product' | 'operator_registry_history' | 'ensure_my_account' | 'my_products' | 'issue_activation_nonce' | 'my_device_units' | 'unit_measurements' | 'create_my_unit' | 'published_profile_versions' | 'unit_explanations' | 'knowledge_workspace' | 'submit_profile_contribution' | 'revise_profile_contribution' | 'review_profile_contribution' | 'published_profile_details' | 'assign_unit_profile' | 'energy_workspace' | 'operator_register_energy_meter' | 'operator_revoke_energy_meter' | 'operator_set_reward_policy' | 'operator_upsert_catalog' | 'reserve_my_reward' | 'cancel_my_redemption' | 'operator_fulfill_redemption' | 'operator_compensate_redemption' | 'reward_workspace' | 'create_transfer_offer' | 'cancel_transfer_offer' | 'accept_transfer' | 'security_workspace'
 export interface TotpEnrollment { id: string; secret: string; uri: string }
-/** The first pot, asked once after sign-up. `crop` names a simulator profile; `device` says whether a Smart Agro
- * unit is on hand to activate. */
-export interface PotSetup { name: string; crop: 'cabai' | 'bawang'; device: boolean }
+/** The first pot, asked once after sign-up. `crop` is a curated species id (src/lib/species.ts), which names the
+ * simulator profile it opens; `device` says whether a Smart Agro unit is on hand to activate.
+ * ponytail: learning species (anggrek, peoni) are refused until Fase 4 gives them an "observe" journey to open. */
+export interface PotSetup { name: string; crop: CuratedId; device: boolean }
 /** Metadata comes back from the token, which its owner can write: validate it like any other input. */
 export function parsePot(value: unknown): PotSetup | null {
-  if (!record(value) || typeof value.name !== 'string' || typeof value.device !== 'boolean' || (value.crop !== 'cabai' && value.crop !== 'bawang')) return null
+  if (!record(value) || typeof value.name !== 'string' || typeof value.device !== 'boolean' || !isCuratedId(value.crop)) return null
   const name = value.name.trim().replace(/\s+/g, ' ')
   const clean = name.length > 0 && name.length <= 40 && !/[<>]/.test(name) && ![...name].some(c => c.charCodeAt(0) < 32)
   return clean ? { name, crop: value.crop, device: value.device } : null

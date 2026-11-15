@@ -6,10 +6,10 @@ import ThemeToggle from './ThemeToggle'
 import { useAccount } from './accountContext'
 import type { PotSetup as Pot } from '../lib/productAccountClient'
 import scenarios from '../lib/scenarios.json'
+import { CURATED_IDS, curated } from '../lib/species'
 
-/** The simulator profile each choice opens, as the app's own "Pot baru" does (scenarios.json 0 = cabai, 7 = bawang). */
-const POT_SCENARIO: Record<Pot['crop'], number> = { cabai: 0, bawang: 7 }
-const crops = (Object.keys(POT_SCENARIO) as Pot['crop'][]).map(id => ({ id, profile: scenarios[POT_SCENARIO[id]].profile }))
+/** The simulator profile each choice opens, as the app's own "Pot baru" does (the species' catalog scenario). */
+const crops = CURATED_IDS.map(id => ({ id, profile: scenarios[curated(id).scenario].profile }))
 
 /** Step 2 after signing in (Google or email): name the first pot, pick its crop, say whether a unit is on hand.
  * Asked once; saved on the account. */
