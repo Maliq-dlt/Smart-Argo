@@ -14,9 +14,11 @@ assert.ok(assets.length >= 2, 'Build must contain JS and CSS entry assets')
 // so wait up to 90s for the new one before judging it.
 let html = '', status = 0
 for (let attempt = 0; attempt < 18; attempt++) {
-  const page = await fetch(`${origin}/`, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
-  status = page.status; html = await page.text()
-  if (status === 200 && assets.every(asset => html.includes(asset))) break
+  try {
+    const page = await fetch(`${origin}/`, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
+    status = page.status; html = await page.text()
+    if (status === 200 && assets.every(asset => html.includes(asset))) break
+  } catch { /* one slow or dropped response (a 20 s timeout failed a deploy on 2026-11-15) counts as "not yet": try again; a page that never answers still fails the status check below */ }
   await new Promise(resolve => setTimeout(resolve, 5000))
 }
 assert.equal(status, 200)
