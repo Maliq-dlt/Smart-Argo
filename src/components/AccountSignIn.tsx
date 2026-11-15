@@ -1,6 +1,8 @@
 import { GoogleLogo } from '@phosphor-icons/react'
 import { useId, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
+import EmailCodeStep from './EmailCodeStep'
 import Mascot, { type Face } from './Mascot'
+import { DISPLAY_NAME_MAX, checkSignup } from '../lib/signupForm'
 
 export type GuardMood = 'idle' | 'busy' | 'error' | 'welcome'
 type Field = 'email' | 'secret' | null
@@ -9,9 +11,9 @@ type Mode = 'signin' | 'signup'
 const NEW_PASSWORD_MIN = 10
 
 const faceOf: Record<GuardMood, Face> = { idle: 'smile', busy: 'think', error: 'sad', welcome: 'happy' }
-const caption = (mood: GuardMood, field: Field, mode: Mode) => mood === 'error' ? 'Ups, belum cocok. Coba sekali lagi, ya.'
+const caption = (mood: GuardMood, field: Field, mode: Mode, codeStep: boolean) => mood === 'error' ? 'Ups, belum cocok. Coba sekali lagi, ya.'
   : mood === 'busy' ? 'Sebentar, saya cek dulu…' : mood === 'welcome' ? 'Asyik, selamat datang!'
-  : field === 'secret' ? 'Mata saya tutup. Janji tidak mengintip… hehe.' : field === 'email' ? 'Wah, saya ikut membaca!'
+  : codeStep ? 'Hampir selesai! Cek email Anda, ya.' : field === 'secret' ? 'Mata saya tutup. Janji tidak mengintip… hehe.' : field === 'email' ? 'Wah, saya ikut membaca!'
   : mode === 'signup' ? 'Halo! Ayo siapkan pot pertama Anda.' : 'Halo! Saya penjaga pot Anda.'
 
 let ruler: CanvasRenderingContext2D | null = null
@@ -30,8 +32,14 @@ interface Props {
   mood: GuardMood
   google: boolean | null
   mfaStep: boolean
+  /** The address whose sign-up code is awaited (also after signing in with an unconfirmed email); null otherwise. */
+  codeEmail: string | null
+  codeWait: number
+  onVerifyEmail: (code: string) => Promise<void>
+  onResendEmail: () => Promise<void>
+  onChangeEmail: () => void
   onGoogle: () => void
-  onPassword: (email: string, password: string, signup: boolean) => Promise<void>
+  onPassword: (email: string, password: string, signup: boolean, name?: string) => Promise<void>
   onCode: (code: string) => Promise<void>
   onCancelCode: () => void
   /** Lost authenticator: spend a one-time recovery code instead of the 6-digit code (APP-01). */
@@ -44,11 +52,13 @@ interface Props {
 
 /** Sign-in and sign-up on one card: Google first when the server offers it, then the email form, always open, with
  * "Masuk" and "Daftar" as tabs so creating an account is never hidden behind a fold. */
-export default function AccountSignIn({ mood, google, mfaStep, onGoogle, onPassword, onCode, onCancelCode, onRecoveryCode, onForgot, onGuest }: Props) {
+export default function AccountSignIn({ mood, google, mfaStep, codeEmail, codeWait, onVerifyEmail, onResendEmail, onChangeEmail, onGoogle, onPassword, onCode, onCancelCode, onRecoveryCode, onForgot, onGuest }: Props) {
   const [mode, setMode] = useState<Mode>('signin')
   const [recovering, setRecovering] = useState(false)
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [otp, setOtp] = useState('')
   const [field, setField] = useState<Field>(null)
   const [caret, setCaret] = useState(0)
@@ -62,6 +72,7 @@ export default function AccountSignIn({ mood, google, mfaStep, onGoogle, onPassw
   const focus = (value: Field) => ({ onFocus: () => setField(value), onBlur: () => setField(null) })
   const follow = (event: SyntheticEvent<HTMLInputElement>) => setCaret(caretAt(event.currentTarget))
   const signup = mode === 'signup', short = signup && password.length < NEW_PASSWORD_MIN
+  const mismatch = signup && confirm.length > 0 && confirm !== password, blocked = short || mismatch
   // Reading: along the line it types into (below and to the right of the mascot); thinking: up and away.
   const look = shown === 'busy' ? { x: .8, y: -1 } : field === 'email' ? { x: .3 + caret * .7, y: .9 } : { x: .35, y: .2 }
   const pick = (next: Mode) => { setMode(next); setSad(false); tabs.current[next]?.focus() }
@@ -71,11 +82,11 @@ export default function AccountSignIn({ mood, google, mfaStep, onGoogle, onPassw
     <div className="signin-guard">
       {/* Typing the email it beams and reads along; on the password it shuts its eyes, shy, and now and then peeks. */}
       <Mascot className="guardian" face={field === 'email' && shown === 'idle' ? 'joy' : faceOf[shown]} look={look} hands hide={field === 'secret' && shown !== 'busy'} bud={shown === 'welcome'} />
-      <p aria-hidden="true">{caption(shown, field, mode)}</p>
+      <p aria-hidden="true">{caption(shown, field, mode, Boolean(codeEmail))}</p>
     </div>
     <div className="signin-body">
-      <h3>{mfaStep ? 'Satu langkah lagi' : signup ? 'Buat akun Smart Agro' : 'Masuk ke Smart Agro'}</h3>
-      {mfaStep ? <form onSubmit={event => { event.preventDefault(); void (recovering && onRecoveryCode ? onRecoveryCode(otp) : onCode(otp)).finally(() => setOtp('')) }}>
+      <h3>{codeEmail ? 'Masukkan kode dari email' : mfaStep ? 'Satu langkah lagi' : signup ? 'Buat akun Smart Agro' : 'Masuk ke Smart Agro'}</h3>
+      {codeEmail ? <EmailCodeStep email={codeEmail} busy={mood === 'busy'} waitSeconds={codeWait} onVerify={onVerifyEmail} onResend={onResendEmail} onBack={onChangeEmail} /> : mfaStep ? <form onSubmit={event => { event.preventDefault(); void (recovering && onRecoveryCode ? onRecoveryCode(otp) : onCode(otp)).finally(() => setOtp('')) }}>
         <fieldset className="signin-fields" disabled={mood === 'busy'}>
           <legend className="sr-only">Verifikasi dua langkah</legend>
           {recovering ? <>
@@ -101,18 +112,27 @@ export default function AccountSignIn({ mood, google, mfaStep, onGoogle, onPassw
           <button ref={el => { tabs.current.signin = el }} type="button" role="tab" id={`${id}-signin`} aria-selected={!signup} aria-controls={`${id}-form`} tabIndex={signup ? -1 : 0} onClick={() => pick('signin')} onKeyDown={arrows}>Masuk</button>
           <button ref={el => { tabs.current.signup = el }} type="button" role="tab" id={`${id}-signup`} aria-selected={signup} aria-controls={`${id}-form`} tabIndex={signup ? 0 : -1} onClick={() => pick('signup')} onKeyDown={arrows}>Daftar</button>
         </div>
-        <form id={`${id}-form`} role="tabpanel" aria-labelledby={`${id}-${mode}`} onSubmit={event => { event.preventDefault(); if (!short) void onPassword(email.trim(), password, signup).finally(() => setPassword('')) }}>
+        <form id={`${id}-form`} role="tabpanel" aria-labelledby={`${id}-${mode}`} onSubmit={event => {
+          event.preventDefault()
+          const check = signup ? checkSignup({ name, password, confirm }) : null
+          if (blocked || (check && !check.ok)) return
+          void onPassword(email.trim(), password, signup, check?.ok ? check.name : undefined).finally(() => { setPassword(''); setConfirm('') })
+        }}>
           <fieldset className="signin-fields" disabled={mood === 'busy'}>
             <legend className="sr-only">{signup ? 'Daftar akun baru' : 'Masuk dengan email'}</legend>
+            {signup && <label className="miro-field"><span>Nama</span><input required autoComplete="name" maxLength={DISPLAY_NAME_MAX} pattern=".*[^ ].*" value={name} {...focus('email')}
+              onChange={e => { setName(e.target.value); setSad(false); follow(e) }} onSelect={follow} onKeyUp={follow} onClick={follow} /></label>}
             <label className="miro-field"><span>Email</span><input type="email" required autoComplete="email" value={email} {...focus('email')}
               onChange={e => { setEmail(e.target.value); setSad(false); follow(e) }} onSelect={follow} onKeyUp={follow} onClick={follow} /></label>
             <label className="miro-field"><span>Kata sandi</span><input type="password" required minLength={signup ? NEW_PASSWORD_MIN : 1} maxLength={256}
               autoComplete={signup ? 'new-password' : 'current-password'} aria-describedby={signup ? hint : undefined} value={password} {...focus('secret')}
               onChange={e => { setPassword(e.target.value); setSad(false) }} /></label>
-            {signup && <small id={hint} className="signin-hint" data-ok={!short || undefined}>
-              {short ? `Minimal ${NEW_PASSWORD_MIN} karakter${password ? ` · kurang ${NEW_PASSWORD_MIN - password.length}` : ''}.` : 'Panjang kata sandi sudah cukup.'} Setelah daftar, buka tautan konfirmasi di email Anda.
+            {signup && <label className="miro-field"><span>Konfirmasi kata sandi</span><input type="password" required maxLength={256} autoComplete="new-password" aria-describedby={hint} value={confirm} {...focus('secret')}
+              onChange={e => { setConfirm(e.target.value); setSad(false) }} /></label>}
+            {signup && <small id={hint} className="signin-hint" data-ok={!blocked || undefined}>
+              {short ? `Minimal ${NEW_PASSWORD_MIN} karakter${password ? ` · kurang ${NEW_PASSWORD_MIN - password.length}` : ''}.` : mismatch ? 'Konfirmasi kata sandi belum sama.' : 'Panjang kata sandi sudah cukup.'} Kami kirim kode 6 angka ke email Anda.
             </small>}
-            <button className="button primary signin-submit" type="submit" aria-disabled={short || undefined}>{signup ? 'Buat akun' : 'Masuk'}</button>
+            <button className="button primary signin-submit" type="submit" aria-disabled={blocked || undefined}>{signup ? 'Buat akun' : 'Masuk'}</button>
             {!signup && onForgot && <button type="button" className="link-button signin-forgot" onClick={() => void onForgot(email.trim())}>Lupa kata sandi?</button>}
             <small className="signin-switch">{signup ? 'Sudah punya akun? ' : 'Belum punya akun? '}
               <button type="button" className="link-button" onClick={() => pick(signup ? 'signin' : 'signup')}>{signup ? 'Masuk' : 'Daftar sekarang'}</button>
@@ -121,7 +141,7 @@ export default function AccountSignIn({ mood, google, mfaStep, onGoogle, onPassw
         </form>
       </>}
       <ol className="signin-steps" aria-label="Langkah memulai">
-        <li aria-current="step">{signup ? 'Daftar' : 'Masuk'}</li><li>Siapkan pot</li><li>Amankan akun dengan 2FA</li>
+        {(signup || codeEmail ? ['Daftar', 'Verifikasi', 'Siapkan pot', 'Amankan akun dengan 2FA'] : ['Masuk', 'Siapkan pot', 'Amankan akun dengan 2FA']).map((label, i) => <li key={label} aria-current={i === (codeEmail ? 1 : 0) ? 'step' : undefined}>{label}</li>)}
       </ol>
     </div>
   </div>

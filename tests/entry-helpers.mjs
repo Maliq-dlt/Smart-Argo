@@ -34,8 +34,10 @@ export async function passPotSetup(page) {
 /** `secret` answers the authenticator step: operator and curator tools only open in an AAL2 session (2026-11-14). */
 export async function signIn(page, email, password, { signup = false, secret } = {}) {
   await emailForm(page, { signup })
+  if (signup) await gate(page).getByLabel('Nama', { exact: true }).fill('Penguji Smart Agro')
   await gate(page).getByLabel('Email', { exact: true }).fill(email)
   await gate(page).getByLabel('Kata sandi', { exact: true }).fill(password)
+  if (signup) await gate(page).getByLabel('Konfirmasi kata sandi', { exact: true }).fill(password)
   await gate(page).getByRole('button', { name: signup ? 'Buat akun' : 'Masuk', exact: true }).click()
   await passPotSetup(page)
   if (!secret) return

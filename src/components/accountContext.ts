@@ -1,8 +1,8 @@
 import { createContext, useContext } from 'react'
-import type { OwnedProduct, PotSetup, ProductAccountClient } from '../lib/productAccountClient'
+import type { OwnedProduct, ProductAccountClient } from '../lib/productAccountClient'
+import type { Identity } from '../lib/identity'
 
-/** `pot` is null until the person has set up their first pot (asked once after sign-up). */
-export interface Identity { name: string; email: string; google: boolean; pot: PotSetup | null }
+export type { Identity }
 export interface AccountState {
   client: ProductAccountClient | null
   ready: boolean

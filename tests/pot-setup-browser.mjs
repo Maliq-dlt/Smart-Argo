@@ -16,13 +16,13 @@ const session = meta => ({ access_token: jwt(meta), refresh_token: `r${Math.rand
 const browser = await chromium.launch({ channel: 'chrome' })
 const page = await browser.newPage({ viewport: { width: 1280, height: 860 } })
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' }
-let saved = null, signups = 0
+let saved = null, signups = 0, lastSignup = null
 await page.route(`${auth}/**`, async route => {
   const request = route.request(), url = new URL(request.url())
   if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors })
   const json = body => route.fulfill({ status: 200, headers: cors, json: body })
   if (url.pathname === '/auth/v1/settings') return json({ external: { google: false, email: true } })
-  if (url.pathname === '/auth/v1/signup') { signups++; return json({ id: 'x', email: 'pot@contoh.test' }) } // confirmation pending
+  if (url.pathname === '/auth/v1/signup') { signups++; lastSignup = request.postDataJSON(); return json({ id: 'x', email: 'pot@contoh.test' }) } // confirmation pending
   if (url.pathname === '/auth/v1/token' && url.searchParams.get('grant_type') === 'password') return json(session({}))
   if (url.pathname === '/auth/v1/token' && url.searchParams.get('grant_type') === 'refresh_token') return json(session(saved ? { pot: saved } : {}))
   if (url.pathname === '/auth/v1/user' && request.method() === 'PUT') { saved = request.postDataJSON().data.pot; return json({ id: 'x', user_metadata: { pot: saved } }) }
@@ -40,6 +40,8 @@ try {
   checks.push('email form open on arrival, no fold')
 
   await gate(page).getByRole('tab', { name: 'Daftar', exact: true }).click()
+  await gate(page).getByLabel('Nama', { exact: true }).fill('Penguji Smart Agro')
+  const confirm = gate(page).getByLabel('Konfirmasi kata sandi', { exact: true })
   await email.fill('pot@contoh.test'); await password.fill('pendek')
   const hint = gate(page).locator('.signin-hint')
   assert.match(await hint.textContent(), /Minimal 10 karakter · kurang 4/)
@@ -48,10 +50,19 @@ try {
   assert.equal(signups, 0, 'a short password never reaches Auth')
   await password.fill('cukup-panjang-12')
   assert.match(await hint.textContent(), /sudah cukup/)
+  await confirm.fill('cukup-panjang-13')
+  assert.match(await hint.textContent(), /Konfirmasi kata sandi belum sama\./)
+  assert.equal(await gate(page).getByRole('button', { name: 'Buat akun', exact: true }).getAttribute('aria-disabled'), 'true')
+  await confirm.press('Enter') // trying anyway: a mismatch never reaches Auth
+  assert.equal(signups, 0, 'a mismatched confirmation never reaches Auth')
+  await confirm.fill('cukup-panjang-12')
+  assert.match(await hint.textContent(), /sudah cukup/)
   await gate(page).getByRole('button', { name: 'Buat akun', exact: true }).click()
-  await gate(page).getByText('Periksa email untuk konfirmasi akun, lalu masuk kembali.').waitFor()
+  await gate(page).getByRole('heading', { name: 'Masukkan kode dari email' }).waitFor()
   assert.equal(signups, 1)
-  checks.push('Daftar tab explains the 10-character rule, then asks to confirm by email')
+  assert.equal(lastSignup.data.display_name, 'Penguji Smart Agro', 'the name travels as user metadata')
+  checks.push('Daftar tab explains the 10-character rule, then opens the email code step')
+  await gate(page).getByRole('button', { name: 'Ganti email', exact: true }).click()
 
   await gate(page).getByRole('tab', { name: 'Masuk', exact: true }).click()
   await password.fill('cukup-panjang-12')

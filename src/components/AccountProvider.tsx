@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AccountContext, type AccountState, type Identity } from './accountContext'
+import { identityFromClaims } from '../lib/identity'
 import StepUpDialog from './StepUpDialog'
 import NewPasswordDialog from './NewPasswordDialog'
-import { ProductAccountClient, productAccountConfigured, oauthReturn, parseOwnedProducts, parsePot, tokenClaims, type OwnedProduct } from '../lib/productAccountClient'
+import { ProductAccountClient, productAccountConfigured, oauthReturn, parseOwnedProducts, tokenClaims, type OwnedProduct } from '../lib/productAccountClient'
 
 // A Google return is single-use (code and verifier), so it is handled once per page load. StrictMode's second
 // effect run gets the same promise for the same client; a later remount (new client) just restores the session.
@@ -27,13 +28,7 @@ const rolesOf = (value: Record<string, unknown>) => {
 }
 
 function identityOf(client: ProductAccountClient | null): Identity | null {
-  if (!client?.session) return null
-  const claims = tokenClaims(client.session.access_token)
-  const meta = (claims.user_metadata ?? {}) as Record<string, unknown>
-  const app = (claims.app_metadata ?? {}) as Record<string, unknown>
-  const email = typeof claims.email === 'string' ? claims.email : ''
-  const named = [meta.full_name, meta.name].find(v => typeof v === 'string' && v.trim()) as string | undefined
-  return { email, name: (named ?? email.split('@')[0]) || 'Akun', google: Array.isArray(app.providers) && app.providers.includes('google'), pot: parsePot(meta.pot) }
+  return client?.session ? identityFromClaims(tokenClaims(client.session.access_token)) : null
 }
 
 export default function AccountProvider({ children }: { children: ReactNode }) {

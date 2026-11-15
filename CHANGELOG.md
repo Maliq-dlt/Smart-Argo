@@ -12,6 +12,8 @@ Notable changes to Smart Agro. Dates are UTC+7.
 - Pure dashboard logic (zones, sun and moon, phase steps, "ago" labels) lives in `src/lib/dashboardFacts.ts`; `tests/dashboardFacts.test.ts` keeps the sky periods equal to the simulator scene's and the phase steps equal to `phaseAt`.
 
 ### Added
+- Sign-up asks for a name and a confirmation of the password, then verifies the email with a six-digit code (also reachable by signing in with an unconfirmed email, with a send-again cooldown); the confirmation link stays in the email as a fallback. The display name is editable in Profil and is not overwritten by the Google name.
+- Indonesian, branded confirmation and password-reset emails (`supabase/templates/`, header image `public/mail/header.png`) and `scripts/apply-auth-email.mjs` to apply them, with the code settings (6 digits, 10 minutes), to hosted Auth with a backup and a restore.
 - "Siapkan pot" after the first sign-in (Google or email): name the pot, pick Cabai or Bawang merah, say whether a unit is on hand. Saved on the account (Auth user metadata, validated on read) and opens that crop's journey; with a unit it continues to activation. Checked by `tests/pot-setup-browser.mjs` against a mocked Auth.
 - Landing numbers and soil scenes animate what the device does (roots drawing in, LED waves, data up the probes, sunlight onto the panel) instead of naming its parts again; parts are labelled only in the product scene.
 - Simulator gate (`#masuk`): sign in with Google or email, or continue as a guest whose data stays in the browser. Deep links pass through the gate and continue to the requested page. Without a backend, the gate is skipped.

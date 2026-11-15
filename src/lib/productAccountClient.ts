@@ -1,3 +1,4 @@
+import { normalizeDisplayName, normalizeEmailCode } from './signupForm.ts'
 export interface ProductSession { access_token: string; refresh_token: string; expires_at: number }
 export interface OwnedProduct { ownership_id: string; product_id: string; serial_public: string; variant: 'single_pot' | 'garden'; start_at: string }
 export interface ProductChallenge { nonce_id: string; challenge: string; expires_at: string }
@@ -72,7 +73,7 @@ const GATE_TEXT: Record<string, string> = {
 function accountError(value: unknown) {
   const v = record(value) ? value : {}
   const code = typeof v.code === 'string' ? v.code : undefined
-  const text = code && Object.hasOwn(GATE_TEXT, code) ? GATE_TEXT[code] : typeof v.message === 'string' ? v.message : typeof v.error_description === 'string' ? v.error_description : 'Permintaan akun gagal. Coba kembali.'
+  const text = code && Object.hasOwn(GATE_TEXT, code) ? GATE_TEXT[code] : typeof v.message === 'string' ? v.message : typeof v.msg === 'string' ? v.msg : typeof v.error_description === 'string' ? v.error_description : 'Permintaan akun gagal. Coba kembali.'
   return Object.assign(new Error(text), { code })
 }
 /** The RPCs the app calls (Supabase migrations define them). */
@@ -154,7 +155,7 @@ export class ProductAccountClient {
   }
 
   /** Sign-up runs PKCE, so the confirmation link returns to `returnTo` with ?code= and never puts tokens in the URL. */
-  async authenticate(email: string, password: string, signup: boolean, returnTo?: string): Promise<'ok' | 'mfa' | 'confirm'> {
+  async authenticate(email: string, password: string, signup: boolean, returnTo?: string, name?: string): Promise<'ok' | 'mfa' | 'confirm'> {
     this.pending = null
     if (!signup) {
       const value = await this.request('/auth/v1/token?grant_type=password', { email, password })
@@ -163,10 +164,41 @@ export class ProductAccountClient {
     const verifier = pkceVerifier()
     try { localStorage.setItem(signupPkceKey, verifier) } catch { /* storage blocked: the link still confirms, then sign in by password */ }
     const query = returnTo ? `?${new URLSearchParams({ redirect_to: returnTo })}` : ''
-    const value = await this.request(`/auth/v1/signup${query}`, { email, password, code_challenge: await pkceChallenge(verifier), code_challenge_method: 's256' })
+    const display = normalizeDisplayName(name)
+    const value = await this.request(`/auth/v1/signup${query}`, { email, password, ...(display ? { data: { display_name: display } } : {}), code_challenge: await pkceChallenge(verifier), code_challenge_method: 's256' })
     if (!value.access_token) return 'confirm'
     local.drop(signupPkceKey)
     return this.begin(value)
+  }
+
+  /** Finishes a sign-up with the six-digit code from the confirmation email (Auth /verify, type signup). */
+  async verifySignupCode(email: string, code: string): Promise<'ok' | 'mfa'> {
+    const token = normalizeEmailCode(code)
+    if (token.length !== 6) throw new Error('Kode verifikasi harus 6 angka.')
+    this.pending = null
+    const value = await this.request('/auth/v1/verify', { type: 'signup', email, token })
+    local.drop(signupPkceKey)
+    return this.begin(value)
+  }
+
+  /** Sends the signup confirmation email again (Auth also enforces its own minimum gap between emails). */
+  async resendSignupCode(email: string): Promise<void> {
+    await this.request('/auth/v1/resend', { type: 'signup', email })
+  }
+
+  /** Auth user metadata is the owner's own preferences, never used for access decisions; the refreshed token carries it. */
+  private async saveMetadata(data: Record<string, unknown>) {
+    await this.refreshIfNeeded()
+    await this.request('/auth/v1/user', { data }, this.session!.access_token, 'PUT')
+    this.store(await this.request('/auth/v1/token?grant_type=refresh_token', { refresh_token: this.session!.refresh_token }))
+  }
+
+  /** The name shown in the app; returns it as stored. Not unique and not an identifier (ponytail: a unique handle needs its own table). */
+  async updateDisplayName(name: string): Promise<string> {
+    const clean = normalizeDisplayName(name)
+    if (!clean) throw new Error('Nama harus 1–40 karakter.')
+    await this.saveMetadata({ display_name: clean })
+    return clean
   }
 
   /** Saves the first pot's setup on the account (Auth user metadata: the owner's own preferences, never used for
@@ -174,9 +206,7 @@ export class ProductAccountClient {
   async savePot(pot: PotSetup) {
     const clean = parsePot(pot)
     if (!clean) throw new Error('Data pot tidak valid.')
-    await this.refreshIfNeeded()
-    await this.request('/auth/v1/user', { data: { pot: clean } }, this.session!.access_token, 'PUT')
-    this.store(await this.request('/auth/v1/token?grant_type=refresh_token', { refresh_token: this.session!.refresh_token }))
+    await this.saveMetadata({ pot: clean })
   }
 
   /** Whether this Auth server has Google sign-in configured (public settings, no session needed). */

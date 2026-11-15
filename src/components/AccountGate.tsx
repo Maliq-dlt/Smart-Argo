@@ -10,7 +10,8 @@ const pause = (ms: number) => new Promise(resolve => window.setTimeout(resolve, 
 /** Auth answers in English; the common ones get a sentence that says what to do next. Others pass through. */
 const plain: [RegExp, string][] = [
   [/invalid login credentials/i, 'Email atau kata sandi salah. Belum punya akun? Pilih Daftar.'],
-  [/email not confirmed/i, 'Email belum dikonfirmasi. Buka tautan konfirmasi di email Anda, lalu masuk.'],
+  [/email not confirmed/i, 'Email belum dikonfirmasi. Masukkan kode yang kami kirim, atau pilih Kirim ulang kode.'],
+  [/token has expired or is invalid|otp_expired/i, 'Kode salah atau sudah kedaluwarsa. Periksa kodenya, atau pilih Kirim ulang.'],
   [/already registered|already been registered/i, 'Email ini sudah terdaftar. Pilih Masuk.'],
   [/password should be at least|weak password/i, 'Kata sandi terlalu pendek: minimal 10 karakter.'],
   [/rate limit|too many/i, 'Terlalu banyak percobaan. Tunggu sebentar, lalu coba lagi.'],
@@ -25,6 +26,8 @@ export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
   const { notice, setNotice } = account
   const [pending, setPending] = useState(false)
   const [mfaStep, setMfaStep] = useState(account.mfaPending)
+  const [codeEmail, setCodeEmail] = useState<string | null>(null)
+  const [codeWait, setCodeWait] = useState(0)
   const [welcome, setWelcome] = useState(false)
   const [google, setGoogle] = useState<boolean | null>(null)
 
@@ -52,15 +55,27 @@ export default function AccountGate({ onGuest }: { onGuest?: () => void }) {
     <header className="entry-top"><a className="entry-home" href="#"><ArrowLeft aria-hidden="true" /><AgroMark /><span>Smart Agro</span></a><ThemeToggle /></header>
     <div className="entry-card">
       {notice && <p className="entry-notice" role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
-      <AccountSignIn mood={mood} google={google} mfaStep={mfaStep}
+      <AccountSignIn mood={mood} google={google} mfaStep={mfaStep} codeEmail={codeEmail} codeWait={codeWait}
         onGoogle={() => void run(() => client.startGoogle(back()))}
         onGuest={onGuest}
-        onPassword={(email, password, signup) => run(async () => {
-          const result = await client.authenticate(email, password, signup, back())
+        onPassword={(email, password, signup, name) => run(async () => {
+          let result: Awaited<ReturnType<typeof client.authenticate>>
+          try { result = await client.authenticate(email, password, signup, back(), name) } catch (err) {
+            // Someone who never finished verifying gets the code step (with send again ready), not a dead end.
+            if (!signup && err instanceof Error && /email not confirmed/i.test(err.message)) { setCodeWait(0); setCodeEmail(email) }
+            throw err
+          }
           if (result === 'mfa') { setMfaStep(true); return }
-          if (result === 'confirm') { setNotice({ error: false, text: 'Periksa email untuk konfirmasi akun, lalu masuk kembali.' }); return }
+          if (result === 'confirm') { setCodeWait(60); setCodeEmail(email); setNotice({ error: false, text: 'Kode sudah dikirim ke email Anda.' }); return }
           await opened(signup ? 'Akun siap digunakan. Aktifkan 2FA di Profil sebelum menukar poin.' : 'Berhasil masuk.')
         })}
+        onVerifyEmail={code => run(async () => {
+          const result = await client.verifySignupCode(codeEmail!, code)
+          if (result === 'mfa') { setCodeEmail(null); setMfaStep(true); return }
+          await opened('Email terverifikasi. Selamat datang!')
+        })}
+        onResendEmail={() => run(async () => { await client.resendSignupCode(codeEmail!); setNotice({ error: false, text: 'Kode baru sudah dikirim ke email Anda.' }) })}
+        onChangeEmail={() => { setCodeEmail(null); setNotice(null) }}
         onCode={code => run(async () => { await client.verifyMfa(code); await opened('Berhasil masuk.') })}
         onRecoveryCode={code => run(async () => { await client.recoverMfa(code); setMfaStep(false); await opened('Masuk dengan kode pemulihan. Autentikator lama dihapus; aktifkan lagi di Profil. Penukaran dan transfer ditahan 24 jam.') })}
         onForgot={email => run(async () => {
