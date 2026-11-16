@@ -34,6 +34,15 @@ await test('Garden: private sites, slots and plant cycles, one history, and numb
     assert.deepEqual((await mine(a)).sites, [])
   })
 
+  await t.test('no function of ours resolves names through a search path its caller could change', () => {
+    // The hosted security advisor flags these (lint 0011). Triggers count too: they run inside the caller's session.
+    const loose = sql(`SELECT string_agg(p.proname, ',' ORDER BY p.proname) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      LEFT JOIN pg_depend d ON d.objid = p.oid AND d.deptype = 'e'
+      WHERE n.nspname = 'public' AND p.prokind = 'f' AND d.objid IS NULL AND p.prolang <> (SELECT oid FROM pg_language WHERE lanname = 'c')
+        AND NOT EXISTS (SELECT 1 FROM unnest(coalesce(p.proconfig, '{}')) c WHERE c LIKE 'search_path=%')`)
+    assert.equal(loose, '', `functions without a fixed search_path: ${loose}`)
+  })
+
   let pot, garden
   await t.test('a pot and a garden are made with their slots; the place is kept to a kilometre and not at all indoors', async () => {
     pot = await addSite(a, { p_name: '  Pot   dapur ', p_placement: 'outdoor', p_latitude: -6.2041, p_longitude: 106.8456 })

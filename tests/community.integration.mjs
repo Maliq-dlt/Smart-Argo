@@ -152,7 +152,9 @@ await test('Community knowledge: shared by choice, anonymous, behind a threshold
     await shared(o3, {}, { ...W(6), p_moisture_low: 34, p_moisture_high: 57 })
     const released = await knowledge(stranger), tropics = zoneOf(released, 'tropis')
     assert.deepEqual([released.ok, released.label, released.source, released.species_id], [true, 'belum dikurasi', 'komunitas', 3])
-    assert.deepEqual(tropics, { zone: 'tropis', cycles: 5, owners: 3, watering_interval_days: { low: 4.5, median: 5, high: 5.5 }, moisture: { low: 34, high: 58 } })
+    // The middle moisture band is 34 to 58; it is published to the nearest 5 points, about what a soil probe can tell apart, so
+    // it no longer equals any one plant's whole-number band (the plant with 34 and 57 is not readable from the result).
+    assert.deepEqual(tropics, { zone: 'tropis', cycles: 5, owners: 3, watering_interval_days: { low: 4.5, median: 5, high: 5.5 }, moisture: { low: 35, high: 60 } })
     assert.equal(zoneOf(released, 'sedang'), undefined, 'a zone with nothing in it is not listed')
     assert.deepEqual((await knowledge(stranger, 4)).zones, [], 'and another species has nothing')
     assert.deepEqual(await knowledge(owner), released, 'everybody reads the same thing')
