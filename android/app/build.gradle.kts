@@ -103,7 +103,7 @@ tasks.matching { it.name == "validateSigningDebug" }.configureEach { dependsOn(c
 // AGP assigns unit-test report paths after the main DSL; override after its task configuration.
 afterEvaluate {
     tasks.withType<Test>().configureEach {
-        reports.html.outputLocation.set(rootProject.file("../.tmp/android-reports/$name"))
+        reports.html.outputLocation.set(rootProject.file(".tmp/reports/$name"))
     }
 }
 

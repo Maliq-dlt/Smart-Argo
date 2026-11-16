@@ -1,5 +1,7 @@
 package id.smartagro.app
 
+import androidx.compose.foundation.verticalScroll
+
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.activity.compose.setContent
@@ -92,7 +94,7 @@ class AppFlowTest {
                             when(stage) {
                                 0 -> RewardsScreen(state,{}, { selected,code->assertEquals(item,selected);assertEquals("123456",code);reservations++ }, { assertEquals(redemption.id,it);cancellations++ })
                                 1 -> ProofsScreen(state,{})
-                                else -> androidx.compose.foundation.layout.Column { WeatherValues(Weather(java.time.Instant.now(),25.0,70.0,5.0,450.0,2,true)) }
+                                else -> androidx.compose.foundation.layout.Column { WeatherValues(WeatherSnapshot("2026-11-16T12:00","berawan",25.0,70.0,55.0,5.0,0.0,emptyList())) }
                             }
                         }
                     }
@@ -122,9 +124,29 @@ class AppFlowTest {
         compose.onNodeWithText("Lihat transaksi di explorer").assertDoesNotExist()
         screenshot("08-native-proofs")
         compose.runOnIdle { stage=2 }
-        compose.onNodeWithText("Radiasi matahari 450,0 W/m²").assertIsDisplayed()
-        compose.onNodeWithText("Bukan lux di daun atau bacaan sensor pot. Sensor cahaya belum tersedia pada layanan perangkat.").assertIsDisplayed()
+        compose.onNodeWithText("Kelembapan udara 70,0% · Angin 5,0 m/s").assertIsDisplayed()
+        compose.onNodeWithText("Prakiraan 2026-11-16 12:00 · waktu lokasi").assertIsDisplayed()
         screenshot("09-native-weather")
+    }
+    @Test fun explanationCanRetryDiscoveryAndOnlySubmitsTheVisibleQuestion() {
+        var available by mutableStateOf(false)
+        var loads=0
+        var submitted=""
+        compose.activity.runOnUiThread {
+            compose.activity.setContent {
+                AgroTheme(false) {
+                    androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                        ExplanationSection(null,false,"Layanan belum tersedia",{loads++},{submitted=it},available)
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Muat penjelasan tersimpan").performScrollTo().performClick()
+        assertEquals(1,loads)
+        compose.runOnIdle { available=true }
+        compose.onNodeWithText("Pertanyaan atau pengamatan (opsional)").performScrollTo().performTextInput("Daun mulai menguning")
+        compose.onNodeWithText("Buat penjelasan berbasis bukti").performScrollTo().performClick()
+        assertEquals("Daun mulai menguning",submitted)
     }
     @Test fun loginDemoProductsDashboardHistoryAndBack() {
         compose.onNodeWithText("Selamat datang kembali").assertIsDisplayed()

@@ -3,7 +3,7 @@ package id.smartagro.app
 import org.json.JSONObject
 import java.time.LocalDate
 
-data class GardenSite(val id: String,val name: String,val kind: String,val placement: String)
+data class GardenSite(val id: String,val name: String,val kind: String,val placement: String,val latitude: Double? = null,val longitude: Double? = null)
 data class GardenPlant(val id: String,val siteId: String,val slotId: String,val zone: String,val unitId: String?,val name: String,
     val species: Int,val ordinal: Int,val code: Long,val plantedOn: LocalDate,val endedOn: LocalDate?) {
     val tag get() = "${when(species) { 1->"CB";2->"BM";3->"AB";4->"PN";else->"SP$species" }}-$ordinal"
@@ -16,7 +16,10 @@ internal fun parseGarden(json: JSONObject): Garden {
     require(json.opt("ok")==true) { "Kebun akun belum dapat dimuat." }
     val sites=json.array("sites").objects(20).map { row ->
         val kind=row.text("kind",40);val placement=row.text("placement",40)
-        GardenSite(row.id("id"),row.text("name",60),kind,placement)
+        val latitude=if(row.has("latitude")) row.nullableNumber("latitude") else null
+        val longitude=if(row.has("longitude")) row.nullableNumber("longitude") else null
+        require((latitude==null)==(longitude==null) && (latitude==null || latitude in -90.0..90.0) && (longitude==null || longitude in -180.0..180.0)) { "Koordinat kebun tidak valid." }
+        GardenSite(row.id("id"),row.text("name",60),kind,placement,latitude,longitude)
     }
     require(sites.map { it.id }.distinct().size==sites.size)
     val slots=json.array("slots").objects(60)

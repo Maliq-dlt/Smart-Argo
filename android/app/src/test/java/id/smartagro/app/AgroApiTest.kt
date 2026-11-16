@@ -82,6 +82,42 @@ class AgroApiTest {
         reply("/auth/v1/logout?scope=local",status=204)
         api.logout();assertNull(api.session);assertNull(store.read())
     }
+    @Test fun serverWeatherUsesAuthenticatedEdgeAndPreservesSessionOnOutage() = runBlocking {
+        reply("/auth/v1/token?grant_type=password",token());reply("/auth/v1/user",user(),"GET")
+        assertTrue(api.login("grower@example.test","test-password"))
+        val weather=JSONObject().put("at","2026-11-16T14:00").put("condition","hujan").put("tempC",24)
+            .put("humidity",90).put("cloud",100).put("windMs",5).put("rainMm",4).put("forecast",JSONArray())
+        reply("/functions/v1/weather-forecast",JSONObject().put("ok",true).put("weather",weather)) {
+            assertEquals(-6.91,it.getDouble("lat"),0.0);assertEquals(107.61,it.getDouble("lon"),0.0)
+        }
+        assertEquals("hujan",api.weather(-6.91,107.61).condition)
+        reply("/functions/v1/weather-forecast",JSONObject().put("ok",false).put("code","weather_unavailable"),status=503)
+        try { api.weather(-6.91,107.61);fail("Expected temporary outage") } catch(error: ApiFailure) { assertFalse(error.expired) }
+        assertNotNull(api.session);assertNotNull(store.read())
+        try { api.weather(Double.NaN,0.0);fail("Invalid location accepted") } catch(_: IllegalArgumentException) { }
+    }
+    @Test fun explanationRetryUsesSameRequestAndRejectsMismatchedEvidence() = runBlocking {
+        reply("/auth/v1/token?grant_type=password",token());reply("/auth/v1/user",user(),"GET")
+        assertTrue(api.login("grower@example.test","test-password"))
+        val request="00000000-0000-4000-8000-000000000009"
+        repeat(2) {
+            reply("/functions/v1/unit-explanation",JSONObject().put("ok",false).put("code","service_unavailable"),status=503) {
+                assertEquals(request,it.getString("request_id"));assertEquals(unitId,it.getString("unit_id"))
+                assertEquals(factor,it.getString("device_id"));assertEquals("Media tampak kering",it.getString("question"))
+            }
+            try { api.explain(unitId,factor,request,"Media tampak kering");fail("Expected outage") } catch(error: ApiFailure) { assertFalse(error.expired) }
+        }
+        val evidence=JSONObject().put("ok",true).put("unit_id",unitId).put("device_id",challenge).put("ownership_id",unitId)
+            .put("profile_version_id",unitId).put("evaluated_at","2026-11-16T07:00:00Z").put("question","")
+            .put("device_status","active").put("registry_status","active").put("packets",JSONArray())
+        val decision=JSONObject().put("decision","DATA_BELUM_ADA").put("action","Tunggu bacaan perangkat").put("reason","Belum ada paket")
+            .put("explanation","Penjelasan aturan.").put("mascot_state","bingung_menunggu").put("rule_version","agronomy-v1.telemetry-v1")
+            .put("source_mode","rule_fallback").put("ai_status","not_configured")
+        val snapshot=JSONObject().put("id",unitId).put("created_at","2026-11-16T07:00:01Z").put("profile_version_id",unitId)
+            .put("context_sha256","a".repeat(64)).put("evidence_ref",evidence).put("decision_payload",decision)
+        reply("/functions/v1/unit-explanation",JSONObject().put("ok",true).put("snapshot",snapshot))
+        try { api.explain(unitId,factor,request,"");fail("Other device evidence accepted") } catch(_: IllegalArgumentException) { }
+    }
     @Test fun secondFactorIsNotPersistedBeforeVerification() = runBlocking {
         reply("/auth/v1/token?grant_type=password",token(mfa=true))
         reply("/auth/v1/user",user(true),"GET")
@@ -89,6 +125,47 @@ class AgroApiTest {
         reply("/auth/v1/factors/$factor/challenge",JSONObject().put("id",challenge))
         reply("/auth/v1/factors/$factor/verify",token("verified-contract")) { assertEquals("123456",it.getString("code"));assertEquals(challenge,it.getString("challenge_id")) }
         api.verifyMfa("123456");assertEquals("verified-contract",store.read()!!.accessToken)
+    }
+    @Test fun expiredOrDifferentAccountLoginCannotBePersisted() = runBlocking {
+        reply("/auth/v1/token?grant_type=password",token(expiry=Instant.now().epochSecond-1))
+        try { api.login("grower@example.test","test-password");fail("Expired login accepted") } catch(_: IllegalArgumentException) { }
+        assertNull(api.session);assertNull(store.read())
+        val different=token().put("user",user().put("email","other@example.test"))
+        reply("/auth/v1/token?grant_type=password",different);reply("/auth/v1/user",user(),"GET")
+        try { api.login("grower@example.test","test-password");fail("Mismatched account accepted") } catch(_: IllegalArgumentException) { }
+        assertNull(api.session);assertNull(store.read())
+    }
+    @Test fun mfaCancellationOrDifferentAccountCannotPublishSession() = runBlocking {
+        reply("/auth/v1/token?grant_type=password",token(mfa=true));reply("/auth/v1/user",user(true),"GET")
+        assertFalse(api.login("grower@example.test","test-password"))
+        reply("/auth/v1/factors/$factor/challenge",JSONObject().put("id",challenge))
+        reply("/auth/v1/factors/$factor/verify",token()) { api.cancelMfa() }
+        try { api.verifyMfa("123456");fail("Cancelled MFA restored a session") } catch(_: IllegalStateException) { }
+        assertNull(api.session);assertNull(store.read())
+        reply("/auth/v1/token?grant_type=password",token(mfa=true));reply("/auth/v1/user",user(true),"GET")
+        assertFalse(api.login("grower@example.test","test-password"))
+        reply("/auth/v1/factors/$factor/challenge",JSONObject().put("id",challenge))
+        reply("/auth/v1/factors/$factor/verify",token().put("user",user().put("email","other@example.test")))
+        try { api.verifyMfa("123456");fail("MFA changed account") } catch(_: IllegalArgumentException) { }
+        assertNull(api.session);assertNull(store.read())
+    }
+    @Test fun explanationIdentitySurvivesStoreRecreationWithoutPersistingQuestion() {
+        val scope=config.url+java.util.UUID.randomUUID()
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val key=KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val first=SessionStore(context,scope) { key }
+        val question="Pengamatan pribadi yang tidak disimpan"
+        val request=first.explanationRequest("grower@example.test",unitId,factor,question)
+        val recreated=SessionStore(context,scope) { key }
+        assertEquals(request,recreated.explanationRequest("grower@example.test",unitId,factor,question))
+        assertNotEquals(request,recreated.explanationRequest("other@example.test",unitId,factor,question))
+        assertNotEquals(request,recreated.explanationRequest("grower@example.test",unitId,challenge,question))
+        assertNotEquals(request,recreated.explanationRequest("grower@example.test",unitId,factor,"Pertanyaan baru"))
+        val identityFiles=context.noBackupFilesDir.listFiles().orEmpty().filter { it.name.startsWith("explanation-") }
+        assertTrue(identityFiles.isNotEmpty())
+        assertTrue(identityFiles.none { it.readText().contains(question) || it.name.contains(question) })
+        recreated.finishExplanationRequest("grower@example.test",unitId,factor,question)
+        assertNotEquals(request,recreated.explanationRequest("grower@example.test",unitId,factor,question))
     }
     @Test fun rewardRetrySurvivesNetworkFailureAndStepUpKeepsRequestIdentity() = runBlocking {
         store.save(Session("access-contract","refresh-contract",Instant.now().epochSecond+3600,"grower@example.test","Petani"))
@@ -121,6 +198,49 @@ class AgroApiTest {
         // What hosted Auth really answers for a rejected refresh token (checked 2026-11-16): 400, no "refresh_token" text.
         reply("/auth/v1/token?grant_type=refresh_token",JSONObject().put("code",400).put("error_code","validation_failed").put("msg","Refresh token is not valid"),status=400)
         try { api.rpc("my_products");fail("Expected expired session") } catch(error: ApiFailure) { assertTrue(error.expired);assertEquals("Sesi berakhir. Silakan masuk kembali.",error.message) }
+    }
+    @Test fun refreshAndLoginResponsesCannotUndoLogoutOrCancelledLogin() = runBlocking {
+        store.save(Session("old-contract","refresh-contract",Instant.now().epochSecond-1,"grower@example.test"))
+        reply("/auth/v1/token?grant_type=refresh_token",token("late-refresh")) { runBlocking { api.clear() } }
+        try { api.restore();fail("Late refresh restored a logged-out session") } catch(_: IllegalStateException) { }
+        assertNull(api.session);assertNull(store.read())
+        reply("/auth/v1/token?grant_type=password",token())
+        reply("/auth/v1/user",user(),"GET") { api.cancelMfa() }
+        try { api.login("grower@example.test","test-password");fail("Cancelled login published a session") } catch(_: IllegalStateException) { }
+        assertNull(api.session);assertNull(store.read())
+    }
+    @Test fun refreshRejectsDifferentAccountAndStaleDiskWriteIsCleared() = runBlocking {
+        store.save(Session("old-contract","refresh-contract",Instant.now().epochSecond-1,"grower@example.test"))
+        reply("/auth/v1/token?grant_type=refresh_token",token().put("user",user().put("email","other@example.test")))
+        try { api.restore();fail("Refresh changed account") } catch(_: IllegalArgumentException) { }
+        assertEquals("grower@example.test",store.read()!!.email)
+        api.clear()
+        val version=api.authenticationVersion()
+        api.clear()
+        try { api.save(Session.parse(token()),version);fail("Stale operation wrote credentials") } catch(_: IllegalStateException) { }
+        assertNull(api.session);assertNull(store.read())
+    }
+    @Test fun logoutSerializesWithCredentialPersistence() = runBlocking {
+        val entered=java.util.concurrent.CountDownLatch(1)
+        val release=java.util.concurrent.CountDownLatch(1)
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val key=KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val slowStore=SessionStore(context,config.url+java.util.UUID.randomUUID()) {
+            entered.countDown()
+            check(release.await(5,java.util.concurrent.TimeUnit.SECONDS))
+            key
+        }
+        val isolated=AgroApi(config,slowStore)
+        val executor=java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val saving=executor.submit { runBlocking { isolated.save(Session.parse(token())) } }
+            assertTrue(entered.await(5,java.util.concurrent.TimeUnit.SECONDS))
+            val clearing=executor.submit { runBlocking { isolated.clear() } }
+            release.countDown()
+            saving.get(5,java.util.concurrent.TimeUnit.SECONDS)
+            clearing.get(5,java.util.concurrent.TimeUnit.SECONDS)
+            assertNull(isolated.session);assertNull(slowStore.read())
+        } finally { release.countDown();executor.shutdownNow();slowStore.clear() }
     }
     @Test fun googleIdTokenUsesNonceAndRequiresMfaBeforePersistence() = runBlocking {
         val nonce="n".repeat(43)

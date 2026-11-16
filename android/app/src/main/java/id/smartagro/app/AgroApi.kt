@@ -1,5 +1,6 @@
 package id.smartagro.app
 
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -13,13 +14,17 @@ class ApiFailure(message: String, val expired: Boolean = false, val code: String
 
 /** Same GoTrue and PostgREST contracts as the web. No service-role key or device-control writes. */
 class AgroApi(private val config: BackendConfig, private val store: SessionStore, private val connect: (URI)->HttpURLConnection = { it.toURL().openConnection() as HttpURLConnection }) {
-    var session: Session? = null
+    @Volatile var session: Session? = null
         private set
-    private var pending: Session? = null
+    @Volatile private var pending: Session? = null
+    internal val pendingSession: Session? get() = pending
     private var factorId: String? = null
     private val refreshLock = Mutex()
+    private val authLock = Any()
+    private var authVersion = 0L
+    internal fun authenticationVersion(): Long = synchronized(authLock) { authVersion }
 
-    private suspend fun request(path: String, body: JSONObject? = JSONObject(), token: String? = null, method: String = "POST"): JSONObject =
+    internal suspend fun request(path: String, body: JSONObject? = JSONObject(), token: String? = null, method: String = "POST", timeout: Int = 20000): JSONObject =
         withContext(Dispatchers.IO) {
             check(config.valid) { "Alamat backend atau kunci publik belum valid." }
             val connection = connect(URI(config.url.trimEnd('/') + path))
@@ -27,7 +32,7 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
                 connection.requestMethod = method
                 connection.instanceFollowRedirects = false
                 connection.connectTimeout = 15000
-                connection.readTimeout = 20000
+                connection.readTimeout = timeout
                 connection.setRequestProperty("apikey", config.anonKey)
                 connection.setRequestProperty("Content-Type", "application/json")
                 token?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
@@ -59,65 +64,99 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
             } finally { connection.disconnect() }
         }
 
-    private suspend fun save(value: Session) {
-        withContext(Dispatchers.IO) { store.save(value) }
-        session = value
-        pending = null
-        factorId = null
+    internal suspend fun save(value: Session, expectedVersion: Long = authenticationVersion()) {
+        require(value.expiresAt > Instant.now().epochSecond && value.email.length <= 320 &&
+            Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$").matches(value.email)) { "Respons sesi tidak valid atau kedaluwarsa." }
+        withContext(Dispatchers.IO) {
+            // Serialize disk and memory together so logout cannot be undone by an older response.
+            synchronized(authLock) {
+                check(authVersion == expectedVersion) { "Proses masuk sudah berubah. Silakan masuk kembali." }
+                store.save(value)
+                session = value
+                pending = null
+                factorId = null
+                authVersion++
+            }
+        }
     }
     suspend fun restore(): Boolean {
-        session = withContext(Dispatchers.IO) { store.read() }
-        if (session == null) return false
+        val expectedVersion = authenticationVersion()
+        val restored = withContext(Dispatchers.IO) {
+            synchronized(authLock) {
+                check(authVersion == expectedVersion) { "Proses masuk sudah berubah." }
+                store.read().also { session = it; authVersion++ }
+            }
+        } ?: return false
         refresh()
-        val user=request("/auth/v1/user", token = session!!.accessToken, method = "GET")
-        save(Session.parse(session!!.toJson().put("user",user)))
+        val (current, version) = synchronized(authLock) { (session ?: return false) to authVersion }
+        val user = request("/auth/v1/user", token = current.accessToken, method = "GET")
+        val verified = Session.parse(current.toJson().put("user", user))
+        require(restored.email.equals(verified.email, ignoreCase=true)) { "Identitas akun tidak sesuai dengan sesi." }
+        save(verified, version)
         return true
     }
     suspend fun login(email: String, password: String): Boolean {
         cancelMfa()
         require(Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$").matches(email) && email.length <= 320) { "Isi alamat email yang valid." }
         require(password.length in 1..256) { "Isi kata sandi, maksimal 256 karakter." }
+        val version = authenticationVersion()
         val json = request("/auth/v1/token?grant_type=password", JSONObject().put("email", email).put("password", password))
-        return acceptLogin(json)
+        return acceptLogin(json, version)
     }
     suspend fun loginIdToken(idToken: String, nonce: String): Boolean {
         cancelMfa()
         require(idToken.length in 1..8192 && idToken.none(Char::isWhitespace) && Regex("[A-Za-z0-9_-]{43}").matches(nonce)) { "Respons Google tidak valid. Coba masuk kembali." }
-        return acceptLogin(request("/auth/v1/token?grant_type=id_token",JSONObject().put("provider","google").put("id_token",idToken).put("nonce",nonce)))
+        val version = authenticationVersion()
+        return acceptLogin(request("/auth/v1/token?grant_type=id_token",JSONObject().put("provider","google").put("id_token",idToken).put("nonce",nonce)), version)
     }
-    private suspend fun acceptLogin(json: JSONObject): Boolean {
+    internal suspend fun acceptLogin(json: JSONObject, expectedVersion: Long = authenticationVersion()): Boolean {
         val candidate = Session.parse(json)
+        require(candidate.expiresAt > Instant.now().epochSecond) { "Respons sesi sudah kedaluwarsa." }
         val user = request("/auth/v1/user", token = candidate.accessToken, method = "GET")
+        val verified = Session.parse(candidate.toJson().put("user",user))
+        require(candidate.email.isBlank() || candidate.email.equals(verified.email,ignoreCase=true)) { "Identitas akun tidak sesuai dengan sesi." }
         val factor = user.optJSONArray("factors")?.objects(30)?.firstOrNull {
             it.optString("factor_type") == "totp" && it.optString("status") == "verified"
         }
         if (factor != null) {
-            pending = candidate
-            factorId = factor.id("id")
+            synchronized(authLock) {
+                check(authVersion == expectedVersion) { "Proses masuk sudah berubah." }
+                pending = verified
+                factorId = factor.id("id")
+                authVersion++
+            }
             return false
         }
-        save(candidate)
+        save(verified, expectedVersion)
         return true
     }
     suspend fun verifyMfa(code: String) {
         require(Regex("[0-9]{6}").matches(code)) { "Kode autentikator harus 6 angka." }
         if (pending == null) refresh()
+        val version = authenticationVersion()
+        val pendingAtStart=pending
         val candidate = pending ?: session ?: throw ApiFailure("Masuk kembali sebelum memasukkan kode.")
+        require(candidate.expiresAt > Instant.now().epochSecond) { "Sesi verifikasi sudah kedaluwarsa. Masuk kembali." }
         val token = candidate.accessToken
         val id = factorId ?: request("/auth/v1/user", token=token, method="GET")
             .optJSONArray("factors")?.objects(30)?.firstOrNull { it.optString("factor_type")=="totp" && it.optString("status")=="verified" }?.id("id")
             ?: throw ApiFailure("Aktifkan autentikator di Keamanan akun pada website sebelum menukar poin.")
         val challenge = request("/auth/v1/factors/$id/challenge", token = token)
         val result = request("/auth/v1/factors/$id/verify", JSONObject().put("challenge_id", challenge.id("id")).put("code", code), token)
-        save(Session.parse(result).let { it.copy(email=it.email.ifBlank { candidate.email },displayName=it.displayName.ifBlank { candidate.displayName }) })
+        check(if(pendingAtStart!=null) pending === pendingAtStart && session==null else pending==null && session === candidate) { "Proses masuk sudah berubah. Ulangi verifikasi." }
+        val verified=Session.parse(result).let { it.copy(email=it.email.ifBlank { candidate.email },displayName=it.displayName.ifBlank { candidate.displayName }) }
+        require(verified.email.equals(candidate.email,ignoreCase=true)) { "Identitas akun tidak sesuai dengan sesi verifikasi." }
+        save(verified, version)
     }
-    fun cancelMfa() { pending = null; factorId = null }
-    private suspend fun refresh() = refreshLock.withLock {
-        val value = session ?: throw ApiFailure("Silakan masuk kembali.", true)
+    fun cancelMfa() = synchronized(authLock) { pending = null; factorId = null; authVersion++ }
+    internal suspend fun refresh() = refreshLock.withLock {
+        val (value, version) = synchronized(authLock) { (session ?: throw ApiFailure("Silakan masuk kembali.", true)) to authVersion }
         if (value.expiresAt > Instant.now().epochSecond + 60) return@withLock
         try {
             val json = request("/auth/v1/token?grant_type=refresh_token", JSONObject().put("refresh_token", value.refreshToken))
-            save(Session.parse(json).let { it.copy(email = it.email.ifBlank { value.email }, displayName = it.displayName.ifBlank { value.displayName }) })
+            val refreshed = Session.parse(json).let { it.copy(email = it.email.ifBlank { value.email }, displayName = it.displayName.ifBlank { value.displayName }) }
+            require(refreshed.email.equals(value.email, ignoreCase=true)) { "Identitas akun tidak sesuai dengan sesi." }
+            save(refreshed, version)
         } catch (error: ApiFailure) {
             // Network failures never get here, and 5xx, 408 and 429 are temporary: the session stays. Any other 4xx is Auth
             // refusing this refresh token (hosted Auth: 400 validation_failed or refresh_token_not_found), so sign-in is required.
@@ -126,15 +165,47 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
         }
     }
     suspend fun rpc(name: String, body: JSONObject = JSONObject()): JSONObject {
-        require(name in setOf("ensure_my_account", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden"))
+        require(name in setOf("ensure_my_account", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden", "my_device_units", "unit_explanations", "add_my_site", "plant_in_my_slot", "switch_my_plant", "append_my_care_journal", "read_my_care_journal", "read_my_measurement_history", "compare_my_measurement_history", "security_workspace", "create_my_recovery_codes", "my_recovery_codes_status", "issue_activation_nonce", "create_transfer_offer", "cancel_transfer_offer", "accept_transfer", "open_ownership_recovery", "withdraw_ownership_recovery", "my_ownership_recoveries", "open_reward_appeal", "my_reward_cases", "energy_workspace", "set_slot_sharing", "share_my_cycle", "unshare_my_cycle", "community_knowledge"))
         refresh()
         return request("/rest/v1/rpc/$name", body, session!!.accessToken)
+    }
+    internal suspend fun authenticatedRequest(path: String, body: JSONObject = JSONObject()): JSONObject {
+        require(path == "/functions/v1/product-claim") { "Fungsi akun tidak didukung." }
+        refresh()
+        return request(path, body, session!!.accessToken)
+    }
+    suspend fun weather(latitude: Double, longitude: Double): WeatherSnapshot {
+        require(latitude.isFinite() && longitude.isFinite() && latitude in -90.0..90.0 && longitude in -180.0..180.0) { "Koordinat kebun tidak valid." }
+        refresh()
+        return parseWeatherSnapshot(request("/functions/v1/weather-forecast",JSONObject().put("lat",latitude).put("lon",longitude),session!!.accessToken).getJSONObject("weather"))
+    }
+    suspend fun explain(unitId: String, deviceId: String, question: String): UnitExplanation {
+        listOf(unitId,deviceId).forEach { JSONObject().put("id",it).id("id") }
+        require(question.length<=500 && question.none { it.isISOControl() && it!='\n' }) { "Pertanyaan maksimal 500 karakter." }
+        refresh()
+        val email=session!!.email
+        val requestId=withContext(Dispatchers.IO) { store.explanationRequest(email,unitId,deviceId,question) }
+        val result=explain(unitId,deviceId,requestId,question)
+        withContext(Dispatchers.IO) { store.finishExplanationRequest(email,unitId,deviceId,question) }
+        return result
+    }
+    suspend fun explain(unitId: String, deviceId: String, requestId: String, question: String): UnitExplanation {
+        listOf(unitId,deviceId,requestId).forEach { JSONObject().put("id",it).id("id") }
+        require(question.length<=500 && question.none { it.isISOControl() && it!='\n' }) { "Pertanyaan maksimal 500 karakter." }
+        refresh()
+        val result=parseExplanationSnapshot(request("/functions/v1/unit-explanation",JSONObject().put("unit_id",unitId).put("device_id",deviceId)
+            .put("request_id",requestId).put("question",question),session!!.accessToken,timeout=45000).getJSONObject("snapshot"))
+        require(result.unitId==unitId && result.deviceId==deviceId) { "Bukti penjelasan tidak sesuai dengan unit." }
+        return result
     }
     suspend fun updateName(raw: String): String {
         val name = displayName(raw)
         refresh()
-        val user = request("/auth/v1/user", JSONObject().put("data",JSONObject().put("display_name",name)),session!!.accessToken,"PUT")
-        save(Session.parse(session!!.toJson().put("user",user)))
+        val (current, version) = synchronized(authLock) { requireNotNull(session) to authVersion }
+        val user = request("/auth/v1/user", JSONObject().put("data",JSONObject().put("display_name",name)),current.accessToken,"PUT")
+        val updated = Session.parse(current.toJson().put("user",user))
+        require(updated.email.equals(current.email, ignoreCase=true)) { "Identitas akun tidak sesuai dengan sesi." }
+        save(updated, version)
         return session!!.displayName
     }
     suspend fun reserveReward(itemId: String, otp: String): String {
@@ -166,9 +237,14 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
         val receipt=rpc("cancel_my_redemption",JSONObject().put("p_id",id))
         require(receipt.opt("ok")==true && receipt.id("redemption_id")==id && receipt.text("status")=="cancelled") { "Pembatalan belum dapat dipastikan. Muat ulang reward." }
     }
-    suspend fun clear() {
-        session = null; cancelMfa()
-        withContext(Dispatchers.IO) { store.clear() }
+    suspend fun clear() = withContext(NonCancellable + Dispatchers.IO) {
+        synchronized(authLock) {
+            session = null
+            pending = null
+            factorId = null
+            authVersion++
+            store.clear()
+        }
     }
     suspend fun logout() {
         val token = session?.accessToken

@@ -137,7 +137,7 @@ class MainActivity : ComponentActivity() {
                         Screen.Login, Screen.Mfa -> LoginScreen(screen==Screen.Mfa,state.busy,state.message!=null,
                             model.config.valid,model::login,model::verify,model::demo, { model.googleLogin(context) })
                         Screen.Products -> ProductsScreen(state,model::openUnit,model::select,model::openGarden)
-                        Screen.Dashboard -> DashboardScreen(state,model::refresh,model::renameUnit,model::openUnit)
+                        Screen.Dashboard -> DashboardScreen(state,model::refresh,model::renameUnit,model::openUnit,model::loadWeather,model::loadExplanation,model::explain)
                         Screen.History -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                             if (state.selectedUnit==null) { Text("Pilih tanaman terlebih dahulu",style=MaterialTheme.typography.headlineSmall); Text("Aktivitas mengikuti persona tanaman yang dipilih.") }
                             else { Text(state.selectedUnit.name,style=MaterialTheme.typography.headlineMedium); History(state,model::loadHistory,model::loadOlderHistory) }
@@ -145,9 +145,15 @@ class MainActivity : ComponentActivity() {
                         Screen.Account -> AccountScreen(state,model::loadRewards,model::logout,model::updateName,model::navigate)
                         Screen.Rewards -> RewardsScreen(state,model::loadRewards,model::reserveReward,model::cancelReward,model::restartRewardRequest)
                         Screen.Proofs -> ProofsScreen(state,model::loadProofs)
-                        Screen.Garden -> GardenPlantScreen(state,model::openUnit)
+                        Screen.Garden -> GardenPlantScreen(state,model::openUnit,model::loadWeather)
                     }
                   }
+                }
+                LaunchedEffect(state.email,state.demo,state.weatherSite,state.screen) {
+                    if(state.screen in listOf(Screen.Dashboard,Screen.Garden)) model.loadWeather()
+                }
+                LaunchedEffect(state.selectedUnit?.id,state.screen) {
+                    if(state.screen==Screen.Dashboard && !state.demo) model.loadExplanation()
                 }
                 LaunchedEffect(state.selectedUnit?.id,state.screen,state.historyLoaded) {
                     if (state.screen in listOf(Screen.Dashboard,Screen.History) && state.selectedUnit!=null && !state.historyLoaded) model.loadHistory()
@@ -216,7 +222,7 @@ class MainActivity : ComponentActivity() {
     var productId by rememberSaveable { mutableStateOf<String?>(null) }
     val uri=rememberSafeUriHandler()
     val visible=state.units.filter { unit ->
-        (productId==null || unit.productId==productId) && listOf(unit.name,unit.crop,unitCode(unit,state.units),state.products.find { it.id==unit.productId }?.serial.orEmpty()).any { it.contains(query.trim(),ignoreCase=true) }
+        (productId==null || unit.productId==productId) && listOf(unit.name,unit.crop,state.plantCode(unit),state.products.find { it.id==unit.productId }?.serial.orEmpty()).any { it.contains(query.trim(),ignoreCase=true) }
     }
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item {
@@ -251,7 +257,7 @@ class MainActivity : ComponentActivity() {
                     Mascot(Modifier.size(42.dp,54.dp))
                     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                         Text(unit.name,style=MaterialTheme.typography.titleMedium)
-                        Text("${unit.crop} · ${unitCode(unit,state.units)}",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${unit.crop} · ${state.plantCode(unit)}",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text("›",style=MaterialTheme.typography.titleLarge)
                 }
@@ -268,7 +274,7 @@ class MainActivity : ComponentActivity() {
 
     }
 }
-@Composable private fun DashboardScreen(state: AppState, refresh: ()->Unit, rename: (String)->Unit, open: (PlantUnit)->Unit) {
+@Composable private fun DashboardScreen(state: AppState, refresh: ()->Unit, rename: (String)->Unit, open: (PlantUnit)->Unit, weather: ()->Unit, loadExplanation: ()->Unit, explain: (String)->Unit) {
     var editing by rememberSaveable(state.selectedUnit?.id) { mutableStateOf(false) }
     var name by rememberSaveable(state.selectedUnit?.id) { mutableStateOf(state.selectedUnit?.name.orEmpty()) }
     val uri=rememberSafeUriHandler()
@@ -285,7 +291,7 @@ class MainActivity : ComponentActivity() {
             TextButton(onClick={uri.openUri(WEB+"#profil")}) { Text("Atur unit di website") }
         } else {
             Text(state.selectedUnit.name,style=MaterialTheme.typography.headlineLarge)
-            Text("${state.selectedUnit.crop} · ${unitCode(state.selectedUnit,state.units)}",style=MaterialTheme.typography.bodySmall)
+            Text("${state.selectedUnit.crop} · ${state.plantCode(state.selectedUnit)}",style=MaterialTheme.typography.bodySmall)
             Text(state.selectedProduct?.serial.orEmpty(),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             Column(Modifier.animateContentSize(spring(dampingRatio=1f,stiffness=400f)),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick={editing=!editing}) { Text(if(editing) "Batal ubah nama" else "Ubah nama tanaman") }
@@ -297,11 +303,11 @@ class MainActivity : ComponentActivity() {
             if (state.units.size > 1) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.units,key={it.id}) { unit ->
                     FilterChip(selected=unit.id==state.selectedUnit.id,onClick={open(unit)},
-                        modifier=Modifier.semantics { contentDescription="Pilih tanaman ${unitCode(unit,state.units)}" },
-                        label={Text("${unitCode(unit,state.units)} · ${unit.name}")})
+                        modifier=Modifier.semantics { contentDescription="Pilih tanaman ${state.plantCode(unit)}" },
+                        label={Text("${state.plantCode(unit)} · ${unit.name}")})
                 }
             }
-            Summary(state,refresh)
+            Summary(state,refresh,weather,loadExplanation,explain)
         }
     }
 }
@@ -359,8 +365,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-@Composable private fun Summary(state: AppState, refresh: () -> Unit) {
-    var weather by remember(state.selectedProduct?.id) { mutableStateOf<Weather?>(null) }
+@Composable private fun Summary(state: AppState, refresh: () -> Unit, reloadWeather: ()->Unit, loadExplanation: ()->Unit, explain: (String)->Unit) {
+    val weather=state.weather.takeIf { state.weatherSiteId==state.weatherSite?.id && !state.weatherBusy }
     val unit = state.selectedUnit ?: return
     val overview = state.overviews.find { it.id == unit.id }
     var now by remember { mutableStateOf(Instant.now()) }
@@ -375,7 +381,7 @@ class MainActivity : ComponentActivity() {
             Text(unit.crop, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             SuggestionChip(onClick = refresh, enabled = !state.busy, label = { Text(status) })
             PlantScene(Modifier.fillMaxWidth().height(210.dp).semantics { contentDescription = "Ilustrasi pot dan akar tanaman; bukan prediksi pertumbuhan" },
-                interactive = true, onion = unit.crop.contains("bawang", ignoreCase = true), moisture = moisture, cutaway = cutaway, daylight=weather?.takeUnless { it.stale(now) }?.daylight, cloudy=weather?.takeUnless { it.stale(now) }?.let { it.code!=0 })
+                interactive = true, onion = unit.crop.contains("bawang", ignoreCase = true), moisture = moisture, cutaway = cutaway, cloudy=weather?.let { it.condition!="cerah" })
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Lihat zona akar", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                 Switch(checked = cutaway, onCheckedChange = { cutaway = it }, modifier = Modifier.semantics { contentDescription = "Tampilkan bagian dalam pot" })
@@ -415,7 +421,11 @@ class MainActivity : ComponentActivity() {
     }
     overview?.alerts?.forEach { alert -> Text(alertLabels[alert] ?: "Peringatan baru dari layanan; periksa detail di website.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
 
-    WeatherSection("${BuildConfig.SUPABASE_URL}:${state.email}:${state.selectedProduct?.id}") { weather=it }
+    if(!state.demo) {
+        key(unit.id) { ExplanationSection(state.explanation.takeIf { state.explanationUnitId==unit.id },state.explanationBusy,state.explanationMessage,
+            loadExplanation,explain,state.explanationUnitId==unit.id && state.explanationDeviceId!=null) }
+        WeatherSection(state.weatherSite,weather,state.weatherBusy,state.weatherMessage,reloadWeather)
+    }
     Surface(shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             Mascot(Modifier.size(56.dp,66.dp).semantics { contentDescription="Maskot kelembapan" },interactive=true,sad=moisture!=null&&moisture<60,happy=moisture!=null&&moisture in 60.0..80.0)

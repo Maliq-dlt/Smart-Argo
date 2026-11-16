@@ -19,14 +19,25 @@ data class AppState(
     val selectedUnit: PlantUnit? = null, val history: List<Reading> = emptyList(), val historyLoaded: Boolean = false, val historyBefore: java.time.Instant? = null, val historyHasMore: Boolean = false,
     val displayName: String = "", val rewardBalance: RewardBalance? = null, val rewardLoaded: Boolean = false,
     val rewards: RewardWorkspace? = null, val proofs: List<ChainProof> = emptyList(), val proofsLoaded: Boolean = false,
+    val weather: WeatherSnapshot? = null, val weatherSiteId: String? = null, val weatherBusy: Boolean = false, val weatherMessage: String? = null,
+    val explanation: UnitExplanation? = null, val explanationUnitId: String? = null, val explanationDeviceId: String? = null,
+    val explanationBusy: Boolean = false, val explanationMessage: String? = null,
     val garden: Garden? = null, val gardenPlant: GardenPlant? = null, val catalogLoaded: Boolean = false, val email: String = "", val demo: Boolean = false, val demoAdvice: Map<String, Pair<String, String>> = emptyMap(),
-)
+) {
+    fun plantCode(unit: PlantUnit): String = garden?.plants?.firstOrNull { it.unitId==unit.id && it.endedOn==null }?.tag ?: unitCode(unit,units)
+    val weatherSite: GardenSite? get() {
+        val plant=if(screen==Screen.Garden) gardenPlant else garden?.plants?.firstOrNull { it.unitId==selectedUnit?.id && it.endedOn==null && it.unitId!=null }
+        return garden?.sites?.find { it.id==plant?.siteId }
+    }
+}
 class AgroViewModel(application: Application) : AndroidViewModel(application) {
     val config = BackendConfig(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, allowEmulatorHost = BuildConfig.DEBUG)
     private val api = AgroApi(config, SessionStore(application, config.url))
     var state by mutableStateOf(AppState())
         private set
     private val operations = kotlinx.coroutines.sync.Mutex()
+    private var weatherJob: kotlinx.coroutines.Job? = null
+    private var weatherGeneration = 0
     init { if (config.valid) run { if (api.restore()) { state = state.copy(screen = Screen.Products, email = api.session!!.email, displayName = api.session!!.displayName); load() } } }
 
     private fun run(action: suspend () -> Unit) {
@@ -95,7 +106,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun refresh() { if (!state.demo) run {
         load()
-
+        loadWeather()
     } }
     fun select(product: Product) {
         state = state.copy(screen = Screen.Dashboard, selectedProduct = product,
@@ -181,6 +192,75 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         api.resetRewardRequest(itemId)
         state=state.copy(message="Identitas lokal disisihkan. Periksa penukaran sebelumnya di website; permintaan berikutnya adalah reservasi baru.")
     }
+    fun loadWeather() {
+        weatherJob?.cancel()
+        val generation=++weatherGeneration
+        val account=state.email
+        val site=state.weatherSite
+        state=state.copy(weather=null,weatherSiteId=site?.id,weatherBusy=false,weatherMessage=null)
+        if(state.demo || site==null) return
+        if(site.placement=="indoor" || site.latitude==null || site.longitude==null) {
+            state=state.copy(weatherMessage=if(site.placement=="indoor") "Tanaman dalam ruangan tidak memakai cuaca luar." else "Koordinat lokasi belum diatur. Atur di website untuk melihat prakiraan.")
+            return
+        }
+        state=state.copy(weatherBusy=true)
+        weatherJob=viewModelScope.launch {
+            try {
+                val weather=api.weather(site.latitude,site.longitude)
+                if(generation==weatherGeneration && state.email==account) state=state.copy(weather=weather)
+            } catch(error: CancellationException) { throw error }
+            catch(error: Exception) {
+                if(generation==weatherGeneration && state.email==account) {
+                    if(error is ApiFailure && error.expired) { api.clear();state=AppState(message=error.message,messageIsError=true) }
+                    else state=state.copy(weatherMessage="Prakiraan belum dapat dimuat. Coba lagi; bacaan sensor tetap tersedia.")
+                }
+            } finally { if(generation==weatherGeneration && state.email==account) state=state.copy(weatherBusy=false) }
+        }
+    }
+    fun loadExplanation() {
+        val unitId=state.selectedUnit?.id ?: return
+        if(state.demo) return
+        run {
+            if(state.selectedUnit?.id!=unitId) return@run
+            state=state.copy(explanation=null,explanationUnitId=unitId,explanationDeviceId=null,explanationBusy=true,explanationMessage=null)
+            try {
+                val devices=api.rpc("my_device_units").array("units").objects(300)
+                val candidates=devices.filter { it.id("unit_id")==unitId && it.optString("device_status")=="active" }
+                val placed=candidates.filter { it.optBoolean("placed") }
+                val device=(placed.ifEmpty { candidates }).singleOrNull()
+                if(device==null) {
+                    if(state.selectedUnit?.id==unitId) state=state.copy(explanationMessage=if(candidates.isEmpty()) "Belum ada perangkat aktif pada unit ini." else "Ada beberapa perangkat pada unit ini. Atur penempatannya di website sebelum meminta penjelasan.")
+                    return@run
+                }
+                val deviceId=device.id("device_id")
+                val snapshots=parseUnitExplanations(api.rpc("unit_explanations",JSONObject().put("p_unit_id",unitId).put("p_device_id",deviceId)))
+                require(snapshots.all { it.unitId==unitId && it.deviceId==deviceId }) { "Bukti penjelasan tidak sesuai dengan unit." }
+                if(state.selectedUnit?.id==unitId) state=state.copy(explanation=snapshots.firstOrNull(),explanationDeviceId=deviceId)
+            } catch(error: CancellationException) { throw error }
+            catch(error: Exception) {
+                if(error is ApiFailure && error.expired) throw error
+                if(state.selectedUnit?.id==unitId) state=state.copy(explanationMessage="Penjelasan belum dapat dimuat. Coba lagi; bacaan sensor tetap tersedia.")
+            } finally { state=state.copy(explanationBusy=false) }
+        }
+    }
+    fun explain(question: String) {
+        val unitId=state.selectedUnit?.id ?: return
+        val deviceId=state.explanationDeviceId ?: return
+        val text=question.trim()
+        run {
+            if(state.selectedUnit?.id!=unitId || state.explanationDeviceId!=deviceId || state.demo) return@run
+            require(text.length<=500) { "Pertanyaan maksimal 500 karakter." }
+            state=state.copy(explanationBusy=true,explanationMessage=null)
+            try {
+                val result=api.explain(unitId,deviceId,text)
+                if(state.selectedUnit?.id==unitId) state=state.copy(explanation=result)
+            } catch(error: CancellationException) { throw error }
+            catch(error: Exception) {
+                if(error is ApiFailure && error.expired) throw error
+                if(state.selectedUnit?.id==unitId) state=state.copy(explanationMessage="Penjelasan belum dapat disimpan. Coba lagi dengan pertanyaan yang sama untuk melanjutkan permintaan.")
+            } finally { state=state.copy(explanationBusy=false) }
+        }
+    }
     fun loadProofs() = run {
         if (state.demo) return@run
         val proofs=parseProofs(api.rpc("my_chain_proofs"))
@@ -196,6 +276,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun logout() = run {
+        weatherJob?.cancel();weatherGeneration++
         getApplication<Application>().getSharedPreferences("weather-cities",0).edit().clear().apply()
         if(state.demo) { state=AppState();return@run }
         try { androidx.credentials.CredentialManager.create(getApplication()).clearCredentialState(androidx.credentials.ClearCredentialStateRequest()) }

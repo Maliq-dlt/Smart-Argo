@@ -1,6 +1,26 @@
 # Smart Agro Android
 
-Aplikasi Android native Kotlin + Jetpack Compose, terpisah dari website React. Source, konfigurasi, APK dan cache aplikasi berada di `android/`; laporan HTML pengujian berada di `.tmp/android-reports/` pada root repository agar tidak dipindai lint web. Tidak ada WebView, perubahan backend, atau perubahan source website.
+Aplikasi Android native Kotlin + Jetpack Compose, terpisah dari website React. Source, konfigurasi, APK dan cache aplikasi berada di `android/`; laporan HTML pengujian berada di `android/.tmp/reports/` (relatif terhadap root repository). Tidak ada WebView, perubahan backend, atau perubahan source website.
+
+## Status non-UI terbaru — 16 November 2026
+
+Sesuai arahan pemilik, pekerjaan desain/UI berikutnya diserahkan kepada Claude. Modul berikut sudah diimplementasikan pada lapisan API/domain dan **belum dihubungkan ke layar**; aplikasi belum menyediakan semua fitur ini lewat tombol/menu.
+
+| Sumber | Kemampuan untuk integrasi Claude |
+| --- | --- |
+| `AccountWorkflows.kt` | Daftar/kode email, reset sandi PKCE, pengaturan TOTP, kode pemulihan, pemulihan MFA, aktivitas keamanan, keluar dari sesi lain. |
+| `GardenWorkflows.kt` | Membuat lokasi/slot, menanam/mengganti tanaman, riwayat siklus, jurnal, histori pengukuran, perbandingan periode, ekspor CSV. |
+| `OwnerWorkflows.kt` | Membaca nomor seri QR, claim bertanda tangan, transfer/pemulihan kepemilikan, banding reward, bukti energi, opt-in dan agregat komunitas. |
+
+Alur ini mengikuti endpoint Auth/RPC/Edge yang sudah ada. Tidak menambah dependency, endpoint backend, layar, izin kamera, ataupun integrasi lembar berbagi Android. Request ID untuk tindakan baru harus disimpan pemanggil bersama payload dan dipakai ulang bila hasil jaringan belum pasti. ID permintaan penjelasan kini disimpan otomatis di no-backup storage, termasuk setelah proses berhenti; isi pertanyaan tidak ditulis ke berkas identitas.
+
+Reset sandi mengikuti tautan PKCE pada template server yang tersedia, bukan kode reset email. `AccountWorkflows` yang sama harus menerima tautan kembali; verifier hanya berada di memori. Claude perlu memasang app link yang sesuai allowlist Supabase dan memeriksa origin/path sebelum meneruskan kode. Jika proses mati, minta tautan baru. Setelah sandi berubah, hasil `PasswordChangedLogoutUnconfirmed` berarti pergantian sudah berhasil tetapi logout server belum dapat dikonfirmasi; jangan tampilkan sebagai kegagalan mengganti sandi. Pengguna tetap masuk ulang melalui login/MFA biasa.
+
+CSV dibuat di memori dari RPC terautentikasi, dengan snapshot/cursor tetap, 14 kolom, BOM/CRLF dan pelindung formula. Batasnya 5.000 baris/4 MiB/10 halaman dan timeout coroutine 15 detik; pembacaan HTTP yang blocking dapat baru berhenti setelah timeout koneksi/bacanya. Tidak mengembalikan CSV parsial atau hasil setelah akun berubah. Detail pemanggilan dan pekerjaan layar yang tersisa ada di [HANDOFF.md](HANDOFF.md).
+
+Verifikasi non-UI terakhir: `./android/build.ps1 -Tasks @('testDebugUnitTest','lintDebug','assembleDebug','assembleRelease','lintRelease')` **berhasil**; XML mencatat **80 tes, 0 gagal/error**, lint debug **0 error/12 warning** dan release **0 error/13 warning**. APK debug dan release berhasil dibuat. Release 2.029.333 byte memakai tanda tangan v2 RSA 3072-bit yang valid; SHA-256 `51433b1aa68d8e8ff24df239bed72300785804f29897b43ccc5a0144b4326364`. Log: `.tmp/non-ui-verified-build.log`; rincian: `.tmp/non-ui-verification.json`. Tes kontrak memakai HTTP loopback/fixture; tidak membuktikan SMTP, Google login, cloud terautentikasi, akun pemilik atau sensor fisik. Lint masih memberi saran versi, penanganan khusus `NoCredentialException` (saat ini lewat exception umum), resource dan KTX.
+
+APK release dengan checksum di atas juga berhasil dipasang dan diluncurkan dingin pada emulator **API 30 dan API 35**: login tampil, `MainActivity` resumed dan buffer crash kosong pada keduanya. Bukti `.tmp/emulator-check/nonui-final-verification.md`. Ini smoke startup dengan layar yang sudah ada, bukan uji alur akun/fitur baru melalui UI.
 
 ## Alur aplikasi
 
@@ -21,7 +41,7 @@ Tombol **Coba mode latihan** memakai 10 skenario sintetis dari `src/lib/scenario
 - Grafik dengan rentang nilai adaptif, inspeksi sentuh, filter 24 jam/7 hari, dan pemuatan 120 bacaan sebelumnya per halaman. Data hilang, galat, jam tak sinkron dan jeda lebih dari satu jam memutus garis. Filter hanya memakai halaman yang sudah dimuat.
 - 2D interaktif memakai Compose Canvas tanpa dependency baru: sentuh daun untuk gerak berurutan yang selesai sendiri, sapa maskot untuk respons tangan/tunas, serta geser jari pada maskot untuk mengubah arah pandang. Tajuk cabai/bawang berganti di atas pot yang tetap; bukaan akar mengikuti kontrol zona akar. Pose daun dan ekspresi memakai bacaan kelembapan valid yang sama; bukan diagnosis atau pengukuran bentuk tanaman. Mengikuti skala animasi sistem, tanpa loop gerak otomatis.
 - Navigasi umum Tanaman / Aktivitas / Akun, tanpa tab wajib Pot/Kebun. Sensor membuka grafik di dalam kartu dengan perubahan tinggi singkat tanpa modal atau layar meredup.
-- Nama persona dapat diganti lewat `rename_my_unit`, sama dengan website. Kode `T-…` berasal dari suffix ID unit dan diperpanjang bila berbenturan dalam daftar; mengganti nama tidak mengganti ID. Kode adalah label tampilan aplikasi, bukan serial produk atau kode aktivasi baru. Deretan pemilih di dasbor menampilkan kode dan nama untuk berpindah persona dalam satu akun tanpa kembali ke daftar.
+- Nama persona dapat diganti lewat `rename_my_unit`, sama dengan website. Tanaman yang terhubung siklus aktif memakai label kebun CB/BM/AB/PN yang sama dengan web. Unit tanpa siklus memakai fallback `T-…` dari suffix ID unit dan diperpanjang bila berbenturan; mengganti nama tidak mengganti ID. Kode adalah label tampilan aplikasi, bukan serial produk atau kode aktivasi baru. Deretan pemilih di dasbor menampilkan kode dan nama untuk berpindah persona dalam satu akun tanpa kembali ke daftar.
 - Maskot mencerminkan indeks kelembapan dengan penjagaan data usang/galat; bukan diagnosis tanaman. Aktivitas menurunkan kejadian kenaikan kelembapan dari bacaan berurutan yang valid dan jam sinkron; jeda lebih dari satu jam memutus rangkaian. Ambang contoh 5 poin belum dikalibrasi, sumber air tidak dapat dipastikan.
 - Akun menampilkan nama dari metadata, jumlah produk/persona, dan saldo poin terkonfirmasi/direservasi/tersedia dari `reward_workspace`. Saldo yang gagal dimuat tidak diganti angka nol atau saldo latihan. Nama profil, katalog, konfirmasi reservasi, pembatalan, ledger poin, dan status bukti blockchain kepemilikan tersedia di layar native. Keamanan, pemulihan, dan transfer tetap ditautkan ke website.
 - Reservasi memakai identitas permintaan per akun/item yang disimpan di no-backup storage sampai server mengakui hasilnya, agar kiriman ulang setelah koneksi putus memakai permintaan yang sama. Salinan identitas memulihkan ID yang sama bila berkas utama rusak. Jika keduanya rusak, pengiriman diblokir; setelah pengguna memeriksa penukaran di website, tindakan pemulihan eksplisit mengarsipkan berkas rusak dan menjelaskan bahwa aksi berikutnya adalah reservasi baru. Daftar server yang dibaca terbatas 100 penukaran, sehingga pemeriksaan ini bukan jaminan tidak pernah ada permintaan lama. Kode TOTP hanya berada di memori. Backend tetap memutus stok, saldo, 2FA, security hold, dan batas harian; aplikasi tidak mengubah saldo secara optimistis.
@@ -31,7 +51,7 @@ Tombol **Coba mode latihan** memakai 10 skenario sintetis dari `src/lib/scenario
 - Tombol kembali Android dan keluar dari sesi aplikasi saja.
 - Preview Compose untuk login normal dan teks besar; layout scroll untuk layar kecil/keyboard.
 
-Pendaftaran, pemulihan akun, aktivasi/QR, transfer, pengaturan unit, fitur operator, jurnal manual, bukti energi, dan pencatatan berkas lewat wallet tetap menggunakan website pada versi awal ini. Saldo poin sudah dapat dibaca di aplikasi; poin program tidak diasumsikan sebagai token atau koin kripto. Cuaca memakai Open-Meteo berdasarkan kota yang dipilih per produk di HP; tidak memakai GPS dan tidak mengirim pilihan kota ke backend akun. Kartu menampilkan waktu prakiraan, suhu/kelembapan udara, angin, dan radiasi matahari W/m². Siang/malam dan awan mengubah ilustrasi secara halus. Radiasi adalah prakiraan wilayah, bukan lux sensor pot. Kontrak backend perangkat hanya memiliki kelembapan, suhu tanah, dan pH; aplikasi tidak mengarang bacaan sensor cahaya. Tautan terkait membuka browser; sesi browser dan aplikasi terpisah. Menutup aplikasi pertama kali tidak meminta izin kamera, lokasi, notifikasi, atau Bluetooth.
+Pendaftaran, pemulihan akun, aktivasi/QR, transfer, pengaturan unit, fitur operator, jurnal manual, bukti energi, dan pencatatan berkas lewat wallet tetap menggunakan website pada versi awal ini. Saldo poin sudah dapat dibaca di aplikasi; poin program tidak diasumsikan sebagai token atau koin kripto. Cuaca memakai fungsi `weather-forecast` melalui sesi akun yang sama dengan website, berdasarkan koordinat lokasi kebun tanaman terpilih. Koordinat dibulatkan oleh server sebelum dikirim ke Open-Meteo; aplikasi tidak meminta GPS atau memilih kota tersendiri. Lokasi indoor tidak meminta prakiraan luar; koordinat yang belum diatur diarahkan ke website. Kartu menampilkan waktu lokal lokasi, suhu/kelembapan udara, angin m/s, awan, curah hujan dan prakiraan hingga enam jam. Kondisi awan dapat mengubah ilustrasi. Kontrak server tidak menyediakan radiasi matahari, lux, atau siang/malam; aplikasi tidak membuat nilai pengganti. Kontrak backend perangkat hanya memiliki kelembapan, suhu tanah, dan pH; aplikasi tidak mengarang bacaan sensor cahaya. Tautan terkait membuka browser; sesi browser dan aplikasi terpisah. Menutup aplikasi pertama kali tidak meminta izin kamera, lokasi, notifikasi, atau Bluetooth.
 
 Animasi web ditulis ulang dengan Canvas dan Compose; GSAP/Framer Motion tidak berjalan di Android. Ini adaptasi native dari interaksi utama, bukan salinan seluruh animasi landing, Three.js, atau simulator. Kecepatan animasi Compose mengikuti skala animasi sistem Android.
 
@@ -84,7 +104,7 @@ Command individual:
 .\build.ps1 -Tasks assembleDebug
 ```
 
-APK debug: `app/build/outputs/apk/debug/app-debug.apk`. Kunci debug standar dibuat otomatis di `.cache/debug.keystore` dan diabaikan Git. APK ini untuk uji lokal; gunakan alur release di bawah untuk artefak bertanda tangan terpisah. Laporan unit test HTML: `../.tmp/android-reports/testDebugUnitTest/index.html` (di root repository supaya tidak ikut lint website); hasil XML tetap di `app/build/test-results/testDebugUnitTest/`; lint: `app/build/reports/lint-results-debug.html`.
+APK debug: `app/build/outputs/apk/debug/app-debug.apk`. Kunci debug standar dibuat otomatis di `.cache/debug.keystore` dan diabaikan Git. APK ini untuk uji lokal; gunakan alur release di bawah untuk artefak bertanda tangan terpisah. Laporan unit test HTML: `.tmp/android-reports/testDebugUnitTest/index.html` (di dalam `android/`); hasil XML tetap di `app/build/test-results/testDebugUnitTest/`; lint: `app/build/reports/lint-results-debug.html`.
 
 ## Sumber dan verifikasi
 
@@ -122,7 +142,7 @@ $env:JAVA_HOME = 'C:/Users/malik/.jdks/temurin-25.0.3'
 node android/tools/check-services.mjs
 ```
 
-Jalankan dari root repository. `check-services.mjs` memeriksa Auth, penolakan akses RPC tanpa login, pencarian kota dan prakiraan publik secara read-only; hasil tanpa token disimpan di `.tmp/services/report.json`. Jika tidak ada akun uji, alur akun dilaporkan **skipped**, bukan lulus. Untuk membaca akun uji, sediakan `SMART_AGRO_TEST_TOKEN` pada environment terminal (tidak disimpan), atau `SMART_AGRO_TEST_EMAIL` dan `SMART_AGRO_TEST_PASSWORD` untuk sesi uji sementara yang ditutup setelahnya. Script tidak mengganti nama, membuat reservasi, atau mengirim data perangkat.
+Jalankan dari root repository. `check-services.mjs` memeriksa Auth dan penolakan akses tanpa login pada RPC akun (termasuk `my_garden` dan `my_device_units`) serta fungsi `weather-forecast` dan `unit-explanation`, secara read-only. Hasil tanpa token disimpan di `android/.tmp/services/report.json` dari root repository. Script tidak memanggil Open-Meteo langsung atau membuat penjelasan baru. Penolakan anonim tidak membuktikan fungsi cuaca/AI berhasil setelah login; alur tersebut memakai tes kontrak native dan masih memerlukan verifikasi akun cloud. Jika tidak ada akun uji, alur akun dilaporkan **skipped**, bukan lulus. Untuk membaca akun uji, sediakan `SMART_AGRO_TEST_TOKEN` pada environment terminal (tidak disimpan), atau `SMART_AGRO_TEST_EMAIL` dan `SMART_AGRO_TEST_PASSWORD` untuk sesi uji sementara yang ditutup setelahnya. Script tidak mengganti nama, membuat reservasi, atau mengirim data perangkat.
 
 Tes `AgroApiTest` menggunakan HTTP sungguhan ke server kontrak terisolasi di loopback dan kunci AES sementara. Tes ini memeriksa request login, MFA, pembaruan nama, pembacaan telemetri, pembaruan sesi, dan identitas reservasi saat server gagal/step-up. Ini bukan bukti login cloud, kinerja HP, atau kalibrasi perangkat fisik. Kunci Android Keystore produksi tidak diganti oleh kunci tes dalam APK.
 
@@ -160,9 +180,43 @@ Verifikasi hardening (15 November 2026): `android/build.ps1 -Tasks @('testDebugU
 
 Uji backend lokal unit/reward/overview lulus 20 pemeriksaan. `phase1-local.mjs` berhenti pada migrasi `20261115000000_recovery_and_case_guards.sql` karena kolom `mfa_recovery_code.factor_ids` sudah ada sementara registri terakhir baru mencatat `20261114170000_knowledge_workspace_profiles.sql`. Gateway uji kemudian dijalankan langsung terhadap skema terpasang. Pemeriksaan read-only membuktikan isi ketiga fungsi guard cocok dengan source dua migrasi terbaru, dan kedua indeks unik pencegah kredit ganda sudah ada. Source/backend, registri, dan migrasi tidak diedit atau direset; ketidaksesuaian pencatatan migrasi tetap perlu ditangani pada pekerjaan backend terpisah. Hasil lokal tidak membuktikan environment cloud atau hardware.
 
-Perbaikan setelah tinjauan (16 November 2026, Claude Code atas permintaan pemilik): (1) cap waktu server dibaca dengan `OffsetDateTime` karena Postgres mengirim `+00:00` dan `Instant.parse` menolaknya sebelum Java 12 (Android 8 sampai 11); (2) data dianggap usang setelah 75 menit, sama dengan alert `stale` di `my_unit_overview`, lewat satu fungsi `fresh()` (sebelumnya 5 menit di tiga tempat, padahal perangkat membaca tiap 30 menit); (3) penolakan refresh token dikenali dari status HTTP 4xx selain 408/429, bukan dari teks pesan, dan kode `unauthorized`/`invalid_session` menampilkan "Sesi berakhir". Tes ditulis lebih dulu: 3 gagal sebelum perbaikan, lalu 23 tes lulus, lint 0 error/8 warning, kedua APK dibangun ulang dan tanda tangan v2 valid. Tes cap waktu lulus juga sebelum perbaikan karena JVM host menerima kedua bentuk; kegagalan lama hanya bisa dibuktikan di emulator atau HP API 30 ke bawah, dan itu belum dilakukan. Belum diuji di HP atau dengan akun nyata.
+Perbaikan setelah tinjauan (16 November 2026, Claude Code atas permintaan pemilik): (1) cap waktu server dibaca dengan `OffsetDateTime` karena Postgres mengirim `+00:00` dan `Instant.parse` menolaknya sebelum Java 12 (Android 8 sampai 11); (2) data dianggap usang setelah 75 menit, sama dengan alert `stale` di `my_unit_overview`, lewat satu fungsi `fresh()` (sebelumnya 5 menit di tiga tempat, padahal perangkat membaca tiap 30 menit); (3) penolakan refresh token dikenali dari status HTTP 4xx selain 408/429, bukan dari teks pesan, dan kode `unauthorized`/`invalid_session` menampilkan "Sesi berakhir". Tes ditulis lebih dulu: 3 gagal sebelum perbaikan, lalu 23 tes lulus, lint 0 error/8 warning, kedua APK dibangun ulang dan tanda tangan v2 valid. Tes cap waktu lulus juga sebelum perbaikan karena JVM host menerima kedua bentuk; kegagalan lama hanya bisa dibuktikan di emulator atau HP API 30 ke bawah, dan pada tinjauan itu belum dilakukan. Bukti emulator API 30 susulan dicatat di HANDOFF; HP fisik dan akun nyata tetap belum diuji.
 
 Tes UI keamanan kini memeriksa akun tanpa kunci perangkat, kembali dari background, tema sesudah Activity dibuat ulang, `FLAG_SECURE`, navigasi saat sibuk, antrean perubahan nama, serta header pada 320 dp dengan teks 200%. Fixture akun tidak memakai token atau memanggil cloud. Challenge PIN lokal dihapus sesuai pilihan pengguna; pengujian penguncian pada catatan 15 November merupakan perilaku lama.
 
 
 Uji tambahan `node --test --test-concurrency=1 tests/mfa-recovery.integration.mjs tests/reward-cases.integration.mjs` lulus 13 pemeriksaan pada skema lokal terpasang: kode pemulihan, pembatasan akses sesi password-only, rate limit, akses operator, refund/kompensasi tunggal, dan satu kredit per subjek banding. Total pemeriksaan backend pada hardening ini 33, semuanya lulus. Perubahan source tetap terbatas pada enam file Android.
+
+
+## A2: cuaca dan penjelasan berbasis bukti (16 November 2026)
+
+Dasbor native memuat penjelasan terbaru melalui `my_device_units` dan `unit_explanations`, lalu dapat meminta penilaian melalui fungsi `unit-explanation`. Perangkat yang ditempatkan diprioritaskan; pasangan ambigu meminta pengaturan di website. Pertanyaan opsional dibatasi 500 karakter. Pengiriman ulang pertanyaan yang sama pada akun/unit/perangkat memakai request ID tersimpan yang sama sampai jawaban tervalidasi diterima, termasuk sesudah proses dihentikan. Berkas identitas memakai hash konteks tanpa menyimpan teks pertanyaan. ID unit/perangkat pada jawaban diperiksa sebelum ditampilkan.
+
+Tindakan, alasan dan penjelasan aturan tetap berasal dari server; teks AI, model dan prompt version ditampilkan terpisah hanya untuk status AI yang valid. Hasil diberi waktu penilaian dan label rekaman, bukan pemantauan langsung. Bukti yang ditampilkan mencakup ID snapshot, versi profil, pertanyaan dan SHA256 konteks; paket mentah tidak diubah menjadi bacaan sensor terkini. Cuaca dan penjelasan tidak muncul sebagai data akun di mode latihan. Tidak ada kunci AI di APK.
+
+Verifikasi A2 sebelumnya, sebelum modul non-UI, tersedia di `android/.tmp/a2-final-build.log`: `testDebugUnitTest`, `lintDebug`, dan `assembleDebug` berhasil. Hasil pada 16 November 2026 12:18 UTC saat itu mencatat 46 tes, 0 gagal/error (XML sekarang diperbarui oleh build non-UI 80 tes); lint debug 0 error dan 12 warning. Tes mencakup kontrak HTTP terisolasi untuk endpoint cuaca/snapshot, penolakan identitas berbeda, parsing, konteks cuaca, serta UI penjelasan dengan fixture. Build release A2 juga dibuat oleh pekerjaan verifikasi terpisah; laporan `app/build/reports/lint-results-release.xml` mencatat 0 error dan 13 warning. Ini tidak membuktikan endpoint cloud terautentikasi, keluaran AI produksi, atau sensor fisik. Artefak emulator dan review visual akhir dicatat terpisah oleh pekerjaan yang menjalankannya; hasil debug dan release harus dibedakan.
+
+Lanjutan pekerjaan tersedia di [HANDOFF.md](HANDOFF.md). Perubahan desain Apple/glass masih berupa referensi dan preview untuk review, belum diterapkan sebagai desain native final.
+
+
+Smoke layanan A2 (16 November 2026): `node --check android/tools/check-services.mjs` dan ESLint file tersebut lulus. Eksekusi live tanpa credential akun lulus 10 pemeriksaan read-only: Auth settings, tujuh penolakan RPC anonim dan dua penolakan fungsi anonim. Alur akun **skipped**; tidak ada penjelasan AI, reservasi atau telemetri yang dibuat. Tidak ada HTTP 404 pada endpoint yang diperiksa. Hasil: `android/.tmp/services/report.json`.
+
+
+## REA/JADX untuk pemeriksaan APK
+
+JAR resmi `jadx-headless-mcp` 0.7.1 tersimpan lokal di `.cache/rea/jadx-0.7.1/` (tidak masuk Git). SHA-256 yang diperiksa: `6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75`. Sumber: https://github.com/1013503897/jadx-headless-mcp/releases/download/v0.7.1/jadx-headless-mcp-0.7.1-all.jar. REA memerlukan JDK lengkap 17+ termasuk `jdk.compiler`, bukan hanya JRE.
+
+Dari root repository, memakai paket `rea-agents` yang sudah terpasang global serta Node/npm pada PATH:
+
+```powershell
+$env:JAVA_HOME = 'C:/path/to/full-jdk'
+./android/tools/rea.ps1 doctor --provider jadx --format json
+./android/tools/check-rea.ps1
+./android/tools/rea.ps1 inspect-android-package "$PWD/android/app/build/outputs/apk/debug/app-debug.apk" --format json
+./android/tools/rea.ps1 inspect-android-class "$PWD/android/app/build/outputs/apk/debug/app-debug.apk" id.smartagro.app.ModelsKt --format json
+./android/tools/rea.ps1 inspect-android-method "$PWD/android/app/build/outputs/apk/debug/app-debug.apk" id.smartagro.app.ModelsKt instant --overload-index 0 --format json
+```
+
+Launcher menjalankan entry Node secara langsung agar argumen JVM seperti `<clinit>` tidak ditafsirkan oleh batch shell. `check-rea.ps1` memeriksa dekompilasi metode cap waktu dan penerusan nama khusus itu pada APK nyata. Launcher memeriksa checksum JAR, membatasi JVM ke 1536 MiB/dua CPU, dan menaruh temp di `android/.tmp/rea/`. Pada mesin ini konfigurasi `[mcp_servers.rea.env]` Codex dan environment REA Claude Code juga sudah diisi memakai JDK 21 yang tersedia; tool MCP memakai pengaturan baru setelah REA tersambung ulang. Launcher CLI langsung dapat digunakan tanpa menunggu koneksi MCP lama dimuat ulang.
+
+Verifikasi nyata 16 November: doctor JADX siap; package/class/metode APK debug berhasil dibaca. Dekompilasi `ModelsKt.instant` menghasilkan Java lengkap, tanpa fallback, dan memuat `OffsetDateTime.parse(...).toInstant()`. Bukti JSON berada di `android/.tmp/rea/`. Ini pemeriksaan statis, terpisah dari uji runtime emulator dan verifikasi tanda tangan APK.

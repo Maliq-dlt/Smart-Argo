@@ -130,20 +130,6 @@ class ModelsTest {
         assertTrue(parseProofs(page).single().explorer!!.startsWith("https://sepolia.basescan.org/tx/0x"))
         proof.put("tx_hash","javascript:alert(1)"); rejects { parseProofs(page) }
     }
-    @Test fun weatherUnitsLocationsAndFreshnessAreExplicit() {
-        val json=JSONObject("""{"current_units":{"temperature_2m":"°C","relative_humidity_2m":"%","wind_speed_10m":"km/h","shortwave_radiation":"W/m²","time":"unixtime"},"current":{"time":1794700800,"temperature_2m":25,"relative_humidity_2m":70,"wind_speed_10m":5,"shortwave_radiation":450,"weather_code":2,"is_day":1}}""")
-        val weather=parseWeather(json)
-        assertEquals(450.0,weather.radiation,0.0)
-        assertFalse(weather.stale(weather.at.plusSeconds(3600)))
-        assertTrue(weather.stale(weather.at.plusSeconds(7201)))
-        assertTrue(weather.stale(weather.at.minusSeconds(901)))
-        json.getJSONObject("current_units").put("shortwave_radiation","lux"); rejects { parseWeather(json) }
-        val city=JSONObject().put("id",1).put("name","Bandung").put("region","Indonesia").put("latitude",-6.9).put("longitude",107.6)
-        assertEquals("Bandung, Indonesia",parsePlace(city).label)
-        assertEquals(parsePlace(city),parsePlace(parsePlace(city).json()))
-        city.put("latitude",91); rejects { parsePlace(city) }
-        assertTrue(parsePlaces(JSONObject()).isEmpty())
-    }
     @Test fun profileNamesAndRewardGateMessagesMatchAccountRules() {
         assertEquals("Maliq Agro",displayName("  Maliq   Agro  "))
         rejects { displayName(" ") }; rejects { displayName("a".repeat(41)) }; rejects { displayName("nama\u202e") }

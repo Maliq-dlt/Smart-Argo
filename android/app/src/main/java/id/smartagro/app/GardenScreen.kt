@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-@Composable internal fun GardenPlantScreen(state: AppState, openUnit: (PlantUnit)->Unit) {
+@Composable internal fun GardenPlantScreen(state: AppState, openUnit: (PlantUnit)->Unit, reloadWeather: ()->Unit = {}) {
     val plant=state.gardenPlant ?: return
     val site=state.garden?.sites?.find { it.id==plant.siteId }
     val unit=state.units.find { it.id==plant.unitId }
@@ -26,6 +26,7 @@ import java.time.temporal.ChronoUnit
         Text("Ilustrasi tanaman; bukan pengukuran bentuk atau diagnosis.",style=MaterialTheme.typography.bodySmall)
         if(unit!=null) Button(onClick={openUnit(unit)}) { Text("Lihat sensor perangkat") }
         else Text("Belum ada unit sensor terhubung ke zona ini. Aplikasi tidak menampilkan bacaan atau saran perangkat tanpa data.")
+        if(!state.demo) WeatherSection(site,state.weather.takeIf { state.weatherSiteId==site?.id },state.weatherBusy,state.weatherMessage,reloadWeather)
         TextButton(onClick={uri.openUri("https://smart-agro-demo.pages.dev/#simulasi")}) { Text("Kelola pot dan kebun di website") }
     }
 }

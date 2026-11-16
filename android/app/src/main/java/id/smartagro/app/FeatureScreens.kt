@@ -14,82 +14,38 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
-import org.json.JSONObject
-import java.time.Instant
 
-@Composable internal fun WeatherSection(productId: String, onWeather: (Weather?)->Unit) {
-    val context=LocalContext.current
-    val preferences=remember { context.getSharedPreferences("weather-cities",0) }
-    var place by remember(productId) { mutableStateOf(runCatching { preferences.getString(productId,null)?.let { parsePlace(JSONObject(it)) } }.getOrNull()) }
-    var weather by remember(productId) { mutableStateOf<Weather?>(null) }
-    var editing by rememberSaveable(productId) { mutableStateOf(false) }
-    var query by rememberSaveable(productId) { mutableStateOf("") }
-    var results by remember(productId) { mutableStateOf<List<WeatherPlace>?>(null) }
-    var busy by remember(productId) { mutableStateOf(false) }
-    var message by remember(productId) { mutableStateOf<String?>(null) }
-    var reload by remember(productId) { mutableIntStateOf(0) }
-    val scope=rememberCoroutineScope()
-    val currentCallback by rememberUpdatedState(onWeather)
-    LaunchedEffect(productId,place,reload) {
-        currentCallback(null)
-        val selected=place ?: return@LaunchedEffect
-        busy=true; message=null
-        try { weather=fetchWeather(selected); currentCallback(weather?.takeUnless { it.stale(Instant.now()) }) }
-        catch (error: CancellationException) { throw error }
-        catch (_: Exception) { message="Cuaca belum dapat dimuat. Periksa koneksi lalu muat ulang." }
-        finally { busy=false }
-    }
+@Composable internal fun WeatherSection(site: GardenSite?, weather: WeatherSnapshot?, busy: Boolean, message: String?, reload: ()->Unit) {
     Surface(shape=RoundedCornerShape(24.dp),color=MaterialTheme.colorScheme.primaryContainer) {
         Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio=1f,stiffness=400f)).padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
             Text("Cuaca sekitar tanaman",style=MaterialTheme.typography.titleLarge)
-            Text(place?.label ?: "Pilih kota tempat produk ini berada.",style=MaterialTheme.typography.bodyMedium)
-            weather?.let { WeatherValues(it) }
+            Text(site?.name ?: "Pilih tanaman dengan lokasi kebun untuk melihat cuaca.",style=MaterialTheme.typography.bodyMedium)
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             message?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick={editing=!editing},enabled=!busy) { Text(if(editing) "Tutup pilihan kota" else if(place==null) "Pilih kota cuaca" else "Ubah kota cuaca") }
-                if (place!=null) TextButton(onClick={reload++},enabled=!busy) { Text("Muat ulang cuaca") }
+            weather?.let {
+                WeatherValues(it)
+                weatherNote(it,site?.placement ?: "indoor")?.let { note -> Text(note,style=MaterialTheme.typography.bodyMedium) }
             }
-            if (editing) {
-                OutlinedTextField(query,{query=it.take(80);results=null},label={Text("Nama kota")},singleLine=true,enabled=!busy,modifier=Modifier.fillMaxWidth())
-                Button(onClick={
-                    busy=true;message=null
-                    scope.launch {
-                        try { results=searchWeatherPlaces(query) }
-                        catch (error: CancellationException) { throw error }
-                        catch (_: Exception) { message="Pencarian kota gagal. Periksa koneksi lalu coba lagi." }
-                        finally { busy=false }
-                    }
-                },enabled=!busy && query.trim().length>=2) { Text("Cari kota") }
-                if (results?.isEmpty()==true) Text("Kota tidak ditemukan. Coba nama kota terdekat.")
-                results?.forEach { result ->
-                    OutlinedButton(onClick={
-                        place=result;weather=null;editing=false;results=null
-                        preferences.edit().putString(productId,result.json().toString()).apply()
-                    },enabled=!busy,modifier=Modifier.fillMaxWidth()) { Text(result.label) }
-                }
-            }
-            Text("Prakiraan Open-Meteo untuk kota pilihan. Pilihan kota disimpan di HP ini; tidak memakai GPS.",style=MaterialTheme.typography.bodySmall)
+            if(site!=null) TextButton(onClick=reload,enabled=!busy) { Text("Muat ulang cuaca") }
+            Text("Prakiraan Open-Meteo melalui layanan akun, berdasarkan koordinat lokasi kebun yang dibulatkan. Bukan bacaan sensor pot.",style=MaterialTheme.typography.bodySmall)
+            Text("Radiasi matahari dan lux tidak tersedia pada layanan cuaca ini.",style=MaterialTheme.typography.bodySmall)
             val uri=rememberSafeUriHandler()
             TextButton(onClick={uri.openUri("https://open-meteo.com/")}) { Text("Sumber cuaca: Open-Meteo · CC BY 4.0") }
         }
     }
 }
-@Composable internal fun WeatherValues(weather: Weather) {
-    Text("${weather.label} · ${if(weather.daylight) "Siang" else "Malam"}",style=MaterialTheme.typography.titleMedium)
-    Text("${number(weather.temperature)} °C",style=MaterialTheme.typography.headlineLarge)
-    Text("Kelembapan udara ${number(weather.humidity)}% · Angin ${number(weather.wind)} km/jam",style=MaterialTheme.typography.bodySmall)
-    Text("Cahaya sekitar (prakiraan)",style=MaterialTheme.typography.titleMedium)
-    Text("Radiasi matahari ${number(weather.radiation)} W/m²",style=MaterialTheme.typography.bodyMedium)
-    Text("Bukan lux di daun atau bacaan sensor pot. Sensor cahaya belum tersedia pada layanan perangkat.",style=MaterialTheme.typography.bodySmall)
-    Text("Prakiraan ${time(weather.at)}${if(weather.stale(Instant.now())) " · Data cuaca usang" else ""}",style=MaterialTheme.typography.bodySmall)
+@Composable internal fun WeatherValues(weather: WeatherSnapshot) {
+    Text(weather.label,style=MaterialTheme.typography.titleMedium)
+    Text("${number(weather.tempC)} °C",style=MaterialTheme.typography.headlineLarge)
+    Text("Kelembapan udara ${number(weather.humidity)}% · Angin ${number(weather.windMs)} m/s",style=MaterialTheme.typography.bodySmall)
+    Text("Awan ${number(weather.cloud)}% · Curah hujan ${number(weather.rainMm)} mm",style=MaterialTheme.typography.bodyMedium)
+    Text("Prakiraan ${weather.at.replace('T',' ')} · waktu lokasi",style=MaterialTheme.typography.bodySmall)
+    weather.forecast.forEach { hour ->
+        Text("${hour.inHours} jam lagi · ${hour.condition} · ${number(hour.tempC)} °C · Hujan ${number(hour.rainMm)} mm",style=MaterialTheme.typography.bodySmall)
+    }
 }
 
 @Composable internal fun RewardsScreen(state: AppState, reload: ()->Unit, reserve: (RewardItem,String)->Unit, cancel: (String)->Unit, recover: (String)->Unit = {}) {

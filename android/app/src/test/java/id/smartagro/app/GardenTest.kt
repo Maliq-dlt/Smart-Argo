@@ -17,6 +17,18 @@ class GardenTest {
         assertEquals("CB-12",plant.tag);assertEquals("Cabai dapur",plant.name);assertNull(plant.unitId)
         assertEquals(0,data.emptySlots)
     }
+    @Test fun serverCoordinatesFollowTheSelectedGardenAndNeverGuessAMissingLocation() {
+        val data=garden();data.getJSONArray("sites").getJSONObject(0).put("latitude",-6.91).put("longitude",107.61)
+        val parsed=parseGarden(data)
+        assertEquals(-6.91,parsed.sites.single().latitude!!,0.0)
+        val state=AppState(screen=Screen.Garden,garden=parsed,gardenPlant=parsed.plants.single())
+        assertEquals(parsed.sites.single(),state.weatherSite)
+        val unit=PlantUnit(id(9),id(10),"Cabai","Cabai")
+        assertEquals("CB-12",state.copy(garden=parsed.copy(plants=listOf(parsed.plants.single().copy(unitId=unit.id)))).plantCode(unit))
+        assertNull(state.copy(screen=Screen.Dashboard,selectedUnit=null).weatherSite)
+        data.getJSONArray("sites").getJSONObject(0).put("longitude",JSONObject.NULL)
+        assertThrows(IllegalArgumentException::class.java) { parseGarden(data) }
+    }
     @Test fun invalidRelationshipsAndConflictingIdentitiesFailClosed() {
         val data=garden();data.getJSONArray("slots").getJSONObject(0).put("site_id",id(4))
         assertThrows(IllegalArgumentException::class.java) { parseGarden(data) }

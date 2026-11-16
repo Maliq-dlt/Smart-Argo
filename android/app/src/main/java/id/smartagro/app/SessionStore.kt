@@ -36,8 +36,11 @@ class SessionStore(private val context: Context, endpoint: String, private val k
         catch (error: Exception) { atomic.failWrite(stream); throw error }
     }
     // An ambiguous network result keeps the same identity, including after process death.
-    fun rewardRequest(email: String, itemId: String): String {
-        val file = rewardFile(email, itemId)
+    fun rewardRequest(email: String, itemId: String): String = requestIdentity(email,itemId,"reward")
+    fun explanationRequest(email: String, unitId: String, deviceId: String, question: String): String =
+        requestIdentity(email,"$unitId:$deviceId:$question","explanation")
+    private fun requestIdentity(email: String, key: String, kind: String): String {
+        val file = requestFile(email,key,kind)
         val atomic = android.util.AtomicFile(file)
         val mirror = android.util.AtomicFile(File(file.path+".copy"))
         fun read(source: android.util.AtomicFile): String? = runCatching {
@@ -56,7 +59,8 @@ class SessionStore(private val context: Context, endpoint: String, private val k
             return value
         }
         if(file.exists() || File(file.path+".copy").exists()) throw ApiFailure(
-            "Identitas reservasi di HP rusak. Periksa penukaran di website sebelum membuat permintaan baru.",code="request_identity_corrupt")
+            if(kind=="reward") "Identitas reservasi di HP rusak. Periksa penukaran di website sebelum membuat permintaan baru."
+            else "Identitas penjelasan tersimpan rusak. Tidak ada permintaan baru dikirim.",code="request_identity_corrupt")
         val id = java.util.UUID.randomUUID().toString()
         val backup = mirror.startWrite()
         try { backup.write(id.toByteArray(Charsets.UTF_8));mirror.finishWrite(backup) }
@@ -66,21 +70,24 @@ class SessionStore(private val context: Context, endpoint: String, private val k
         catch (error: Exception) { atomic.failWrite(stream); throw error }
         return id
     }
-    fun finishRewardRequest(email: String, itemId: String) {
-        val target=rewardFile(email,itemId)
+    fun finishRewardRequest(email: String, itemId: String) = finishRequest(email,itemId,"reward")
+    fun finishExplanationRequest(email: String, unitId: String, deviceId: String, question: String) =
+        finishRequest(email,"$unitId:$deviceId:$question","explanation")
+    private fun finishRequest(email: String, key: String, kind: String) {
+        val target=requestFile(email,key,kind)
         android.util.AtomicFile(target).delete()
         android.util.AtomicFile(File(target.path+".copy")).delete()
     }
     fun archiveRewardRequest(email: String,itemId: String) {
-        val target=rewardFile(email,itemId)
+        val target=requestFile(email,itemId,"reward")
         listOf(target,File(target.path+".copy")).filter { it.exists() }.forEach { source ->
             val archive=File(source.path+".damaged-"+java.util.UUID.randomUUID())
             check(source.renameTo(archive)) { "Identitas lama belum berhasil disisihkan. Tidak ada permintaan baru dibuat." }
         }
     }
-    private fun rewardFile(email: String, itemId: String): File {
-        val hash = java.security.MessageDigest.getInstance("SHA-256").digest("$email:$itemId".toByteArray()).joinToString("") { "%02x".format(it) }
-        return File(context.noBackupFilesDir,"reward-$scope-$hash.id")
+    private fun requestFile(email: String, key: String, kind: String): File {
+        val hash = java.security.MessageDigest.getInstance("SHA-256").digest("$email:$key".toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        return File(context.noBackupFilesDir,"$kind-$scope-$hash.id")
     }
     fun clear() { android.util.AtomicFile(file).delete() }
 }
