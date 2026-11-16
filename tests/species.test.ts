@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { CURATED_IDS, PLANTABLE, SPECIES, curated, isCuratedId, phaseRanges, plantNickname, sceneOf, searchSpecies, speciesById, speciesOfCrop } from '../src/lib/species.ts'
+import { CURATED_IDS, PLANTABLE, SPECIES, curated, isCuratedId, phaseRanges, plantNickname, plantTag, sceneOf, searchSpecies, speciesById, speciesOfCrop } from '../src/lib/species.ts'
 
 const scenarios: { profile: { crop: string } }[] = JSON.parse(readFileSync(new URL('../src/lib/scenarios.json', import.meta.url), 'utf8'))
 
@@ -77,6 +77,14 @@ test('search finds a plant by its name, an alias or its Latin name, ignoring cas
 test('a plant with no name given is called by its species and its number', () => {
   assert.equal(plantNickname(speciesById('cabai'), 3), 'Cabai 3')
   assert.equal(plantNickname(speciesById('bawang'), 1), 'Bawang merah 1')
+})
+
+test('a plant tag is its species letters and its number, and no two species share letters', () => {
+  const tags = SPECIES.map(s => s.tag)
+  for (const tag of tags) assert.match(tag, /^[A-Z]{2}$/)
+  assert.equal(new Set(tags).size, tags.length)
+  assert.equal(plantTag(speciesById('cabai'), 12), 'CB-12')
+  assert.equal(plantTag(speciesById('bawang'), 1), 'BM-1')
 })
 
 test('only own catalog ids count as curated, never inherited object keys', () => {

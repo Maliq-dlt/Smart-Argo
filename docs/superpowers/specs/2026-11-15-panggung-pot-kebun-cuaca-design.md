@@ -250,5 +250,6 @@ Interpretasi saya (**belum disetujui pengguna**, ditanyakan saat Fase 1):
 **Yang sudah diputuskan saat Fase 1 dikerjakan (2026-11-15, di `src/lib/species.ts`):**
 - `speciesId` sudah diberikan: cabai 1, bawang merah 2, anggrek bulan 3, peoni 4. Angka ini **permanen** begitu kode tanaman terbit; batas atas 2146 supaya `speciesId * 1_000_000 + plant_no` muat di `integer` Postgres (dijaga tes).
 - Huruf tampilan: sudah dijawab (bebas, hanya tampilan, kategori atau inisial). Belum ada di katalog; ditambahkan sebagai satu bidang data bersama kode tanaman di Fase 4.
-- Alias dan nama Latin untuk pencarian: **ditambahkan di Fase 4** bersama `searchSpecies`. Huruf tampilan kode tanaman masih belum ada (hanya tampilan, belum ada pemakainya).
+- Alias dan nama Latin untuk pencarian: **ditambahkan di Fase 4** bersama `searchSpecies`.
+- **Huruf tampilan diputuskan pengguna (2026-11-16): per spesies.** Dua huruf kapital unik per spesies di katalog (`tag`: cabai CB, bawang merah BM, anggrek bulan AB, peoni PN), karena satu inisial bentrok (mawar dan melati sama-sama "M"). Tampil sebagai `CB-12` (`plantTag`) di samping nama panggilan pada pemilih pot dan ringkasan kebun. Hanya tampilan: identitasnya tetap `plantCode` (angka bulat), jadi huruf boleh diganti tanpa migrasi; tes menjaga keunikannya.
 - Id spesies kurasi tetap `cabai` dan `bawang` (nilai itu sudah tersimpan di token dan sesi pengguna), jadi tidak ada alias dan tidak ada migrasi. `parsePot` menolak anggrek dan peoni sampai Fase 4 menyediakan perjalanan "mengamati".

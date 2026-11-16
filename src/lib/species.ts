@@ -15,6 +15,9 @@ export interface Species {
   /** Permanent integer behind the future plant code (`speciesId * 1_000_000 + plant number`, spec section 11): never
    * reuse or renumber one once a code has been issued. Capped at 2146 so a code still fits a Postgres integer. */
   speciesId: number
+  /** Two capital letters shown before a plant's number ("CB-12"). Display only: the integer code is the identity, so the
+   * letters may change, but no two species share them (one initial would not do: mawar and melati are both "M"). */
+  tag: string
   name: string
   category: 'sayur_buah' | 'hias' | 'perkebunan'
   form: 'semak' | 'roset' | 'umbi'
@@ -37,13 +40,13 @@ export interface Curated extends Species { id: CuratedId; tier: 'kurasi'; scenar
 const LEARNING_PHASES: readonly Phase[] = [{ name: 'Mengamati', start: 0 }]
 const CURATED: Record<CuratedId, Curated> = {
   cabai: {
-    id: 'cabai', speciesId: 1, name: 'Cabai', category: 'sayur_buah', form: 'semak', tier: 'kurasi',
+    id: 'cabai', speciesId: 1, tag: 'CB', name: 'Cabai', category: 'sayur_buah', form: 'semak', tier: 'kurasi',
     aliases: ['cabe', 'lombok', 'cabai rawit', 'cabai merah'], latin: 'Capsicum annuum', scene: 'cabai',
     scenario: 0, growthDays: 62, maxDay: 90,
     phases: [{ name: 'Awal tanam', start: 0 }, { name: 'Vegetatif', start: 1 }, { name: 'Berbunga', start: 31 }, { name: 'Berbuah', start: 56 }],
   },
   bawang: {
-    id: 'bawang', speciesId: 2, name: 'Bawang merah', category: 'sayur_buah', form: 'umbi', tier: 'kurasi',
+    id: 'bawang', speciesId: 2, tag: 'BM', name: 'Bawang merah', category: 'sayur_buah', form: 'umbi', tier: 'kurasi',
     aliases: ['bawang', 'shallot', 'brambang'], latin: 'Allium cepa var. aggregatum', scene: 'bawang',
     scenario: 7, growthDays: 48, maxDay: 65,
     phases: [{ name: 'Awal tanam', start: 0 }, { name: 'Vegetatif', start: 1 }, { name: 'Pembentukan umbi', start: 26 }, { name: 'Pematangan umbi', start: 51 }],
@@ -53,8 +56,8 @@ export const CURATED_IDS: readonly CuratedId[] = ['cabai', 'bawang']
 export const SPECIES: readonly Species[] = [
   CURATED.cabai,
   CURATED.bawang,
-  { id: 'anggrek', speciesId: 3, name: 'Anggrek bulan', category: 'hias', form: 'roset', tier: 'belajar', aliases: ['anggrek', 'orchid', 'phalaenopsis'], latin: 'Phalaenopsis amabilis', scene: 'anggrek', growthDays: 120, maxDay: 180, phases: LEARNING_PHASES },
-  { id: 'peoni', speciesId: 4, name: 'Peoni', category: 'hias', form: 'semak', tier: 'belajar', aliases: ['peony', 'paeonia', 'mawar cina'], latin: 'Paeonia lactiflora', scene: null, growthDays: 120, maxDay: 180, phases: LEARNING_PHASES },
+  { id: 'anggrek', speciesId: 3, tag: 'AB', name: 'Anggrek bulan', category: 'hias', form: 'roset', tier: 'belajar', aliases: ['anggrek', 'orchid', 'phalaenopsis'], latin: 'Phalaenopsis amabilis', scene: 'anggrek', growthDays: 120, maxDay: 180, phases: LEARNING_PHASES },
+  { id: 'peoni', speciesId: 4, tag: 'PN', name: 'Peoni', category: 'hias', form: 'semak', tier: 'belajar', aliases: ['peony', 'paeonia', 'mawar cina'], latin: 'Paeonia lactiflora', scene: null, growthDays: 120, maxDay: 180, phases: LEARNING_PHASES },
 ]
 const BY_ID = new Map<string, Species>(SPECIES.map(species => [species.id, species]))
 /** Any species of the catalog by its id. */
@@ -97,3 +100,5 @@ export function searchSpecies(query: string): Species[] {
 }
 /** "Cabai 3": the name a plant gets when its owner gives none. */
 export const plantNickname = (species: Species, ordinal: number) => `${species.name} ${ordinal}`
+/** How a person reads a plant's code aloud: its species letters and its number. Same plant as `plantCode` in garden.ts. */
+export const plantTag = (species: Species, plantNo: number) => `${species.tag}-${plantNo}`

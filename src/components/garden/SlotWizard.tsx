@@ -17,7 +17,8 @@ const MAX_ZONES = 6
 
 /** "Siapkan": a personal pot or a garden, where it stands, what grows in it and since when. The plant starts on the planting
  * date; an older date has the simulator age it (at most `MAX_BACKFILL_DAYS`), so the dashboard is not an empty seedling. */
-export default function SlotWizard({ today, onCreate, onClose }: { today: string; onCreate: (input: WizardInput) => void; onClose: () => void }) {
+/** `account`: the pot is saved on the signed-in person's account, not only on this device. */
+export default function SlotWizard({ today, account = false, onCreate, onClose }: { today: string; account?: boolean; onCreate: (input: WizardInput) => void; onClose: () => void }) {
   const [kind, setKind] = useState<'pot' | 'garden'>('pot')
   const [name, setName] = useState('')
   const [placement, setPlacement] = useState<Placement>('indoor')
@@ -37,7 +38,7 @@ export default function SlotWizard({ today, onCreate, onClose }: { today: string
       onCreate({ kind, name, placement, location, plantedOn, plant: { speciesId, nickname: nickname.trim() || undefined }, zones })
     } catch (err) { setError(err instanceof Error ? err.message : 'Tidak dapat menyimpan.') }
   }}>
-    <div className="dialog-heading"><div><DialogTitle>Tambah pot atau kebun</DialogTitle><DialogDescription>Disimpan di perangkat ini. Pembacaan tetap data simulasi.</DialogDescription></div>
+    <div className="dialog-heading"><div><DialogTitle>Tambah pot atau kebun</DialogTitle><DialogDescription>{account ? 'Disimpan di akun Anda.' : 'Disimpan di perangkat ini.'} Pembacaan tetap data simulasi.</DialogDescription></div>
       <button type="button" className="icon-button" aria-label="Tutup" onClick={onClose}><X /></button></div>
     <SegmentedControl label="Jenis" value={kind} onValueChange={value => setKind(value === 'garden' ? 'garden' : 'pot')} options={[{ value: 'pot', label: 'Pot pribadi' }, { value: 'garden', label: 'Kebun' }]} />
     <label>Nama<input value={name} onChange={event => setName(event.target.value)} maxLength={60} required placeholder={kind === 'pot' ? 'Pot dapur' : 'Kebun belakang'} /></label>
@@ -45,7 +46,7 @@ export default function SlotWizard({ today, onCreate, onClose }: { today: string
     {outdoors && <div className="form-grid">
       <label>Lintang<input type="number" inputMode="decimal" step="any" min="-90" max="90" value={lat} onChange={event => setLat(event.target.value)} placeholder="Opsional" /></label>
       <label>Bujur<input type="number" inputMode="decimal" step="any" min="-180" max="180" value={lon} onChange={event => setLon(event.target.value)} placeholder="Opsional" /></label>
-      <small className="section-hint">Opsional. Disimpan di perangkat ini untuk cuaca nanti.</small></div>}
+      <small className="section-hint">Opsional. {account ? 'Disimpan di akun, dibulatkan sekitar 1 km,' : 'Disimpan di perangkat ini'} untuk cuaca nanti.</small></div>}
     {kind === 'pot'
       ? <>
         <SpeciesSearch value={speciesId} onChange={setSpeciesId} />

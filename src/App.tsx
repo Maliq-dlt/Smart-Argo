@@ -25,9 +25,10 @@ import LearningCard from './components/dashboard/LearningCard'
 import { THRESHOLDS, dryingRate, evidenceLevel, healthyMoistureRange, observe, waterResponse, wateringTimes, type InspectionState } from './lib/observation'
 import { learningEvidence, learningTemplate, type LearningText } from './lib/learningExplanation'
 import { features } from './lib/appMode'
-import { activeCycle, addGarden, addPersonalPot, bindSession, demoGarden, emptyGarden, switchPlant, type GardenBook, type Outcome, type Slot } from './lib/garden'
+import { activeCycle, addGarden, addPersonalPot, bindSession, demoGarden, emptyGarden, gardenFromServer, switchPlant, type GardenBook, type Outcome, type Slot } from './lib/garden'
+import { addSiteOnServer, gardenErrorText, switchOnServer, type GardenRpc } from './lib/gardenServer'
 import { createSlotSession, loadScenario, loadSpeciesScenario } from './lib/gardenSessions'
-import { browserStorage, readGarden, saveGarden } from './lib/gardenStore'
+import { browserStorage, keepDeviceCopy, readGarden, saveGarden } from './lib/gardenStore'
 import PlantMood from './components/PlantMood'
 import AgroMark from './components/AgroMark'
 import SessionReport from './components/SessionReport'
@@ -40,7 +41,7 @@ import ConditionBand from './components/dashboard/ConditionBand'
 import AnswerCard, { type AnswerRow } from './components/dashboard/AnswerCard'
 import Instruments from './components/dashboard/Instruments'
 import { agoLabel, skyPeriod } from './lib/dashboardFacts'
-import { CURATED_IDS, curated, isCuratedId, speciesByCode, speciesById, speciesOfCrop } from './lib/species'
+import { CURATED_IDS, curated, isCuratedId, plantTag, speciesByCode, speciesById, speciesOfCrop } from './lib/species'
 import './components/dashboard/dashboard.css'
 import './components/garden/garden.css'
 import SessionClockCard from './components/dashboard/SessionClockCard'
@@ -126,24 +127,58 @@ function Simulator() {
   const [careEffect, setCareEffect] = useState<CareEffect | null>(null)
   const [weather, setWeatherState] = useState<SimWeather>(readSimWeather)
   const setWeather = (kind: SimWeather) => { setWeatherState(kind); saveSimWeather(kind) }
-  // Pots and gardens kept on this device, one set for each account (or for a guest). Every slot opens its own simulator session.
+  // Pots and gardens, one set for each account (or for a guest). Every slot opens its own simulator session. A guest's live only
+  // on this device; a signed-in person's live on the server (my_garden), and this device keeps a copy to show at once and which
+  // session each slot opens.
   const gardenScope = account.signedIn && account.identity ? encodeURIComponent(account.identity.email.toLowerCase()) : 'guest'
   const [gardenState, setGardenState] = useState(() => ({ scope: gardenScope, book: readGarden(browserStorage(), gardenScope).book }))
   if (gardenState.scope !== gardenScope) setGardenState({ scope: gardenScope, book: readGarden(browserStorage(), gardenScope).book })
   const garden = gardenState.scope === gardenScope ? gardenState.book : emptyGarden()
   const setGarden = (change: (old: GardenBook) => GardenBook) => setGardenState(old => { const next = change(old.book); saveGarden(browserStorage(), old.scope, next); return { scope: old.scope, book: next } })
+  const server = account.signedIn && account.identity ? account.client : null
+  const gardenRpc: GardenRpc | null = server && ((name, body) => server.rpc(name, body))
+  useEffect(() => {
+    if (!server) return
+    let live = true
+    server.rpc('my_garden').then(answer => {
+      if (!live) return
+      gardenFromServer(answer, emptyGarden()) // a broken answer throws here, before anything on this device changes
+      // ponytail: pots made on this device before the garden moved to the server are kept aside, not uploaded; add an import
+      // if real accounts turn out to have them.
+      const cached = readGarden(browserStorage(), gardenScope).book
+      if (cached.sites.some(site => /^s\d+$/.test(site.id)) && keepDeviceCopy(browserStorage(), gardenScope, cached))
+        setNotice('Pot lama yang hanya ada di perangkat ini belum dipindahkan ke akun. Salinannya disimpan; yang tampil sekarang kebun akun Anda.')
+      setGardenState(old => {
+        if (old.scope !== gardenScope) return old
+        const book = gardenFromServer(answer, old.book)
+        saveGarden(browserStorage(), old.scope, book)
+        return { scope: old.scope, book }
+      })
+    }).catch(() => { if (live) setNotice('Kebun akun belum bisa dimuat. Yang tampil adalah salinan terakhir di perangkat ini.') })
+    return () => { live = false }
+  }, [server, gardenScope])
+  /** Reads the server's garden into this device's book, keeping sessions; throws, changing nothing, on a refused or broken answer. */
+  async function pullGarden(rpc: GardenRpc) {
+    const answer = await rpc('my_garden'), next = gardenFromServer(answer, garden)
+    setGarden(old => gardenFromServer(answer, old)) // cannot throw: the same answer was just accepted
+    return next
+  }
   const [gardenDialog, setGardenDialog] = useState<'add' | 'switch' | null>(null)
   const today = () => new Date().toLocaleDateString('en-CA')
   const slotOfSession = garden.slots.find(s => s.sessionId === session.id)
   const siteOfSession = slotOfSession && garden.sites.find(s => s.id === slotOfSession.siteId)
   const sessionOfSlot = (slot: Slot) => slot.sessionId ? book.sessions.find(s => s.id === slot.sessionId) : undefined
+  const plantLabel = (slot: Slot) => {
+    const cycle = activeCycle(slot), species = cycle && speciesByCode(cycle.speciesId)
+    return !cycle ? 'Kosong' : species ? `${cycle.nickname} · ${plantTag(species, cycle.plantNo)}` : cycle.nickname
+  }
   const describeSlot = (slot: Slot) => {
     const cycle = activeCycle(slot), linked = sessionOfSlot(slot)
     if (!cycle) return 'Kosong'
     const linkedSim = linked && simulationOf(linked)
-    return `${cycle.nickname} · ${linked && linkedSim ? `Hari ke-${linkedSim.mode === 'journey' ? Math.floor(linkedSim.growthHours / 24) : linked.day}` : 'Belum dibuka'}`
+    return `${plantLabel(slot)} · ${linked && linkedSim ? `Hari ke-${linkedSim.mode === 'journey' ? Math.floor(linkedSim.growthHours / 24) : linked.day}` : 'Belum dibuka'}`
   }
-  const zoneStatus = (slot: Slot) => ({ plant: activeCycle(slot)?.nickname ?? 'Kosong', text: sessionOfSlot(slot) ? evaluate(sessionOfSlot(slot)!.data).action : 'Belum dibuka' })
+  const zoneStatus = (slot: Slot) => ({ plant: plantLabel(slot), text: sessionOfSlot(slot) ? evaluate(sessionOfSlot(slot)!.data).action : 'Belum dibuka' })
   const sessionForCycle = (slot: Slot) => { const cycle = activeCycle(slot), species = cycle && speciesByCode(cycle.speciesId); return cycle && species ? createSlotSession(species.id, slot.name, cycle.plantedOn, today()) : null }
   /** Makes and binds a session for each slot and opens the first, as a new pot or garden (or the demo) is added. */
   function launch(base: GardenBook, slots: Slot[]) {
@@ -164,8 +199,20 @@ function Simulator() {
     if (!fresh) { setNotice(`${slot.name} masih kosong. Pilih "Ganti tanaman" untuk menanam.`); return }
     openNew(fresh); setGarden(old => bindSession(old, slotId, fresh.id))
   }
-  function createFromWizard(input: WizardInput) {
+  async function createFromWizard(input: WizardInput) {
     const { placement, location, plantedOn } = input
+    if (gardenRpc) {
+      setGardenDialog(null); setNotice('Menyimpan ke akun…')
+      const before = new Set(garden.slots.map(s => s.id))
+      const zones = input.kind === 'pot' ? [{ name: input.name, plant: { ...input.plant, plantedOn } }] : input.zones.map(zone => ({ name: zone.name, plant: { speciesId: zone.speciesId, plantedOn } }))
+      const failure = await addSiteOnServer(gardenRpc, { kind: input.kind, name: input.name, placement, location, zones }).then(() => '', gardenErrorText)
+      try { // whatever was made, even when a plant was refused, is shown and opened
+        const next = await pullGarden(gardenRpc)
+        launch(next, next.slots.filter(s => !before.has(s.id)))
+      } catch (err) { setNotice(failure || gardenErrorText(err)); return }
+      setNotice(failure || (input.kind === 'pot' ? `${input.name} ditambahkan ke akun Anda. Pembacaan tetap data simulasi.` : `${input.name} ditambahkan ke akun Anda dengan ${input.zones.length} zona. Pembacaan tetap data simulasi.`))
+      return
+    }
     const next = input.kind === 'pot'
       ? addPersonalPot(garden, { name: input.name, placement, location, plant: { speciesId: input.plant.speciesId, plantedOn, nickname: input.plant.nickname } })
       : addGarden(garden, { name: input.name, placement, location, zones: input.zones.map(zone => ({ name: zone.name, plant: { speciesId: zone.speciesId, plantedOn } })) })
@@ -173,8 +220,20 @@ function Simulator() {
     setGardenDialog(null)
     setNotice(input.kind === 'pot' ? `${input.name} ditambahkan. Pembacaan tetap data simulasi.` : `${input.name} ditambahkan dengan ${input.zones.length} zona. Pembacaan tetap data simulasi.`)
   }
-  function switchSlotPlant(change: { speciesId: number; outcome: Outcome; nickname?: string }) {
+  async function switchSlotPlant(change: { speciesId: number; outcome: Outcome; nickname?: string }) {
     if (!slotOfSession) return
+    if (gardenRpc) {
+      const slotId = slotOfSession.id
+      setGardenDialog(null)
+      try {
+        if ((await switchOnServer(gardenRpc, slotId, change, today())).unchanged === true) { setNotice('Tanaman itu sudah ditanam di sini hari ini.'); return }
+        const next = await pullGarden(gardenRpc), slot = next.slots.find(s => s.id === slotId), cycle = slot && activeCycle(slot)
+        if (!slot || !cycle) return
+        launch(next, [slot])
+        setNotice(`Siklus lama ${slot.name} ditutup dan riwayatnya disimpan di akun Anda. ${cycle.nickname} mulai dari hari 0.`)
+      } catch (err) { setNotice(gardenErrorText(err)) }
+      return
+    }
     const stamp = today(), next = switchPlant(garden, slotOfSession.id, change.speciesId, stamp, change.outcome, change.nickname)
     setGardenDialog(null)
     if (next === garden) { setNotice('Tanaman itu sudah ditanam di sini hari ini.'); return }
@@ -498,7 +557,14 @@ function Simulator() {
   if (account.signedIn && account.identity && !account.identity.pot) return <PotSetup onSaved={pot => {
     const fresh = { ...createJourney(loadScenario(curated(pot.crop).scenario).data), name: pot.name }
     openNew(fresh)
-    try { // the first pot of an account is also its first slot; if that cannot be made the pot still opens
+    // The first pot of an account is also its first slot, on the server; if that cannot be made the pot still opens.
+    const plant = { speciesId: curated(pot.crop).speciesId, plantedOn: today() }
+    if (gardenRpc) void addSiteOnServer(gardenRpc, { kind: 'pot', name: pot.name, placement: 'outdoor', zones: [{ name: pot.name, plant }] })
+      .then(() => pullGarden(gardenRpc)).then(next => {
+        const slot = next.slots.at(-1) // the newest, as the server orders slots by when they were made
+        if (slot) setGarden(old => old.slots.some(s => s.id === slot.id) ? bindSession(old, slot.id, fresh.id) : old)
+      }).catch(err => setNotice(gardenErrorText(err)))
+    else try {
       setGarden(old => { const added = addPersonalPot(old, { name: pot.name, placement: 'outdoor', plant: { speciesId: curated(pot.crop).speciesId, plantedOn: today() } }); return bindSession(added, added.slots[added.slots.length - 1].id, fresh.id) })
     } catch { /* the garden is optional */ }
     if (pot.device) location.hash = '#ekosistem' // activation by serial lives there
@@ -522,7 +588,7 @@ function Simulator() {
     <header className="app-topbar">
       <a className="topbar-brand" href="#" aria-label="Smart Agro · Beranda"><AgroMark /></a>
       <h1 className="page-title"><i aria-hidden="true" />{currentPage.title}</h1>
-      <div className="session-pill"><SlotPicker book={{ ...garden, activeSlotId: slotOfSession?.id ?? null }} describe={describeSlot} canSwitch={!!slotOfSession} canLoadDemo={garden.sites.length === 0 && features.demoGarden} onSelect={openSlot} onAdd={() => setGardenDialog('add')} onSwitch={() => setGardenDialog('switch')} onDemo={loadDemo}><PlantMood mood={!sim.planted ? 'ready' : mood} /><span><strong>{session.name}</strong><small>Simulasi · {!journey ? 'Eksperimen' : sim.planted ? `Hari ke-${day}` : 'Belum ditanam'}</small></span></SlotPicker>
+      <div className="session-pill"><SlotPicker book={{ ...garden, activeSlotId: slotOfSession?.id ?? null }} describe={describeSlot} canSwitch={!!slotOfSession} canLoadDemo={garden.sites.length === 0 && features.demoGarden && !server} onSelect={openSlot} onAdd={() => setGardenDialog('add')} onSwitch={() => setGardenDialog('switch')} onDemo={loadDemo}><PlantMood mood={!sim.planted ? 'ready' : mood} /><span><strong>{session.name}</strong><small>Simulasi · {!journey ? 'Eksperimen' : sim.planted ? `Hari ke-${day}` : 'Belum ditanam'}</small></span></SlotPicker>
         <span className={`save-status ${saveState.error ? 'save-failed' : ''}`} role="status"><i aria-hidden="true" />{saveState.error ? 'Belum tersimpan' : saveState.book === book ? 'Tersimpan' : 'Menyimpan…'}</span></div>
       <div className="topbar-tools">
         <ClockSettings clock={session.clock} hour={data.now_h} onChange={clock => { setRunning(false); setPauseNote('Zona waktu diubah. Tekan Lanjutkan waktu.'); edit({ clock }) }} />
@@ -625,7 +691,7 @@ function Simulator() {
     <div className={`toast ${notice ? 'visible' : ''}`} role="status">{notice && <><Check weight="bold" aria-hidden="true" />{notice}</>}</div>
     <ChainProofDialog open={modal === 'proof'} onOpenChange={open => { if (!open) setModal(null) }} record={() => ({ name: `smart-agro-catatan-${new Date().toISOString().replace(/[:.]/g, '-')}.json`, text: JSON.stringify(encodeSession(session), null, 2) })} />
     <Dialog open={modal === 'profile'} onOpenChange={open => { if (!open) setModal(null) }}><DialogContent showCloseButton={false} onCloseAutoFocus={restoreModalFocus}><ProfileEditor key={profileVersion} profile={data.profile} onApply={applyProfile} onClose={() => setModal(null)} /></DialogContent></Dialog>
-    <Dialog open={gardenDialog === 'add'} onOpenChange={open => { if (!open) setGardenDialog(null) }}><DialogContent showCloseButton={false}><SlotWizard today={today()} onCreate={createFromWizard} onClose={() => setGardenDialog(null)} /></DialogContent></Dialog>
+    <Dialog open={gardenDialog === 'add'} onOpenChange={open => { if (!open) setGardenDialog(null) }}><DialogContent showCloseButton={false}><SlotWizard today={today()} account={!!server} onCreate={createFromWizard} onClose={() => setGardenDialog(null)} /></DialogContent></Dialog>
     <Dialog open={gardenDialog === 'switch' && !!slotOfSession} onOpenChange={open => { if (!open) setGardenDialog(null) }}><DialogContent showCloseButton={false}>{slotOfSession && <SwitchPlantDialog slotName={slotOfSession.name} today={today()} onSwitch={switchSlotPlant} onClose={() => setGardenDialog(null)}
       current={(() => { const cycle = activeCycle(slotOfSession), species = cycle && speciesByCode(cycle.speciesId); return cycle && species ? { nickname: cycle.nickname, speciesName: species.name, plantedOn: cycle.plantedOn } : null })()} />}</DialogContent></Dialog>
     <Dialog open={modal === 'guide'} onOpenChange={open => { if (!open) setModal(null) }}><DialogContent className="guide-modal" showCloseButton={false} onCloseAutoFocus={restoreModalFocus}><div className="dialog-heading"><span className="dialog-icon"><BookOpenText weight="duotone" aria-hidden="true" /></span><div><DialogTitle>Tentang simulator</DialogTitle><DialogDescription>Asisten perawatan tanaman dalam pot berbasis riwayat sensor.</DialogDescription></div><button className="icon-button" aria-label="Tutup panduan" onClick={() => setModal(null)}><X aria-hidden="true" /></button></div>

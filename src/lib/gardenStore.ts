@@ -23,6 +23,13 @@ export function saveGarden(storage: Reader, scope: string, book: GardenBook): bo
   try { storage.setItem(gardenKey(scope), JSON.stringify(book)); return true } catch { return false }
 }
 
+/** Keeps a copy of a book under `<key>.device` before the server's garden replaces it, so pots that were only ever on this device
+ * are not lost. The first copy is kept: true only when one was written now. */
+export function keepDeviceCopy(storage: Reader, scope: string, book: GardenBook): boolean {
+  const key = `${gardenKey(scope)}.device`
+  try { if (storage.getItem(key) !== null) return false; storage.setItem(key, JSON.stringify(book)); return true } catch { return false }
+}
+
 /** The browser's storage, or a stand-in that reads nothing and refuses writes where storage is blocked (private windows, some embeds). */
 export function browserStorage(): Reader {
   try { return window.localStorage } catch { return { getItem: () => null, setItem: () => { throw new Error('storage blocked') } } }

@@ -173,6 +173,26 @@ export function parseGarden(raw: unknown): GardenBook {
   return { sites, slots, activeSlotId, nextPlantNo }
 }
 
+/** The garden the server keeps for an account (`my_garden()`), as the app's book. Sites, slots and plants are the server's; which
+ * session a slot opens and which slot is chosen belong to this device and are carried over from `local` by slot id. The answer is
+ * checked by `parseGarden` like stored data, so a broken one throws instead of showing an empty garden. */
+export function gardenFromServer(answer: unknown, local: GardenBook): GardenBook {
+  if (!isRecord(answer) || !Array.isArray(answer.sites) || !Array.isArray(answer.slots) || !Array.isArray(answer.cycles)) throw new Error('Format kebun server tidak valid')
+  const cycles = answer.cycles.filter(isRecord), nextPlantNo: Record<number, number> = {}
+  for (const c of cycles) if (typeof c.species_id === 'number' && typeof c.plant_no === 'number') nextPlantNo[c.species_id] = Math.max(nextPlantNo[c.species_id] ?? 1, c.plant_no + 1)
+  if (cycles.length !== answer.cycles.length) throw new Error('Siklus server tidak valid')
+  const slotIds = answer.slots.map(z => isRecord(z) ? z.id : null)
+  const chosen = slotIds.includes(local.activeSlotId) ? local.activeSlotId : slotIds[0] ?? null
+  return parseGarden({
+    sites: answer.sites.map(s => isRecord(s) ? { id: s.id, name: s.name, kind: s.kind, placement: s.placement, ...(s.latitude != null && { location: { lat: s.latitude, lon: s.longitude } }) } : s),
+    slots: answer.slots.map(z => isRecord(z) ? {
+      id: z.id, siteId: z.site_id, name: z.name, sessionId: local.slots.find(old => old.id === z.id)?.sessionId ?? null,
+      cycles: cycles.filter(c => c.slot_id === z.id).map(c => ({ id: c.id, speciesId: c.species_id, plantNo: c.plant_no, nickname: c.nickname, plantedOn: c.planted_on, ...(c.ended_on != null && { endedOn: c.ended_on, outcome: c.outcome }) })),
+    } : z),
+    activeSlotId: chosen, nextPlantNo,
+  })
+}
+
 /** What a presentation shows: an orchid in a pot indoors, and a garden of two zones outdoors. `today` is passed in so the
  * dates (and the tests) do not depend on the clock. */
 export function demoGarden(today: string): GardenBook {
