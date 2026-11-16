@@ -26,8 +26,17 @@ for (let attempt = 0; attempt < 18; attempt++) {
 assert.equal(status, 200)
 for (const asset of [...assets, './fonts/fraunces-soft.woff2', './fonts/general-sans-400.woff2']) {
   if (asset.startsWith('./assets/')) assert.ok(html.includes(asset), `Production must serve the current build: ${asset}`)
-  const response = await fetch(new URL(asset, origin), { signal: AbortSignal.timeout(20000) })
-  assert.equal(response.status, 200, `Asset must load: ${asset}`)
+  // A new file can reach the edge a little after the new index.html that names it (2026-11-16: react-*.js came back as the
+  // HTML fallback 0.1 s after publishing, and was served fine seconds later), so give each asset the same 60 s of retries.
+  let response
+  for (let attempt = 0; attempt < 12; attempt++) {
+    try {
+      response = await fetch(new URL(asset, origin), { cache: 'no-store', signal: AbortSignal.timeout(20000) })
+      if (response.status === 200 && !response.headers.get('content-type')?.includes('text/html')) break
+    } catch { /* a slow answer counts as "not yet", as above */ }
+    await new Promise(resolve => setTimeout(resolve, 5000))
+  }
+  assert.equal(response?.status, 200, `Asset must load: ${asset}`)
   assert.ok(!response.headers.get('content-type')?.includes('text/html'), `Asset must not fall back to HTML: ${asset}`)
 }
 const settings = await fetch(new URL('/auth/v1/settings', backend), { headers: { apikey: env.VITE_SUPABASE_ANON_KEY, Origin: origin }, signal: AbortSignal.timeout(20000) })
