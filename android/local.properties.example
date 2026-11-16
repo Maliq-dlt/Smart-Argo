@@ -1,0 +1,4 @@
+# Copy to local.properties (ignored by Git) and use your installed SDK path.
+sdk.dir=C\:/Users/YOUR_USER/AppData/Local/Android/Sdk
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_ANON_KEY=YOUR_PUBLIC_PUBLISHABLE_OR_ANON_KEY

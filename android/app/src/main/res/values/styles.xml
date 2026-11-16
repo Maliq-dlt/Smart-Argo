@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.SmartAgro" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#2f5a3c</item>
+        <item name="android:windowBackground">#ecefe7</item>
+    </style>
+</resources>

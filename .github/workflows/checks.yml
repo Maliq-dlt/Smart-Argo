@@ -24,6 +24,21 @@ jobs:
       - run: npm run build
       - run: python scripts/reference/simulasi_pot.py --self-test
       - run: git diff --check
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-java@v6.3.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6.4.1
+      # No local.properties in CI: the app is built without a backend URL, and the tests use fixtures and loopback servers.
+      - run: ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 15

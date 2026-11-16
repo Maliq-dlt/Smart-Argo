@@ -1,0 +1,11 @@
+.gradle/
+.kotlin/
+.cache/
+.tmp/
+**/build/
+local.properties
+*.jks
+*.keystore
+
+.private/
+*.p12

@@ -5,7 +5,7 @@ import hooks from 'eslint-plugin-react-hooks'
 import refresh from 'eslint-plugin-react-refresh'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', '.tmp', '.remember/**'] },
+  { ignores: ['dist', 'dist-live', 'node_modules', '.tmp', '.remember/**', 'android/.tmp', 'android/.cache', 'android/**/build'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { files: ['**/*.{ts,tsx,js,mjs}'], languageOptions: { globals: { ...globals.browser, ...globals.node } },

@@ -1,0 +1,934 @@
+[
+  {
+    "name": "Cabai 55 cepat mengering",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 85,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 79,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 73,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 67,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 61,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "PERIKSA_SEBELUM_PERGI",
+    "result": {
+      "decision": "PERIKSA_SEBELUM_PERGI",
+      "action": "Jadwalkan pemeriksaan sebelum kunjungan berikutnya",
+      "reason": "Jika laju kering bertahan, acuan terlewati sekitar 1.3 jam; bukan waktu siram pasti.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Cabai",
+        "low": 39,
+        "wet": 88,
+        "moisture": 55,
+        "temp_c": 27,
+        "eta_h": 1.33,
+        "slope_per_h": -12,
+        "r2": 1,
+        "watering_response": "Belum dievaluasi",
+        "ph_status": "pH terakhir 6.2; umur 0 jam"
+      }
+    }
+  },
+  {
+    "name": "Cabai 55 stabil",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "AMATI",
+    "result": {
+      "decision": "AMATI",
+      "action": "Lanjutkan pengamatan sesuai jadwal",
+      "reason": "Belum ada kondisi terkonfirmasi yang membutuhkan tindakan; ketiadaan peringatan bukan jaminan tanaman sehat.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Cabai",
+        "low": 39,
+        "wet": 88,
+        "moisture": 55,
+        "temp_c": 27,
+        "eta_h": null,
+        "slope_per_h": 0,
+        "r2": 0,
+        "watering_response": "Belum dievaluasi",
+        "ph_status": "pH terakhir 6.2; umur 0 jam"
+      }
+    }
+  },
+  {
+    "name": "Basah menetap",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 3,
+        "moisture": 95,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 3,
+    "expected": "PERIKSA_DRAINASE",
+    "watering": {
+      "t_h": 0,
+      "volume_ml": 150
+    },
+    "result": {
+      "decision": "PERIKSA_DRAINASE",
+      "action": "Periksa media, lubang pot dan genangan tatakan",
+      "reason": "Bacaan berada di atas batas basah lokal selama tiga jam; ini petunjuk pemeriksaan, bukan diagnosis akar.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Cabai",
+        "low": 39,
+        "wet": 88,
+        "moisture": 95,
+        "temp_c": 27,
+        "eta_h": null,
+        "slope_per_h": null,
+        "r2": null,
+        "watering_response": "Perubahan +0.0 poin setelah 150 mL; hanya lokasi probe",
+        "ph_status": "pH terakhir 6.2; umur 0 jam"
+      }
+    }
+  },
+  {
+    "name": "Respons siraman kecil",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 34,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 33,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 32,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 31,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 30,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 31,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "PERIKSA_SIRAMAN",
+    "watering": {
+      "t_h": 2,
+      "volume_ml": 150
+    },
+    "result": {
+      "decision": "PERIKSA_SIRAMAN",
+      "action": "Periksa aliran air dan kontak probe sebelum menambah air",
+      "reason": "Respons lokal kurang dari lima poin; air belum tentu mencapai probe atau pembacaannya bermasalah.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Cabai",
+        "low": 39,
+        "wet": 88,
+        "moisture": 31,
+        "temp_c": 27,
+        "eta_h": null,
+        "slope_per_h": null,
+        "r2": null,
+        "watering_response": "Perubahan +1.0 poin setelah 150 mL; hanya lokasi probe",
+        "ph_status": "pH terakhir 6.2; umur 0 jam"
+      }
+    }
+  },
+  {
+    "name": "Lonjakan tanpa tindakan",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.51,
+        "moisture": 9,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.51,
+    "expected": "PERIKSA_SENSOR",
+    "result": {
+      "decision": "PERIKSA_SENSOR",
+      "action": "Periksa posisi probe dan ulangi pembacaan",
+      "reason": "Lonjakan lebih dari 20 poin dalam dua menit tanpa catatan penyiraman.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Cabai",
+        "low": 39,
+        "wet": 88,
+        "moisture": 9,
+        "temp_c": 27,
+        "eta_h": null,
+        "slope_per_h": null,
+        "r2": null,
+        "watering_response": "Belum dievaluasi",
+        "ph_status": "Belum ada pH tervalidasi yang mutakhir"
+      }
+    }
+  },
+  {
+    "name": "pH rendah berulang",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 4.9,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 4.9,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 4.9,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "UKUR_ULANG_PH",
+    "result": {
+      "decision": "UKUR_ULANG_PH",
+      "action": "Ukur ulang pH dengan metode acuan sebelum mengubah media",
+      "reason": "Tiga pembacaan pH di luar rentang profil; sistem tidak menentukan dosis pupuk atau dolomit.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Cabai",
+        "low": 39,
+        "wet": 88,
+        "moisture": 55,
+        "temp_c": 27,
+        "eta_h": null,
+        "slope_per_h": null,
+        "r2": null,
+        "watering_response": "Belum dievaluasi",
+        "ph_status": "pH terakhir 4.9; umur 0 jam; tiga pembacaan di sisi luar rentang yang sama; perlu ukur ulang dengan acuan"
+      }
+    }
+  },
+  {
+    "name": "Data terakhir basi",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 3,
+    "expected": "PULIHKAN_DATA",
+    "result": {
+      "decision": "PULIHKAN_DATA",
+      "action": "Periksa sensor dan sambungan",
+      "reason": "Data terakhir tidak valid atau lebih tua dari lima menit.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Cabai",
+        "low": 39,
+        "wet": 88,
+        "moisture": 55,
+        "temp_c": 27,
+        "eta_h": null,
+        "slope_per_h": null,
+        "r2": null,
+        "watering_response": "Belum dievaluasi",
+        "ph_status": "Belum ada pH tervalidasi yang mutakhir"
+      }
+    }
+  },
+  {
+    "name": "Bawang 55 profil berbeda",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Bawang merah",
+      "media": "Media B",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        27,
+        28,
+        29
+      ],
+      "drained": [
+        70,
+        71,
+        72
+      ],
+      "next_visit_h": 1,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 85,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 79,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 73,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 67,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 61,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "AMATI",
+    "result": {
+      "decision": "AMATI",
+      "action": "Lanjutkan pengamatan sesuai jadwal",
+      "reason": "Belum ada kondisi terkonfirmasi yang membutuhkan tindakan; ketiadaan peringatan bukan jaminan tanaman sehat.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Bawang merah",
+        "low": 28,
+        "wet": 81,
+        "moisture": 55,
+        "temp_c": 27,
+        "eta_h": 2.25,
+        "slope_per_h": -12,
+        "r2": 1,
+        "watering_response": "Belum dievaluasi",
+        "ph_status": "pH terakhir 6.2; umur 0 jam"
+      }
+    }
+  },
+  {
+    "name": "Kering terkonfirmasi",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 45,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 42,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 38,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 35,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 32,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 30,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "PERIKSA_MEDIA_KERING",
+    "result": {
+      "decision": "PERIKSA_MEDIA_KERING",
+      "action": "Konfirmasi media kering, lalu siram bertahap dan catat volume",
+      "reason": "Tiga sampel mutakhir berada di bawah acuan kebutuhan air pot ini.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Cabai",
+        "low": 39,
+        "wet": 88,
+        "moisture": 30,
+        "temp_c": 27,
+        "eta_h": null,
+        "slope_per_h": null,
+        "r2": null,
+        "watering_response": "Belum dievaluasi",
+        "ph_status": "pH terakhir 6.2; umur 0 jam"
+      }
+    }
+  },
+  {
+    "name": "Suhu tinggi media masih lembap",
+    "profile": {
+      "pot_id": "P1",
+      "crop": "Cabai",
+      "media": "Media A",
+      "phase": "Vegetatif",
+      "validated": true,
+      "ph_validated": true,
+      "needs_water": [
+        38,
+        39,
+        40
+      ],
+      "drained": [
+        77,
+        78,
+        79
+      ],
+      "next_visit_h": 6,
+      "hot_c": 34,
+      "ph_range": [
+        5.8,
+        6.8
+      ]
+    },
+    "samples": [
+      {
+        "t_h": 0,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 0.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 1.5,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2,
+        "moisture": 55,
+        "temp_c": 27,
+        "ph": 6.2,
+        "valid": true
+      },
+      {
+        "t_h": 2.5,
+        "moisture": 55,
+        "temp_c": 36,
+        "ph": 6.2,
+        "valid": true
+      }
+    ],
+    "now_h": 2.5,
+    "expected": "PERIKSA_PANAS",
+    "result": {
+      "decision": "PERIKSA_PANAS",
+      "action": "Periksa paparan panas dan kondisi tanaman",
+      "reason": "Suhu melewati batas demonstrasi profil; suhu tinggi sendiri bukan perintah menambah air.",
+      "evidence": {
+        "pot_id": "P1",
+        "crop": "Cabai",
+        "low": 39,
+        "wet": 88,
+        "moisture": 55,
+        "temp_c": 36,
+        "eta_h": null,
+        "slope_per_h": null,
+        "r2": null,
+        "watering_response": "Belum dievaluasi",
+        "ph_status": "pH terakhir 6.2; umur 0 jam"
+      }
+    }
+  }
+]

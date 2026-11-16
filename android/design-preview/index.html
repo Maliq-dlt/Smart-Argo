@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ecefe7">
+  <title>Smart Agro · Preview aplikasi</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='50' font-size='50'%3E🌱%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="preview.css">
+  <script src="preview.js" defer></script>
+</head>
+<body>
+  <main class="studio">
+    <aside class="review-panel" aria-label="Pengaturan preview">
+      <a class="wordmark" href="./"><span class="brand-icon" data-icon="sprout"></span> smart agro<span class="wordmark-dot">®</span></a>
+      <div class="review-intro"><span class="edition">Studi aplikasi / 01</span><h1>Dekat dengan<br>yang tumbuh.</h1><p>Rasa native yang lebih tenang.<br>Dengan jiwa Smart Agro yang sama.</p></div>
+      <div class="review-controls">
+        <label for="viewport-size">Ukuran layar</label>
+        <select id="viewport-size"><option value="320">Kompak · 320 × 740</option><option value="390" selected>Standar · 390 × 844</option><option value="430">Luas · 430 × 900</option></select>
+        <span class="control-label" id="theme-label">Tampilan</span>
+        <div class="segments" role="group" aria-labelledby="theme-label"><button data-theme-set="light" aria-pressed="true">Terang</button><button data-theme-set="dark" aria-pressed="false">Gelap</button></div>
+        <label for="collection-select">Koleksi contoh</label>
+        <select id="collection-select"><option value="pots">Pot saja</option><option value="garden">Kebun saja</option><option value="both">Pot dan kebun</option></select>
+        <label for="screen-select">Layar</label>
+        <select id="screen-select"><option value="dashboard">Dasbor tanaman</option><option value="login">Masuk</option><option value="products">Tanaman saya</option><option value="garden">Kebun (jika dimiliki)</option><option value="activity">Aktivitas</option><option value="account">Akun</option></select>
+        <button class="secondary-button replay-launch" id="replay-launch">Lihat loading screen</button><label class="switch-row" for="reduce-motion"><span>Kurangi animasi</span><input id="reduce-motion" type="checkbox"></label>
+      </div>
+      <p class="review-hint"><span data-icon="touch"></span>Coba ketuk tanaman, buka sensor,<br>atau geser grafik dengan jari.</p>
+      <details class="references"><summary>Referensi & arah desain</summary><p>Hierarki dari Apple Home, gerak yang menjawab sentuhan, serta sheet untuk tugas singkat. Warna dan karakter tetap milik Smart Agro.</p><a href="https://www.apple.com/home-app/" target="_blank" rel="noreferrer">Apple Home <span aria-hidden="true">↗</span></a><a href="https://developer.apple.com/design/human-interface-guidelines/motion" target="_blank" rel="noreferrer">Apple HIG · Motion <span aria-hidden="true">↗</span></a><a href="https://developer.apple.com/design/human-interface-guidelines/sheets" target="_blank" rel="noreferrer">Apple HIG · Sheets <span aria-hidden="true">↗</span></a></details>
+      <p class="review-note">HTML interaktif · data contoh<br>Belum diterapkan ke aplikasi Android.</p>
+    </aside>
+    <section class="device-area" aria-label="Simulator layar HP">
+      <div class="device" id="device">
+        <div class="phone" id="phone">
+          <div class="statusbar" aria-hidden="true"><span>9:41</span><div><span data-icon="signal"></span><span data-icon="wifi"></span><span class="battery"></span></div></div>
+          <div id="app-content" class="app-content"><div id="screen" class="screen" tabindex="-1"></div></div>
+          <nav id="bottom-nav" class="bottom-nav" aria-label="Navigasi aplikasi"></nav>
+          <div class="home-indicator" aria-hidden="true"></div>
+          <div id="launch-screen" class="launch-screen" role="status" aria-label="Menyiapkan kebun"><div class="launch-mark"><span data-icon="sprout"></span></div><p>smart agro</p><span class="launch-message">Menyiapkan ruang bertumbuh.</span><div class="launch-progress" aria-hidden="true"><span></span></div></div>
+          <div id="toast" class="toast" role="status" aria-live="polite"></div>
+          <dialog id="sheet" aria-labelledby="sheet-title"><div class="sheet-dimmer"></div><div class="sheet-panel"><div class="sheet-grabber" aria-hidden="true"><div class="sheet-handle"></div></div><header class="sheet-header"><h2 id="sheet-title"></h2><button class="icon-button close-sheet" data-action="close-sheet" aria-label="Tutup panel"><span data-icon="back"></span><span>Kembali</span></button></header><div id="sheet-content"></div></div></dialog>
+        </div>
+      </div>
+      <p class="device-caption"><span class="preview-dot"></span>Preview interaktif<span class="caption-rule"></span><span id="size-caption">390 × 844</span></p>
+    </section>
+  </main>
+  <button class="mobile-config" aria-label="Buka pengaturan preview" data-action="preview-settings"><span data-icon="sliders"></span></button>
+</body>
+</html>
