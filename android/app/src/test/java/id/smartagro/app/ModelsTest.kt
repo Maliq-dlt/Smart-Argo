@@ -74,13 +74,16 @@ class ModelsTest {
         // An RPC that answers "no session" is a sign-in problem, not a connection problem.
         assertEquals("Sesi berakhir. Silakan masuk kembali.",friendlyError(200,JSONObject().put("ok",false).put("code","unauthorized").put("message","Active session required.")))
     }
-    @Test fun historyRejectsUntrustedSourcesAndClockMetadata() {
+    @Test fun historyShowsOnlyDeviceReadingsAndSkipsValuesItDoesNotKnow() {
         val row = JSONObject("""{"id":"00000000-0000-4000-8000-000000000001","boot_id":"00000000-0000-4000-8000-000000000002","received_at":"2026-11-15T00:00:00Z","measured_at":"2026-11-15T00:00:00Z","sensor_id":"moisture","quality_status":"ok","value_nullable":50,"source":"device","clock_status":"synced","sequence":1,"error_message":null}""")
-        fun page(item: JSONObject) = JSONObject().put("readings", org.json.JSONArray().put(item))
+        fun page(vararg items: JSONObject) = JSONObject().put("readings", org.json.JSONArray().apply { items.forEach { put(it) } })
+        fun other(id: Int, key: String, value: Any) = JSONObject(row.toString()).put("id","00000000-0000-4000-8000-00000000000$id").put(key,value)
         assertEquals(50.0,parseHistory(page(row)).single().value!!,0.0)
-        rejects { parseHistory(page(JSONObject(row.toString()).put("source","simulator"))) }
-        rejects { parseHistory(page(JSONObject(row.toString()).put("clock_status","unknown"))) }
+        // The server also stores 'simulation' readings, and may add a clock status later: those rows are left out of the
+        // chart (never shown as device data), and the device readings on the same page still show.
+        assertEquals(listOf(row.getString("id")), parseHistory(page(row, other(2,"source","simulation"), other(3,"clock_status","drifting"))).map { it.id })
         rejects { parseHistory(page(JSONObject(row.toString()).put("sequence",1.5))) }
+        rejects { parseHistory(page(JSONObject(row.toString()).put("source",7))) }
     }
 
 
@@ -119,6 +122,9 @@ class ModelsTest {
             .put("confirmed_at",JSONObject.NULL).put("created_at",now.toString())
         val page=JSONObject().put("ok",true).put("proofs",org.json.JSONArray().put(proof))
         assertNull(parseProofs(page).single().explorer)
+        // A proof kind this version does not know (the event key already allows recovery) is left out, not fatal.
+        val newer=JSONObject(proof.toString()).put("event_key","recovery:00000000-0000-4000-8000-000000000009").put("kind","ownership_recovery")
+        assertEquals(listOf("claim:$id"), parseProofs(JSONObject().put("ok",true).put("proofs",org.json.JSONArray().put(proof).put(newer))).map { it.event })
         proof.put("status","confirmed"); rejects { parseProofs(page) }
         proof.put("tx_hash","0x"+"b".repeat(64)).put("chain_id","84532").put("block_number",12).put("confirmed_at",now.toString())
         assertTrue(parseProofs(page).single().explorer!!.startsWith("https://sepolia.basescan.org/tx/0x"))

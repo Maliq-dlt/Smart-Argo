@@ -78,7 +78,8 @@ dependencies {
 }
 
 tasks.withType<Test>().configureEach {
-    doFirst { rootProject.file(".cache/test-home").mkdirs(); rootProject.file(".cache/robolectric").mkdirs() }
+    // .tmp too: it is the tests' java.io.tmpdir and is ignored by Git, so a fresh checkout (CI) does not have it.
+    doFirst { rootProject.file(".cache/test-home").mkdirs(); rootProject.file(".cache/robolectric").mkdirs(); rootProject.file(".tmp").mkdirs() }
     systemProperty("user.home", rootProject.file(".cache/test-home").absolutePath)
     systemProperty("maven.repo.local", rootProject.file(".cache/robolectric").absolutePath)
     systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")

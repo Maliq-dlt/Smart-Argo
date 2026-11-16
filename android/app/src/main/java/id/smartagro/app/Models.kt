@@ -129,7 +129,9 @@ fun chartSegments(readings: List<Reading>, sensor: Sensor): List<List<Reading>> 
 
 fun parseHistory(json: JSONObject): List<Reading> = json.array("readings").objects(120).mapNotNull { row ->
     row.id("id"); row.id("boot_id"); row.instant("received_at")
-    if (row.text("source") != "device" || row.text("clock_status") !in listOf("synced", "unsynced")) invalid()
+    // Only device readings are charted. A 'simulation' row (the server stores those too) or a clock status this version does
+    // not know is left out rather than failing the page; a malformed row still fails it.
+    if (row.text("source") != "device" || row.text("clock_status") !in listOf("synced", "unsynced")) return@mapNotNull null
     val sequence = row.opt("sequence") as? Number ?: invalid()
     if (sequence.toDouble() != sequence.toInt().toDouble() || sequence.toLong() < 0) invalid()
     if (row.optString("quality_status") == "error") row.text("error_message")
@@ -226,9 +228,10 @@ data class ChainProof(val event: String, val kind: String, val serial: String, v
 }
 fun parseProofs(json: JSONObject): List<ChainProof> {
     if (json.opt("ok") != true) invalid()
-    return json.array("proofs").objects(1000).map { row ->
+    return json.array("proofs").objects(1000).mapNotNull { row ->
         val event = row.text("event_key",80).also { if (!Regex("(claim|transfer|recovery):[0-9a-fA-F-]{36}").matches(it) || !uuid.matches(it.substringAfter(':'))) invalid() }
-        val kind = row.text("kind").also { if (it !in listOf("ownership_claim", "ownership_transfer")) invalid() }
+        // A kind this version does not know is left out; the rest of the list still shows.
+        val kind = row.text("kind").takeIf { it in listOf("ownership_claim", "ownership_transfer") } ?: return@mapNotNull null
         val status = row.text("status",80)
         val hash = row.text("artifact_sha256",64).also { if (!Regex("[a-fA-F0-9]{64}").matches(it)) invalid() }
         val chain = row.optionalText("chain_id",20)?.also { if (!Regex("[0-9]{1,20}").matches(it)) invalid() }

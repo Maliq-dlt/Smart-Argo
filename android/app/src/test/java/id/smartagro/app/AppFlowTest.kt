@@ -174,6 +174,8 @@ class AppFlowTest {
             state.value=AppState(screen=Screen.Products,busy=true,email="grower@example.test",catalogLoaded=true,
                 garden=Garden(listOf(GardenSite("site","Pot ruang tamu","pot","indoor")),listOf(plant),0))
         }
+        // The plants are the account's open plant cycles, not its sensor units (an account with a plant and no device has 1 plant).
+        compose.onNodeWithText("1 tanaman · 0 produk").assertIsDisplayed()
         compose.onNodeWithText("Anggrek ruang tamu").performScrollTo().performClick()
         compose.onNodeWithText("AB-12 \u00b7 Anggrek bulan").assertIsDisplayed()
         compose.onNodeWithText("Mengamati \u00b7 profil perawatan spesies ini belum dikurasi.").performScrollTo().assertIsDisplayed()

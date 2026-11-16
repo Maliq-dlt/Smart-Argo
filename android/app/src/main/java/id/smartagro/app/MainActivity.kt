@@ -221,7 +221,7 @@ class MainActivity : ComponentActivity() {
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item {
             Text("Tanaman saya",style=MaterialTheme.typography.headlineLarge)
-            Text("${state.units.size} tanaman · ${state.products.size} produk",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("${state.garden?.plants?.count { it.endedOn == null } ?: 0} tanaman · ${state.products.size} produk",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
         state.garden?.let { garden ->
             item { Text("Pot & kebun akun",style=MaterialTheme.typography.titleLarge) }

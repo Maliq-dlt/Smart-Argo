@@ -72,7 +72,7 @@ export default function ProductTelemetry({ client, products, onSessionExpired, v
         {readings.map(r => <li key={r.id}><div><strong>{names[r.sensor_id]}: {r.value_nullable===null ? 'NULL' : r.value_nullable}{r.value_nullable!==null && r.sensor_id==='soil_temperature' ? ' °C' : r.value_nullable!==null && r.sensor_id==='moisture' ? '/100' : ''}</strong> · {states[r.quality_status]}
           {r.error_message && <p>Galat perangkat: {r.error_message}</p>}
           <p>Diukur {time(r.measured_at)} · Diterima {time(r.received_at)}</p>
-          <p>Jam {r.clock_status==='synced' ? 'tersinkron menurut perangkat' : 'belum tersinkron'} · {reviewedAt-Date.parse(r.measured_at)>300000 ? 'Usang (>5 menit saat dimuat)' : 'Belum usang saat dimuat'} · Urutan {r.sequence} · Boot {r.boot_id}</p>
+          <p>Jam {r.clock_status==='synced' ? 'tersinkron menurut perangkat' : 'belum tersinkron'} · {reviewedAt-Date.parse(r.measured_at)>75*60_000 ? 'Usang (>75 menit saat dimuat)' : 'Belum usang saat dimuat'} · Urutan {r.sequence} · Boot {r.boot_id}</p>
         </div></li>)}
       </ul></details>}
       {active && <ProductExplanation key={selected} client={client} unitId={active.unit_id} deviceId={active.device_id} onSessionExpired={onSessionExpired} />}
