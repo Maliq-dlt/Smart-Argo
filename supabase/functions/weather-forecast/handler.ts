@@ -1,8 +1,9 @@
 import { canonicalRequestId } from '../_shared/observability.ts'
+import { appOrigins, originFor } from '../_shared/origin.ts'
 import { fromOpenMeteo } from '../../../src/lib/weather.ts'
 
 /* Weather for a place, from Open-Meteo, through the server so the browser never talks to the provider and the place is
- * rounded first. This function is NOT deployed and is in no deploy script or gateway; see docs/cuaca.md ("Keadaan saat ini"). */
+ * rounded first. Only a signed-in person may ask, so the free quota is not an open proxy; see docs/cuaca.md. */
 
 const MAX_BODY = 512
 const MAX_ANSWER = 200_000
@@ -20,10 +21,20 @@ function place(text: string): { lat: number; lon: number } | null {
   return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null
 }
 
-export function createWeatherForecastHandler(config: { appOrigin: string; fetch?: typeof fetch }) {
-  const origin = new URL(config.appOrigin).origin
+/** Whether a bearer is a live session, asked of Auth. 401/403 mean no; any other failure throws, because the browser signs
+ * out on a 401 and an Auth outage must not do that. */
+export const signedInVia = (supabaseUrl: string, apiKey: string, ask: typeof fetch = fetch) => async (authorization: string): Promise<boolean> => {
+  const answer = await ask(`${new URL(supabaseUrl).origin}/auth/v1/user`, { headers: { Authorization: authorization, apikey: apiKey }, signal: AbortSignal.timeout(TIMEOUT_MS) })
+  if (answer.ok) return true
+  if (answer.status === 401 || answer.status === 403) return false
+  throw new Error('auth status')
+}
+
+export function createWeatherForecastHandler(config: { appOrigin: string; signedIn: (authorization: string) => Promise<boolean>; fetch?: typeof fetch }) {
+  const origins = appOrigins(config.appOrigin)
   const ask = config.fetch ?? ((input: URL | RequestInfo, init?: RequestInit) => fetch(input, init))
   return async (request: Request): Promise<Response> => {
+    const origin = originFor(origins, request)
     const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=300', Vary: 'Origin',
       'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-request-id',
       'Access-Control-Allow-Methods': 'POST, OPTIONS', 'x-request-id': canonicalRequestId(request.headers.get('x-request-id')) }
@@ -36,6 +47,8 @@ export function createWeatherForecastHandler(config: { appOrigin: string; fetch?
     if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') return reply(415, 'invalid_content_type', 'JSON required.')
     const where = place(await request.text())
     if (!where) return reply(400, 'invalid_request', 'lat and lon must be numbers in range.')
+    try { if (!await config.signedIn(authorization)) return reply(401, 'unauthorized', 'Session invalid or expired.') }
+    catch { return reply(503, 'weather_unavailable', 'Weather is not available right now.') }
     const url = new URL('https://api.open-meteo.com/v1/forecast')
     url.searchParams.set('latitude', String(round2(where.lat)))
     url.searchParams.set('longitude', String(round2(where.lon)))

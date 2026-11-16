@@ -46,7 +46,7 @@ export default function SlotWizard({ today, account = false, onCreate, onClose }
     {outdoors && <div className="form-grid">
       <label>Lintang<input type="number" inputMode="decimal" step="any" min="-90" max="90" value={lat} onChange={event => setLat(event.target.value)} placeholder="Opsional" /></label>
       <label>Bujur<input type="number" inputMode="decimal" step="any" min="-180" max="180" value={lon} onChange={event => setLon(event.target.value)} placeholder="Opsional" /></label>
-      <small className="section-hint">Opsional. {account ? 'Disimpan di akun, dibulatkan sekitar 1 km,' : 'Disimpan di perangkat ini'} untuk cuaca nanti.</small></div>}
+      <small className="section-hint">Opsional. {account ? 'Disimpan di akun, dibulatkan sekitar 1 km, untuk menampilkan cuaca nyata di tempat itu.' : 'Disimpan di perangkat ini. Cuaca nyata hanya untuk akun.'}</small></div>}
     {kind === 'pot'
       ? <>
         <SpeciesSearch value={speciesId} onChange={setSpeciesId} />

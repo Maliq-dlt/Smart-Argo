@@ -1,4 +1,5 @@
 import { canonicalRequestId } from '../_shared/observability.ts'
+import { appOrigins, originFor } from '../_shared/origin.ts'
 
 type Json = Record<string, unknown>
 const uuid = (value: unknown): value is string => typeof value === 'string' && value.length === 36 && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
@@ -24,9 +25,10 @@ function validReading(row: Json, unitId: string): boolean {
 }
 
 export function createHistoryExportHandler(config: { url: string; serviceKey: string; appOrigin: string }) {
-  const base = new URL(config.url), origin = new URL(config.appOrigin).origin
+  const base = new URL(config.url), origins = appOrigins(config.appOrigin)
   if (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) throw new Error('HTTPS required')
   return async (request: Request): Promise<Response> => {
+    const origin = originFor(origins, request)
     const requestId = canonicalRequestId(request.headers.get('x-request-id'))
     const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', Vary: 'Origin',
       'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-request-id',

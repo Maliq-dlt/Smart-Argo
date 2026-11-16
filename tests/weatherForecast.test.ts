@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { createWeatherForecastHandler } from '../supabase/functions/weather-forecast/handler.ts'
+import { createWeatherForecastHandler, signedInVia } from '../supabase/functions/weather-forecast/handler.ts'
 
 // No test in this file reaches the network: the real fetch is replaced by one that fails the test, and every provider answer is injected.
 const realFetch = globalThis.fetch
@@ -9,12 +9,13 @@ globalThis.fetch = (() => { throw new Error('A test must not use the network') }
 test.after(() => { globalThis.fetch = realFetch })
 
 const fixture = readFileSync(new URL('./fixtures/open-meteo-forecast.json', import.meta.url), 'utf8')
-const origin = 'https://app.example'
+const origin = 'https://app.example', live = 'https://live.example'
 const asked: { url: string; init?: RequestInit }[] = []
 const provider = (answer: () => Response | Promise<Response>) => (async (input: URL | RequestInfo, init?: RequestInit) => { asked.push({ url: String(input), init }); return answer() }) as typeof fetch
+let session: () => Promise<boolean> = async () => true
 const call = (fetch: typeof globalThis.fetch, body: unknown = { lat: -6.2041, lon: 106.8456 }, headers: Record<string, string> = {}, method = 'POST') => {
   asked.length = 0
-  return createWeatherForecastHandler({ appOrigin: origin, fetch })(new Request('http://function.local/', { method, headers: { authorization: 'Bearer caller.token.value', 'content-type': 'application/json', origin, ...headers }, body: method === 'POST' ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined }))
+  return createWeatherForecastHandler({ appOrigin: `${origin}, ${live}`, signedIn: () => session(), fetch })(new Request('http://function.local/', { method, headers: { authorization: 'Bearer caller.token.value', 'content-type': 'application/json', origin, ...headers }, body: method === 'POST' ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined }))
 }
 const ok = provider(() => new Response(fixture))
 
@@ -64,6 +65,34 @@ test('CORS is locked to the app origin, and only POST answers', async () => {
   assert.equal(((await other.json()) as { code: string }).code, 'origin_denied')
   assert.equal((await call(ok, undefined, {}, 'GET')).status, 405)
   assert.equal(asked.length, 0)
+  const second = await call(ok, undefined, { origin: live, 'access-control-request-method': 'POST' }, 'OPTIONS')
+  assert.equal(second.status, 204, 'the live app is a second allowed origin')
+  assert.equal(second.headers.get('access-control-allow-origin'), live)
+})
+
+test('only a live session reaches the provider; Auth trouble is not reported as a bad session', async () => {
+  try {
+    session = async () => false
+    const stranger = await call(provider(() => { throw new Error('the provider must not be asked') }))
+    assert.equal(stranger.status, 401, 'a well-formed but unknown bearer is refused')
+    assert.equal(((await stranger.json()) as { code: string }).code, 'unauthorized')
+    session = async () => { throw new Error('auth down') }
+    const down = await call(provider(() => { throw new Error('the provider must not be asked') }))
+    assert.equal(down.status, 503, 'the client signs out on 401, so an Auth outage must not look like one')
+    assert.equal(asked.length, 0)
+  } finally { session = async () => true }
+})
+
+test('signedInVia asks Auth for the user with the caller\'s bearer and reads only 200 and 401/403 as answers', async () => {
+  const seen: { url: string; headers: Headers }[] = []
+  const auth = (status: number) => (async (input: URL | RequestInfo, init?: RequestInit) => { seen.push({ url: String(input), headers: new Headers(init?.headers) }); return new Response('{}', { status }) }) as typeof fetch
+  assert.equal(await signedInVia('https://ref.supabase.co/', 'anon-key', auth(200))('Bearer user.token'), true)
+  assert.equal(seen[0].url, 'https://ref.supabase.co/auth/v1/user')
+  assert.equal(seen[0].headers.get('authorization'), 'Bearer user.token')
+  assert.equal(seen[0].headers.get('apikey'), 'anon-key')
+  assert.equal(await signedInVia('https://ref.supabase.co', 'k', auth(401))('Bearer x'), false)
+  assert.equal(await signedInVia('https://ref.supabase.co', 'k', auth(403))('Bearer x'), false)
+  await assert.rejects(signedInVia('https://ref.supabase.co', 'k', auth(500))('Bearer x'))
 })
 
 test('any trouble at the provider becomes weather_unavailable and leaks nothing of it', async () => {

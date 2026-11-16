@@ -1,6 +1,10 @@
 import { ArrowRight, Plant } from '@phosphor-icons/react'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useReducedMotion } from 'framer-motion'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+
+// Not framer-motion's hook: importing it would put framer-motion on the first page, which otherwise never uses it.
+const REDUCED = '(prefers-reduced-motion: reduce)'
+const onReducedChange = (notify: () => void) => { const mq = matchMedia(REDUCED); mq.addEventListener('change', notify); return () => mq.removeEventListener('change', notify) }
+const useReducedMotion = () => useSyncExternalStore(onReducedChange, () => matchMedia(REDUCED).matches, () => false)
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Hero from './landing/v5/Hero'
 import { LeafReveal, Numbers, Problem, Product, RootZone } from './landing/v5/Story'

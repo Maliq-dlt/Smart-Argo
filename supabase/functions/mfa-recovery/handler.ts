@@ -1,4 +1,5 @@
 import { canonicalRequestId } from '../_shared/observability.ts'
+import { appOrigins, originFor } from '../_shared/origin.ts'
 // APP-01: a lost authenticator. The caller signed in with their password and holds an aal1 token, which Auth validates
 // here. One recovery code is spent through the service role (consume_recovery_code: rate limited, one use, retry
 // window), the TOTP factors are removed through the Auth admin API, and every other session is signed out. The
@@ -10,8 +11,9 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 export function createMfaRecoveryHandler(config: Config) {
   const base = new URL(config.url)
   if (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) throw new Error('HTTPS required')
-  const origin = new URL(config.appOrigin).origin
+  const origins = appOrigins(config.appOrigin)
   return async (request: Request): Promise<Response> => {
+    const origin = originFor(origins, request)
     const requestId = canonicalRequestId(request.headers.get('x-request-id'))
     const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Vary': 'Origin',
       'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-request-id',

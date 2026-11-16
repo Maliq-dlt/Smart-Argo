@@ -8,7 +8,8 @@ import { addSample, evaluate, parseCase, phaseAt, recordWatering, type PotCase }
 const root = fileURLToPath(new URL('../scripts/reference/', import.meta.url))
 const cases: PotCase[] = JSON.parse(readFileSync(new URL('../src/lib/scenarios.json', import.meta.url), 'utf8'))
 const clone = (index = 1) => structuredClone(cases[index])
-const python = process.env.PYTHON ?? 'python'
+// python3 first (Linux/macOS often have only that); on Windows its Store stub exits non-zero, so `python` is used.
+const python = process.env.PYTHON ?? ['python3', 'python'].find(cmd => spawnSync(cmd, ['--version']).status === 0) ?? 'python'
 
 test('10 skenario makalah dan nilai ETA', () => {
   for (const c of cases) assert.equal(evaluate(c).decision, c.expected, c.name)

@@ -1,5 +1,5 @@
 import { evaluate, median, RULES, type Decision, type PotCase } from './agronomyEngine.ts'
-import { calculateSolarBatterySizing } from './miroProductEngine.ts'
+import { calculateSolarBatterySizing } from './solarSizing.ts'
 import { storyExamples, type StoryCrop } from './landingStory.ts'
 
 export type Condition = 'dry' | 'wet'

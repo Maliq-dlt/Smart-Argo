@@ -43,3 +43,21 @@ jobs:
         run: npx --yes wrangler@4.158.0 pages deploy dist --project-name=smart-agro-demo --branch=main --commit-hash="$RELEASE_SHA"
       - name: Verify public frontend and Supabase integration
         run: node tests/cloud-smoke.mjs
+      # The live app: same backend, a real sign-in, none of the demo's stand-ins. A branch deployment of the same Pages
+      # project, so it has its own address (live.smart-agro-demo.pages.dev) and needs no other project or token.
+      - name: Build live app
+        run: |
+          grep -E '^VITE_(SUPABASE_URL|SUPABASE_ANON_KEY|ISSUER_PUBLIC_KEYS)=' .env.cloud > .env.live.local
+          npx vite build --mode live --outDir dist-live
+      - name: Publish live app
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ea31880cad9f6306dc15a017d97a881e
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: npx --yes wrangler@4.158.0 pages deploy dist-live --project-name=smart-agro-demo --branch=live --commit-hash="$RELEASE_SHA"
+      - name: Verify live app
+        env:
+          SMOKE_ORIGIN: https://live.smart-agro-demo.pages.dev
+          SMOKE_DIST: dist-live
+        run: node tests/cloud-smoke.mjs

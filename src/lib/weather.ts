@@ -85,6 +85,19 @@ export function fromOpenMeteo(json: unknown): WeatherSnapshot {
   return { at, condition: conditionFromWmo(cur.weather_code), tempC, humidity: num(cur.relative_humidity_2m, 0), cloud: num(cur.cloud_cover, 0), windMs: num(cur.wind_speed_10m, 0), rainMm: num(cur.precipitation, 0), forecast }
 }
 
+const CONDITIONS: readonly Condition[] = ['cerah', 'berawan', 'mendung', 'hujan', 'badai']
+const finite = (x: unknown) => { if (typeof x !== 'number' || !Number.isFinite(x)) throw new Error('Cuaca tidak valid.'); return x }
+const condition = (x: unknown) => { if (!CONDITIONS.includes(x as Condition)) throw new Error('Cuaca tidak valid.'); return x as Condition }
+/** A snapshot as the `weather-forecast` function sends it. Anything else throws, so a bad answer leaves the stage as it was. */
+export function parseSnapshot(x: unknown): WeatherSnapshot {
+  if (!isRecord(x) || !Array.isArray(x.forecast)) throw new Error('Cuaca tidak valid.')
+  const forecast = x.forecast.slice(0, 6).map(f => {
+    if (!isRecord(f)) throw new Error('Cuaca tidak valid.')
+    return { inHours: finite(f.inHours), condition: condition(f.condition), rainMm: finite(f.rainMm), tempC: finite(f.tempC) }
+  })
+  return { at: typeof x.at === 'string' ? x.at.slice(0, 32) : '', condition: condition(x.condition), tempC: finite(x.tempC), humidity: finite(x.humidity), cloud: finite(x.cloud), windMs: finite(x.windMs), rainMm: finite(x.rainMm), forecast }
+}
+
 /** One line of context for the advice, or nothing. Indoors the weather changes nothing; outdoors it can only say two things,
  * both about timing and inspection and never about an amount, and it quotes only hours that are in the forecast. */
 export function weatherNote(w: WeatherSnapshot, placement: Placement): string | null {

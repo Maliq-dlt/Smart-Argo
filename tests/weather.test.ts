@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { conditionFromWmo, fromOpenMeteo, isSimWeather, simKind, simulatedWeather, weatherNote, type SimWeather } from '../src/lib/weather.ts'
+import { conditionFromWmo, fromOpenMeteo, isSimWeather, parseSnapshot, simKind, simulatedWeather, weatherNote, type SimWeather } from '../src/lib/weather.ts'
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/open-meteo-forecast.json', import.meta.url), 'utf8'))
 const KINDS: SimWeather[] = ['cerah', 'berawan', 'mendung', 'hujan', 'terik']
@@ -76,4 +76,13 @@ test('a note quotes only numbers that are in the snapshot and never a dose', () 
 test('only the five demo skies are accepted from storage, and prototype keys are not', () => {
   for (const kind of KINDS) assert.ok(isSimWeather(kind), kind)
   for (const odd of ['badai', 'constructor', '__proto__', 'toString', '', ' cerah', null, undefined, 3, {}]) assert.ok(!isSimWeather(odd), String(odd))
+})
+
+test('the browser accepts exactly what the weather function sends, through JSON, and nothing malformed', () => {
+  const sent = fromOpenMeteo(fixture)
+  assert.deepEqual(parseSnapshot(JSON.parse(JSON.stringify(sent))), sent)
+  for (const kind of KINDS) assert.deepEqual(parseSnapshot(simulatedWeather(kind)), simulatedWeather(kind))
+  const bad = (patch: Record<string, unknown>) => ({ ...sent, ...patch })
+  for (const odd of [null, [], 'x', bad({ condition: 'salju' }), bad({ tempC: '29' }), bad({ humidity: null }), bad({ forecast: null }),
+    bad({ forecast: [null] }), bad({ forecast: [{ inHours: 1, condition: 'cerah', rainMm: Number.NaN, tempC: 1 }] })]) assert.throws(() => parseSnapshot(odd), JSON.stringify(odd))
 })

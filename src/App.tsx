@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { flushSync } from 'react-dom'
-import { motion, useReducedMotion } from 'framer-motion'
+import { MotionConfig, motion, useReducedMotion } from 'framer-motion'
 import { gsap } from 'gsap'
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
 
@@ -15,7 +15,7 @@ import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription, SheetC
 import { SelectField } from './components/ui/select'
 import PlantPotVisualizer, { type CareEffect } from './components/PlantPotVisualizer'
 import type { SceneReadings } from './components/PlantScene'
-import { simulatedWeather, weatherNote, type SimWeather } from './lib/weather'
+import { simKind, simulatedWeather, weatherNote, type SimWeather, type WeatherSnapshot } from './lib/weather'
 import { readSimWeather, saveSimWeather } from './lib/weatherStore'
 import SlotPicker from './components/garden/SlotPicker'
 import SlotWizard, { type WizardInput } from './components/garden/SlotWizard'
@@ -167,7 +167,19 @@ function Simulator() {
   const today = () => new Date().toLocaleDateString('en-CA')
   const slotOfSession = garden.slots.find(s => s.sessionId === session.id)
   const siteOfSession = slotOfSession && garden.sites.find(s => s.id === slotOfSession.siteId)
-  const sessionOfSlot = (slot: Slot) => slot.sessionId ? book.sessions.find(s => s.id === slot.sessionId) : undefined
+  // Real weather for a signed-in person's outdoor place that has coordinates; anything else keeps the simulated (or no) sky.
+  // ponytail: fetched when the place changes, not refreshed on a timer; add an interval if dashboards stay open for hours.
+  const [realWeather, setRealWeather] = useState<{ key: string; snapshot: WeatherSnapshot } | null>(null)
+  const weatherPlace = server && siteOfSession?.placement !== 'indoor' ? siteOfSession?.location : undefined
+  const weatherKey = weatherPlace ? `${siteOfSession!.id}@${weatherPlace.lat},${weatherPlace.lon}` : ''
+  useEffect(() => {
+    if (!server || !weatherPlace || realWeather?.key === weatherKey) return
+    let current = true
+    // A failed lookup leaves the simulated sky: the stage then says "Cuaca simulasi", so it never claims real weather.
+    server.weather(weatherPlace).then(snapshot => { if (current) setRealWeather({ key: weatherKey, snapshot }) }, () => {})
+    return () => { current = false }
+  }, [server, weatherKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const sessionOfSlot =(slot: Slot) => slot.sessionId ? book.sessions.find(s => s.id === slot.sessionId) : undefined
   const plantLabel = (slot: Slot) => {
     const cycle = activeCycle(slot), species = cycle && speciesByCode(cycle.speciesId)
     return !cycle ? 'Kosong' : species ? `${cycle.nickname} · ${plantTag(species, cycle.plantNo)}` : cycle.nickname
@@ -521,7 +533,10 @@ function Simulator() {
   // The three readings the pot stage writes beside the part they describe; the same numbers the instruments below show.
   // A pot indoors does not see the sky: no weather control, no note, a clear window. A session outside any slot counts as outdoors.
   const placement = siteOfSession?.placement ?? 'outdoor', outdoors = placement !== 'indoor', skyChoice = outdoors && features.simulatedWeather
-  const weatherLine = weatherNote(simulatedWeather(weather), placement)
+  const real = realWeather && realWeather.key === weatherKey ? realWeather.snapshot : null
+  const weatherLine = weatherNote(real ?? simulatedWeather(weather), placement)
+  const stageWeather = !outdoors ? null : real ? { kind: simKind(real), note: weatherLine, tempC: real.tempC }
+    : skyChoice ? { kind: weather, onChange: setWeather, note: weatherLine } : null
   const gardenSummary = siteOfSession?.kind === 'garden'
     ? <GardenSummary site={siteOfSession} slots={garden.slots.filter(s => s.siteId === siteOfSession.id)} activeSlotId={slotOfSession?.id ?? null} status={zoneStatus} onSelect={openSlot} />
     : undefined
@@ -651,7 +666,7 @@ function Simulator() {
           <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, species)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
             species={species} day={developmentDay} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
             hour={clockHour(data.now_h, session.clock)} period={skyPeriod(clockHour(data.now_h, session.clock))} readings={sceneReadings} careEffect={careEffect}
-            weather={skyChoice ? { kind: weather, onChange: setWeather, note: weatherLine } : null} summary={gardenSummary}>
+            weather={stageWeather} summary={gardenSummary}>
             <SessionClockCard samples={data.samples} time={clockTime(session.clock, data.now_h).slice(0, 5)} period={scenePeriod(data.now_h, session.clock)}
               state={awaitingPlant ? 'Menunggu bibit ditanam' : running ? 'Timelapse berjalan' : 'Waktu dijeda'} note={playbackNote} rate={sim.rate}
               running={running} disabled={simulationStopped(session)} onToggle={toggleRunning} />
@@ -704,6 +719,7 @@ function Simulator() {
   </>
 }
 
+// MotionConfig lives here, not in main.tsx, so the landing never downloads framer-motion (only the simulator animates with it).
 export default function App() {
-  return <AccountProvider><Simulator /></AccountProvider>
+  return <MotionConfig reducedMotion="user"><AccountProvider><Simulator /></AccountProvider></MotionConfig>
 }

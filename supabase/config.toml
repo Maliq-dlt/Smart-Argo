@@ -25,3 +25,7 @@ verify_jwt = false
 # The caller's aal1 token is validated by Auth inside the handler; the recovery code is the second proof.
 [functions.mfa-recovery]
 verify_jwt = false
+
+# Only a live session (checked with Auth inside the handler) may ask; the place is rounded before it leaves.
+[functions.weather-forecast]
+verify_jwt = false

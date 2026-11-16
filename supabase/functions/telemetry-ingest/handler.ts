@@ -1,4 +1,5 @@
 import { canonicalRequestId } from '../_shared/observability.ts'
+import { appOrigins, originFor } from '../_shared/origin.ts'
 import { parseTelemetryV2 } from '../../../src/lib/telemetry.ts'
 import { verifyDeviceSignature } from '../_shared/deviceSignature.ts'
 type Json = Record<string, unknown>
@@ -6,8 +7,9 @@ type Json = Record<string, unknown>
 export function createTelemetryIngestHandler(config: { url: string; serviceKey: string; appOrigin: string }) {
   const base = new URL(config.url)
   if (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) throw new Error('HTTPS required')
-  const origin = new URL(config.appOrigin).origin
+  const origins = appOrigins(config.appOrigin)
   return async (request: Request): Promise<Response> => {
+    const origin = originFor(origins, request)
     const requestId = canonicalRequestId(request.headers.get('x-request-id'))
     const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', Vary: 'Origin',
       'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-request-id',

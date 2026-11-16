@@ -91,6 +91,32 @@ try {
   await first.page.reload(); await curtainOpen(first.page)
   ok((await listed(first.page, 'Bedeng timur')).includes('Anggrek bulan 1'), 'After a reload the first device shows the server garden')
 
+  // Real weather (Fase 8): an outdoor pot with coordinates asks the weather function, here answered with a fixed snapshot so
+  // the test never reaches Open-Meteo, and the stage shows it with its credit instead of the simulated-weather control.
+  const asked = []
+  await first.context.route('**/functions/v1/weather-forecast', async route => {
+    asked.push({ body: route.request().postDataJSON(), bearer: route.request().headers().authorization ?? '' })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, weather: { at: '2026-11-16T15:00', condition: 'hujan', tempC: 24.5, humidity: 93, cloud: 100, windMs: 4, rainMm: 3.2, forecast: [] } }) })
+  })
+  const simControl = first.page.getByRole('group', { name: 'Cuaca simulasi' })
+  ok(await simControl.count() === 1 && asked.length === 0, 'An outdoor zone without coordinates keeps the simulated weather and asks nothing')
+  await pill(first.page).click()
+  await picker(first.page).getByRole('button', { name: 'Tambah pot atau kebun' }).click()
+  await wizard.getByLabel('Nama', { exact: true }).fill('Pot teras')
+  await wizard.getByRole('radio', { name: 'Luar ruangan', exact: true }).check()
+  await wizard.getByLabel('Lintang').fill('-6.914744')
+  await wizard.getByLabel('Bujur').fill('107.609810')
+  await wizard.getByRole('button', { name: 'Buat pot' }).click()
+  await first.page.getByRole('status').filter({ hasText: 'ditambahkan ke akun Anda' }).last().waitFor({ timeout: 30000 })
+  ok(onServer(`s.latitude || ',' || s.longitude`).split('\n').includes('-6.91,107.61'), 'The place is stored rounded to about a kilometre')
+  const live = first.page.locator('.stage-weather-live')
+  await live.waitFor({ timeout: 30000 })
+  ok(/Cuaca sekarang: Hujan, 24,5 °C/.test(await live.innerText()), `The stage shows the real weather: ${await live.innerText()}`)
+  ok(await live.getByRole('link', { name: 'Open-Meteo' }).getAttribute('href') === 'https://open-meteo.com/', 'The data is credited to Open-Meteo')
+  ok(await simControl.count() === 0, 'No simulated-weather control while real weather is shown')
+  ok(/hujan/i.test(await first.page.locator('.stage-weather-note').innerText()), 'The advice note follows the real weather')
+  ok(asked.length >= 1 && Math.abs(asked[0].body.lat + 6.91) < 0.006 && Math.abs(asked[0].body.lon - 107.61) < 0.006 && asked[0].bearer.startsWith('Bearer '), 'The function was asked for this place with the session')
+
   ok(errors.length === 0, `No page or console errors: ${errors.join(' | ')}`)
   console.log(`garden-sync-browser: ${checks} checks passed`)
 } finally {

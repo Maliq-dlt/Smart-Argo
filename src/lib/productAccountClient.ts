@@ -1,6 +1,7 @@
 import { features } from './appMode.ts'
 import { normalizeDisplayName, normalizeEmailCode } from './signupForm.ts'
 import { isCuratedId, type CuratedId } from './species.ts'
+import { parseSnapshot, type WeatherSnapshot } from './weather.ts'
 export interface ProductSession { access_token: string; refresh_token: string; expires_at: number }
 export interface OwnedProduct { ownership_id: string; product_id: string; serial_public: string; variant: 'single_pot' | 'garden'; start_at: string }
 export interface ProductChallenge { nonce_id: string; challenge: string; expires_at: string }
@@ -399,6 +400,12 @@ export class ProductAccountClient {
       await this.verifyMfa(code)
       return this.request('/functions/v1/product-provision', body, this.session!.access_token)
     }
+  }
+
+  /** The weather now at an outdoor place, from Open-Meteo through the server (which rounds the place first). */
+  async weather(place: { lat: number; lon: number }): Promise<WeatherSnapshot> {
+    await this.refreshIfNeeded()
+    return parseSnapshot((await this.request('/functions/v1/weather-forecast', { lat: place.lat, lon: place.lon }, this.session!.access_token, 'POST', 10000)).weather)
   }
 
   /** ID-01: registry status of a public serial; needs no account. */

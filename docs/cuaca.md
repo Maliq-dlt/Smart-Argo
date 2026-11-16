@@ -2,12 +2,13 @@
 
 Cuaca dipakai untuk dua hal saja: **langit di panggung tanaman** dan **satu baris catatan** di saran perawatan. Cuaca tidak pernah mengubah angka sensor, tidak pernah menyebut dosis, dan di dalam ruangan tidak menambah catatan apa pun (`weatherNote`, `src/lib/weather.ts`).
 
-## Keadaan saat ini (prototipe)
+## Keadaan saat ini (Fase 8, 2026-11-16)
 
-- **Demo memakai cuaca simulasi.** Kontrol "Cuaca simulasi" di dashboard memilih salah satu dari lima langit: cerah, berawan, mendung, hujan, terik. Pilihannya disimpan di `localStorage` (`smart-agro.weather`). Tidak ada panggilan jaringan.
-- **Model dan adapter sudah ada dan teruji**: `src/lib/weather.ts` memuat `WeatherSnapshot`, `simulatedWeather`, `fromOpenMeteo` (adapter murni untuk respons Open-Meteo), `simKind` (badai tampil sebagai hujan, langit cerah yang panas tampil sebagai terik) dan `weatherNote`.
-- **Fungsi `weather-forecast` ada di repo tetapi tidak di-deploy** (`supabase/functions/weather-forecast/`). Ia tidak masuk skrip deploy mana pun dan tidak dipanggil dari aplikasi. Mengaktifkannya adalah bagian Fase 8 dan butuh persetujuan pemilik proyek.
-- Fixture `tests/fixtures/open-meteo-forecast.json` **ditulis tangan** mengikuti bentuk respons yang terdokumentasi, bukan rekaman nyata. Ganti dengan rekaman nyata saat fungsi diaktifkan.
+- **Cuaca nyata** tampil untuk akun yang masuk, pada pot atau kebun **luar ruangan yang punya koordinat** (diisi di wizard). Panggung memakai langit dari data itu, menulis "Cuaca sekarang: …, … °C · data Open-Meteo" (atribusi wajib, CC BY 4.0), dan catatan saran memakai prakiraan 6 jam. Data diambil saat situs berganti, tidak diperbarui berkala.
+- **Selain itu tetap cuaca simulasi**: tamu, situs tanpa koordinat, atau bila fungsi gagal. Di demo, kontrol "Cuaca simulasi" memilih satu dari lima langit (cerah, berawan, mendung, hujan, terik; disimpan di `localStorage` `smart-agro.weather`). Di build live tidak ada kontrol simulasi, jadi tanpa data nyata langitnya cerah polos tanpa catatan.
+- **Fungsi `weather-forecast`** (`supabase/functions/weather-forecast/`) berjalan di Supabase dan di gateway lokal. Ia hanya melayani sesi yang masih hidup (diperiksa ke Auth); token yang dikenal tetapi tidak sah dijawab 401, Auth yang tidak terjangkau dijawab 503 supaya browser tidak mengeluarkan pengguna. `npm test` tidak pernah memanggil jaringan; gateway lokal memanggil Open-Meteo sungguhan.
+- **Model dan adapter**: `src/lib/weather.ts` memuat `WeatherSnapshot`, `simulatedWeather`, `fromOpenMeteo`, `parseSnapshot` (memeriksa jawaban fungsi di browser), `simKind` (badai tampil sebagai hujan, langit cerah yang panas sebagai terik) dan `weatherNote`.
+- Fixture `tests/fixtures/open-meteo-forecast.json` **ditulis tangan** mengikuti bentuk respons yang terdokumentasi, bukan rekaman nyata.
 
 ## Penyedia dan syaratnya
 

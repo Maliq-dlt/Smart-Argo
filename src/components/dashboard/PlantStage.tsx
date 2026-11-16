@@ -12,8 +12,9 @@ const WEATHER_LABEL: Record<SimWeather, string> = { cerah: 'Cerah', berawan: 'Be
 export default function PlantStage({ crop, sub, status, species, day, planted, moisture, contact, readings, hour, period, careEffect, weather, summary, children }: {
   crop: string; sub: string; status: { ok: boolean; text: string }; species: SpeciesId; day: number; planted: boolean; moisture: number; contact: boolean
   readings: SceneReadings; hour: number; period: SkyPeriod; careEffect?: CareEffect | null
-  /** The demo weather and its note; null for a pot indoors, which does not see the sky. */
-  weather: { kind: SimWeather; onChange: (kind: SimWeather) => void; note: string | null } | null
+  /** The sky and its note; null for a pot indoors, which does not see the sky. With `onChange` it is the demo's simulated
+   * weather and gets its control; with `tempC` it is the real weather at the place, credited to its source. */
+  weather: { kind: SimWeather; note: string | null; onChange?: (kind: SimWeather) => void; tempC?: number } | null
   /** The zones of a garden, above the heading. */
   summary?: ReactNode; children?: ReactNode
 }) {
@@ -27,10 +28,12 @@ export default function PlantStage({ crop, sub, status, species, day, planted, m
       <PlantScene species={sceneOf(species)} day={day} planted={planted} moisture={moisture} contact={contact} hour={hour} readings={readings} weather={weather?.kind} careEffect={careEffect}
         label={`${crop} dalam pot, ${sub}. Kelembapan ${readings.kelembapan}, suhu ${readings.suhu}, pH ${readings.ph}.`} />
     </div>
-    {weather && <div className="stage-weather">
+    {weather?.onChange && <div className="stage-weather">
       <span aria-hidden="true">Cuaca simulasi</span>
-      <SegmentedControl label="Cuaca simulasi" value={weather.kind} onValueChange={value => { if (isSimWeather(value)) weather.onChange(value) }} options={SIM_WEATHERS.map(kind => ({ value: kind, label: WEATHER_LABEL[kind] }))} />
+      <SegmentedControl label="Cuaca simulasi" value={weather.kind} onValueChange={value => { if (isSimWeather(value)) weather.onChange?.(value) }} options={SIM_WEATHERS.map(kind => ({ value: kind, label: WEATHER_LABEL[kind] }))} />
     </div>}
+    {/* Open-Meteo data is CC BY 4.0: the credit goes wherever its numbers are shown. */}
+    {weather?.tempC !== undefined && <p className="stage-weather-live">Cuaca sekarang: {WEATHER_LABEL[weather.kind]}, {weather.tempC.toLocaleString('id-ID', { maximumFractionDigits: 1 })} °C · data <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a></p>}
     {weather?.note && <p className="stage-weather-note">{weather.note}</p>}
     {children}
   </section>
