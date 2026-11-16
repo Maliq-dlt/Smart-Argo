@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
-enum class Screen { Login, Mfa, Products, Dashboard, History, Account, Rewards, Proofs, Garden }
+enum class Screen { Login, Mfa, Products, Dashboard, History, Account, Rewards, Proofs, Garden, Gallery }
 data class AppState(
     val screen: Screen = Screen.Login, val busy: Boolean = false, val message: String? = null, val messageIsError: Boolean = false,
     val products: List<Product> = emptyList(), val units: List<PlantUnit> = emptyList(),
@@ -144,7 +144,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         state=state.copy(screen=Screen.Garden,gardenPlant=plant,message=null)
     }
     fun navigate(screen: Screen) {
-        if (screen in listOf(Screen.Products,Screen.History,Screen.Account,Screen.Rewards,Screen.Proofs)) state=state.copy(screen=screen,message=null)
+        if (screen in listOf(Screen.Products,Screen.History,Screen.Account,Screen.Rewards,Screen.Proofs) || screen==Screen.Gallery && BuildConfig.DEBUG) state=state.copy(screen=screen,message=null)
     }
     fun openUnit(unit: PlantUnit) {
         if (state.units.none { it.id==unit.id }) return
@@ -270,7 +270,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         if (state.busy && state.screen==Screen.Mfa) return
         when (state.screen) {
             Screen.Mfa -> { api.cancelMfa(); state = AppState() }
-            Screen.Rewards, Screen.Proofs -> state = state.copy(screen = Screen.Account, message = null)
+            Screen.Rewards, Screen.Proofs, Screen.Gallery -> state = state.copy(screen = Screen.Account, message = null)
             Screen.Dashboard, Screen.History, Screen.Account, Screen.Garden -> state = state.copy(screen = Screen.Products, message = null)
             else -> Unit
         }

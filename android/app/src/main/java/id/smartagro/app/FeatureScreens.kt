@@ -14,38 +14,61 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
+/** The forecast over a plant's site, from the account's weather service; never a substitute for the pot's own sensors. */
 @Composable internal fun WeatherSection(site: GardenSite?, weather: WeatherSnapshot?, busy: Boolean, message: String?, reload: ()->Unit) {
-    Surface(shape=RoundedCornerShape(24.dp),color=MaterialTheme.colorScheme.primaryContainer) {
-        Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio=1f,stiffness=400f)).padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            Text("Cuaca sekitar tanaman",style=MaterialTheme.typography.titleLarge)
-            Text(site?.name ?: "Pilih tanaman dengan lokasi kebun untuk melihat cuaca.",style=MaterialTheme.typography.bodyMedium)
-            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            message?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-            weather?.let {
-                WeatherValues(it)
-                weatherNote(it,site?.placement ?: "indoor")?.let { note -> Text(note,style=MaterialTheme.typography.bodyMedium) }
+    val p = palette
+    val uri = rememberSafeUriHandler()
+    Panel {
+        when {
+            site == null -> Text("Pilih tanaman dengan lokasi kebun untuk melihat cuaca.", style = T.body, color = p.secondary)
+            weather != null -> {
+                WeatherValues(weather)
+                weatherNote(weather, site.placement)?.let { Banner(it, Modifier.padding(top = 14.dp)) }
             }
-            if(site!=null) TextButton(onClick=reload,enabled=!busy) { Text("Muat ulang cuaca") }
-            Text("Prakiraan Open-Meteo melalui layanan akun, berdasarkan koordinat lokasi kebun yang dibulatkan. Bukan bacaan sensor pot.",style=MaterialTheme.typography.bodySmall)
-            Text("Radiasi matahari dan lux tidak tersedia pada layanan cuaca ini.",style=MaterialTheme.typography.bodySmall)
-            val uri=rememberSafeUriHandler()
-            TextButton(onClick={uri.openUri("https://open-meteo.com/")}) { Text("Sumber cuaca: Open-Meteo · CC BY 4.0") }
+            busy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ActivityIndicator(); Text("Memuat prakiraan\u2026", style = T.body, color = p.secondary)
+            }
+        }
+        message?.let { Text(it, style = T.subhead, color = p.warn, modifier = Modifier.padding(top = 8.dp)) }
+        Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Sumber cuaca: Open-Meteo \u00b7 CC BY 4.0", Modifier.weight(1f).clickable(role = Role.Button) { uri.openUri("https://open-meteo.com/") }
+                .padding(vertical = 12.dp), style = T.footnote, color = p.tint)
+            if (site != null) PlainButton("Muat ulang", reload, enabled = !busy)
         }
     }
 }
+internal fun conditionIcon(condition: String) = when (condition) {
+    "cerah" -> PhosphorPaths.Sun; "berawan" -> PhosphorPaths.CloudSun; "mendung" -> PhosphorPaths.Cloud
+    "hujan" -> PhosphorPaths.CloudRain; else -> PhosphorPaths.CloudLightning
+}
 @Composable internal fun WeatherValues(weather: WeatherSnapshot) {
-    Text(weather.label,style=MaterialTheme.typography.titleMedium)
-    Text("${number(weather.tempC)} °C",style=MaterialTheme.typography.headlineLarge)
-    Text("Kelembapan udara ${number(weather.humidity)}% · Angin ${number(weather.windMs)} m/s",style=MaterialTheme.typography.bodySmall)
-    Text("Awan ${number(weather.cloud)}% · Curah hujan ${number(weather.rainMm)} mm",style=MaterialTheme.typography.bodyMedium)
-    Text("Prakiraan ${weather.at.replace('T',' ')} · waktu lokasi",style=MaterialTheme.typography.bodySmall)
-    weather.forecast.forEach { hour ->
-        Text("${hour.inHours} jam lagi · ${hour.condition} · ${number(hour.tempC)} °C · Hujan ${number(hour.rainMm)} mm",style=MaterialTheme.typography.bodySmall)
+    val p = palette
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Icon(icon(conditionIcon(weather.condition)), null, Modifier.size(44.dp), tint = if (weather.condition == "cerah") p.sun else p.water)
+        Column {
+            Text("${number(weather.tempC)} \u00b0C", style = T.title1, color = p.ink)
+            Text(weather.label, style = T.subhead, color = p.secondary)
+        }
     }
+    Text("Kelembapan udara ${number(weather.humidity)}% \u00b7 Angin ${number(weather.windMs)} m/s", style = T.footnote, color = p.secondary, modifier = Modifier.padding(top = 10.dp))
+    if (weather.forecast.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+        weather.forecast.forEach { hour ->
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("${hour.inHours} j", style = T.footnote, color = p.secondary)
+                Icon(icon(conditionIcon(hour.condition)), hour.condition, Modifier.size(22.dp), tint = if (hour.rainMm >= 1.0) p.water else p.secondary)
+                Text("${number(hour.tempC)}\u00b0", style = T.subhead, color = p.ink)
+            }
+        }
+    }
+    Text("Prakiraan ${weather.at.replace('T',' ')} \u00b7 waktu lokasi", style = T.footnote, color = p.secondary, modifier = Modifier.padding(top = 12.dp))
 }
 
 @Composable internal fun RewardsScreen(state: AppState, reload: ()->Unit, reserve: (RewardItem,String)->Unit, cancel: (String)->Unit, recover: (String)->Unit = {}) {

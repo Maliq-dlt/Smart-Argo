@@ -1,10 +1,14 @@
 package id.smartagro.app
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import org.json.JSONObject
 import java.time.Instant
@@ -52,46 +56,54 @@ internal fun parseExplanationSnapshot(json: JSONObject): UnitExplanation {
 internal fun parseUnitExplanations(json: JSONObject): List<UnitExplanation> =
     json.array("snapshots").objects(10).map(::parseExplanationSnapshot)
 
+/** Why the advice says what it says: the stored rule result, the AI's wording of it when allowed, and the evidence. */
 @Composable internal fun ExplanationSection(explanation: UnitExplanation?,busy: Boolean,message: String?,load: ()->Unit,
     explain: (String)->Unit,available: Boolean) {
-    var question by remember { mutableStateOf("") }
-    var evidence by remember { mutableStateOf(false) }
-    Surface(shape=RoundedCornerShape(24.dp),color=MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            Text("Penjelasan berbasis bukti",style=MaterialTheme.typography.titleLarge)
-            Text("Penilaian memakai bacaan perangkat dan versi profil saat diminta. Emosi maskot adalah petunjuk antarmuka, bukan emosi biologis tanaman.",style=MaterialTheme.typography.bodySmall)
-            if(!available) Text("Hubungkan unit dengan perangkat milik akun untuk meminta penjelasan.")
-            if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            message?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-            OutlinedTextField(question,{question=it.take(500)},label={Text("Pertanyaan atau pengamatan (opsional)")},
-                enabled=available && !busy,modifier=Modifier.fillMaxWidth(),supportingText={Text("${question.length}/500")})
-            Button(onClick={explain(question.trim())},enabled=available && !busy) { Text("Buat penjelasan berbasis bukti") }
-            TextButton(onClick=load,enabled=!busy) { Text("Muat penjelasan tersimpan") }
-            explanation?.let { result ->
-                Text(result.action,style=MaterialTheme.typography.titleMedium)
-                Text(result.reason)
-                Text("Dinilai ${time(result.evaluatedAt)}. Rekaman penilaian, bukan pemantauan langsung.",style=MaterialTheme.typography.bodySmall)
-                Text(result.explanation)
+    val p = palette
+    var question by rememberSaveable { mutableStateOf("") }
+    var evidence by rememberSaveable { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        message?.let { Banner(it, Modifier.padding(horizontal = 16.dp), error = true) }
+        if (!available) Footnote("Hubungkan unit dengan perangkat milik akun untuk meminta penjelasan.")
+        explanation?.let { result ->
+            Panel {
+                Text(result.action, style = T.title3, color = p.ink)
+                Text(result.reason, style = T.body, color = p.secondary, modifier = Modifier.padding(top = 4.dp))
+                Text(result.explanation, style = T.body, color = p.ink, modifier = Modifier.padding(top = 12.dp))
                 result.ai?.let { ai ->
-                    Text("Penjelasan AI",style=MaterialTheme.typography.titleMedium)
-                    Text(ai.explanation)
-                    ai.answer?.takeIf { it.isNotBlank() }?.let { Text("Jawaban: $it") }
-                    Text("${ai.model} · ${ai.promptVersion}. AI menjelaskan hasil aturan; tindakan tetap dari aturan.",style=MaterialTheme.typography.bodySmall)
+                    Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(icon(PhosphorPaths.Sparkle), null, Modifier.size(18.dp), tint = p.tint)
+                        Text("Penjelasan AI", style = T.headline, color = p.ink)
+                    }
+                    Text(ai.explanation, style = T.body, color = p.ink, modifier = Modifier.padding(top = 6.dp))
+                    ai.answer?.takeIf { it.isNotBlank() }?.let { Text("Jawaban: $it", style = T.body, color = p.ink, modifier = Modifier.padding(top = 6.dp)) }
+                    Text("${ai.model} \u00b7 ${ai.promptVersion}. AI menjelaskan hasil aturan; tindakan tetap dari aturan.", style = T.footnote, color = p.secondary, modifier = Modifier.padding(top = 6.dp))
                 } ?: Text(when(result.aiStatus) {
                     "failed" -> "AI tidak tersedia saat diminta; penjelasan berasal dari aturan."
                     "refused" -> "AI menolak permintaan ini; penjelasan berasal dari aturan."
                     "rejected" -> "Jawaban AI tidak lolos pemeriksaan; penjelasan berasal dari aturan."
                     else -> "Layanan AI belum dikonfigurasi; penjelasan berasal dari aturan."
-                },style=MaterialTheme.typography.bodySmall)
-                TextButton(onClick={evidence=!evidence}) { Text(if(evidence) "Tutup bukti penilaian" else "Lihat bukti penilaian") }
-                if(evidence) {
-                    Text("Kode: ${result.decision} · agronomy-v1.telemetry-v1",style=MaterialTheme.typography.bodySmall)
-                    Text("Profil versi ${result.profileVersion}",style=MaterialTheme.typography.bodySmall)
-                    Text("Pertanyaan: ${result.question.ifBlank { "Tidak ada" }}",style=MaterialTheme.typography.bodySmall)
-                    Text("Snapshot ${result.id} · Disimpan ${time(result.createdAt)}",style=MaterialTheme.typography.bodySmall)
-                    Text("SHA256 konteks ${result.contextSha}",style=MaterialTheme.typography.bodySmall)
+                }, style = T.footnote, color = p.secondary, modifier = Modifier.padding(top = 12.dp))
+                Text("Dinilai ${time(result.evaluatedAt)}. Rekaman penilaian, bukan pemantauan langsung.", style = T.footnote, color = p.secondary, modifier = Modifier.padding(top = 6.dp))
+            }
+            Group {
+                Cell(if (evidence) "Tutup bukti penilaian" else "Lihat bukti penilaian", chevron = false, onClick = { evidence = !evidence })
+                if (evidence) {
+                    Cell("Kode", subtitle = "${result.decision} \u00b7 agronomy-v1.telemetry-v1")
+                    Cell("Profil", subtitle = "Versi ${result.profileVersion}")
+                    Cell("Pertanyaan", subtitle = result.question.ifBlank { "Tidak ada" })
+                    Cell("Snapshot", subtitle = "${result.id} \u00b7 Disimpan ${time(result.createdAt)}")
+                    Cell("SHA256 konteks", subtitle = result.contextSha)
                 }
             }
         }
+        Group(footer = "${question.length}/500 \u00b7 Penilaian memakai bacaan perangkat dan versi profil saat diminta.") {
+            BasicTextField(question, { question = it.take(500) }, Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 15.dp),
+                enabled = available && !busy, textStyle = T.body.copy(color = p.ink), cursorBrush = SolidColor(p.tint),
+                decorationBox = { field -> Box { if (question.isEmpty()) Text("Pertanyaan atau pengamatan (opsional)", style = T.body, color = p.secondary); field() } })
+        }
+        PrimaryButton("Buat penjelasan berbasis bukti", { explain(question.trim()) }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+            enabled = available && !busy, busy = busy, path = PhosphorPaths.Sparkle)
+        PlainButton("Muat penjelasan tersimpan", load, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), enabled = !busy)
     }
 }

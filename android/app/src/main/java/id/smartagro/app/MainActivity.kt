@@ -1,5 +1,9 @@
 package id.smartagro.app
 
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.ui.unit.IntOffset
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.HazeState
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -9,9 +13,15 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.spring
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.animation.animateContentSize
@@ -61,7 +71,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private const val WEB = "https://smart-agro-demo.pages.dev/"
+internal const val WEB = "https://smart-agro-demo.pages.dev/"
 private val timeFormat = DateTimeFormatter.ofPattern("dd MMM, HH:mm", Locale.forLanguageTag("id-ID")).withZone(ZoneId.systemDefault())
 internal fun time(at: Instant?) = at?.let(timeFormat::format) ?: "Belum ada bacaan"
 internal fun number(value: Double?) = value?.let { String.format(Locale.forLanguageTag("id-ID"), "%.1f", it) } ?: "\u2014"
@@ -74,12 +84,22 @@ class MainActivity : ComponentActivity() {
         setContent { SmartAgroApp(model) }
     }
 }
-@OptIn(ExperimentalMaterial3Api::class)
+/** How deep a screen sits, so a push slides in from the trailing edge and a pop slides back (iOS navigation stack). */
+private fun depth(screen: Screen) = when (screen) {
+    Screen.Login, Screen.Mfa -> 0
+    Screen.Products, Screen.History, Screen.Account -> 1
+    else -> 2
+}
+private val tabs = listOf(TabItem("Tanaman", PhosphorPaths.Plant, PhosphorPaths.PlantFill),
+    TabItem("Aktivitas", PhosphorPaths.Notebook, PhosphorPaths.NotebookFill),
+    TabItem("Akun", PhosphorPaths.UserCircle, PhosphorPaths.UserCircleFill))
+private val tabScreens = listOf(Screen.Products, Screen.History, Screen.Account)
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable private fun SmartAgroApp(model: AgroViewModel) {
     val state = model.state
-    val systemDark = isSystemInDarkTheme()
+    val dark = isSystemInDarkTheme()
     val context = androidx.compose.ui.platform.LocalContext.current
-    val preferences = remember { context.getSharedPreferences("appearance",0) }
     // Screenshots, screen recording and the Recents thumbnail are blocked only where a code is typed or shown (the
     // authenticator step and reward confirmation), so every other screen can be captured and shared.
     val codeOnScreen = state.screen == Screen.Mfa || state.screen == Screen.Rewards
@@ -90,7 +110,6 @@ class MainActivity : ComponentActivity() {
         }
         onDispose { }
     }
-    var dark by rememberSaveable { mutableStateOf(preferences.getString("theme",null)?.let { it=="dark" } ?: systemDark) }
     val view = LocalView.current
     SideEffect {
         (view.context as? android.app.Activity)?.window?.let { window ->
@@ -101,69 +120,102 @@ class MainActivity : ComponentActivity() {
         }
     }
     AgroTheme(dark) {
-      CompositionLocalProvider(LocalRippleConfiguration provides null) {
-        BackHandler(state.screen in listOf(Screen.Dashboard, Screen.Mfa, Screen.History, Screen.Account, Screen.Rewards, Screen.Proofs, Screen.Garden)) { model.back() }
-        Scaffold(containerColor = MaterialTheme.colorScheme.background, bottomBar = {
-            if (state.screen !in listOf(Screen.Login,Screen.Mfa)) NavigationBar(containerColor=MaterialTheme.colorScheme.surface) {
-                listOf(Screen.Products to "Tanaman",Screen.History to "Aktivitas",Screen.Account to "Akun").forEachIndexed { index,(target,label) ->
-                    NavigationBarItem(selected=state.screen==target || target==Screen.Products && state.screen in listOf(Screen.Dashboard,Screen.Garden) || target==Screen.Account && state.screen in listOf(Screen.Rewards,Screen.Proofs),
-                        onClick={ model.navigate(target) },label={Text(label)},icon={NavIcon(index,Modifier.size(24.dp))})
-                }
-            }
-        }) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding).imePadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-                // iOS order: a row of actions (back on the left, the rest on the right), then the title on a line of its own, so the
-                // title always has the full width and can wrap at large text sizes instead of being squeezed between buttons.
-                Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    FlowRow(Modifier.fillMaxWidth(), itemVerticalAlignment = Alignment.CenterVertically) {
-                        if (state.screen in listOf(Screen.Dashboard,Screen.Mfa,Screen.Rewards,Screen.Proofs,Screen.Garden)) TextButton(onClick = model::back, enabled = state.screen!=Screen.Mfa || !state.busy,
-                            modifier = Modifier.semantics { contentDescription = when(state.screen) { Screen.Mfa->"Kembali ke login"; Screen.Rewards,Screen.Proofs->"Kembali ke akun"; else->"Kembali ke produk saya" } }) { Text("\u2039") }
-                        Spacer(Modifier.weight(1f))
-                        if(state.screen !in listOf(Screen.Login,Screen.Mfa) && !state.demo) TextButton(onClick=model::refreshCurrent,enabled=!state.busy) { Text("Segarkan") }
-                        TextButton(onClick = { dark = !dark; preferences.edit().putString("theme",if(dark) "dark" else "light").apply() }) { Text(if (dark) "Mode terang" else "Mode gelap") }
+      val shellHaze = remember { HazeState() }
+      val showTabs = state.screen !in listOf(Screen.Login, Screen.Mfa)
+      val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+      CompositionLocalProvider(LocalRippleConfiguration provides null, LocalShellHaze provides shellHaze,
+          LocalBottomClearance provides if (showTabs) navInset + 84.dp else navInset) {
+        BackHandler(state.screen in listOf(Screen.Dashboard, Screen.Mfa, Screen.History, Screen.Account, Screen.Rewards, Screen.Proofs, Screen.Garden, Screen.Gallery)) { model.back() }
+        Surface(Modifier.fillMaxSize(), color = palette.canvas, contentColor = palette.ink) { Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().hazeSource(shellHaze).imePadding()) {
+              SharedTransitionLayout {
+                AnimatedContent(targetState = state.screen, transitionSpec = {
+                    val push = spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = IntOffset.VisibilityThreshold)
+                    val zooming = setOf(initialState, targetState) == setOf(Screen.Products, Screen.Dashboard)
+                    when {
+                        // The plant screen grows out of its tile and shrinks back into it; the list stays put underneath.
+                        zooming -> (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished).apply { if (targetState == Screen.Products) targetContentZIndex = -1f }
+                        depth(targetState) > depth(initialState) -> (slideInHorizontally(push) { it } togetherWith
+                            slideOutHorizontally(push) { -it / 4 } + fadeOut(tween(260), .4f))
+                        depth(targetState) < depth(initialState) -> (slideInHorizontally(push) { -it / 4 } + fadeIn(tween(220), .4f) togetherWith
+                            slideOutHorizontally(push) { it }).apply { targetContentZIndex = -1f }
+                        else -> fadeIn(tween(200)) togetherWith fadeOut(tween(1, delayMillis = 200))
                     }
-                    Text("Smart Agro", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-                }
-                Box(Modifier.fillMaxWidth().height(3.dp)) { if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().semantics { contentDescription = "Memuat Smart Agro" }) }
-                if (state.demo) Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
-                    Text("Mode latihan \u00b7 data sintetis dari skenario web", Modifier.padding(horizontal = 24.dp, vertical = 10.dp), style = MaterialTheme.typography.bodySmall)
-                }
-                state.message?.let { Notice(it, Modifier.widthIn(max = 600.dp).padding(horizontal = 20.dp, vertical = 6.dp), state.messageIsError) }
-                PullToRefreshBox(isRefreshing=state.busy && state.catalogLoaded && !state.demo,
-                    onRefresh={ if(!state.busy && !state.demo && state.screen !in listOf(Screen.Login,Screen.Mfa)) model.refreshCurrent() },
-                    modifier=Modifier.weight(1f).widthIn(max=640.dp).fillMaxWidth()) {
-                  AnimatedContent(targetState=state.screen,transitionSpec={ fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },label="Layar Smart Agro") { screen ->
+                }, label = "Layar Smart Agro") { screen ->
+                  CompositionLocalProvider(LocalSharedScope provides this@SharedTransitionLayout, LocalNavScope provides this@AnimatedContent) {
                     when (screen) {
-                        Screen.Login, Screen.Mfa -> LoginScreen(screen==Screen.Mfa,state.busy,state.message!=null,
-                            model.config.valid,model::login,model::verify,model::demo, { model.googleLogin(context) })
-                        Screen.Products -> ProductsScreen(state,model::openUnit,model::select,model::openGarden)
-                        Screen.Dashboard -> DashboardScreen(state,model::refresh,model::renameUnit,model::openUnit,model::loadWeather,model::loadExplanation,model::explain)
-                        Screen.History -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-                            if (state.selectedUnit==null) { Text("Pilih tanaman terlebih dahulu",style=MaterialTheme.typography.headlineSmall); Text("Aktivitas mengikuti persona tanaman yang dipilih.") }
-                            else { Text(state.selectedUnit.name,style=MaterialTheme.typography.headlineMedium); History(state,model::loadHistory,model::loadOlderHistory) }
-                        }
-                        Screen.Account -> AccountScreen(state,model::loadRewards,model::logout,model::updateName,model::navigate)
-                        Screen.Rewards -> RewardsScreen(state,model::loadRewards,model::reserveReward,model::cancelReward,model::restartRewardRequest)
-                        Screen.Proofs -> ProofsScreen(state,model::loadProofs)
-                        Screen.Garden -> GardenPlantScreen(state,model::openUnit,model::loadWeather)
+                        Screen.Gallery -> ComponentGallery(model::back)
+                        Screen.Products -> PlantsHome(state, model)
+                        Screen.Dashboard -> PlantDetail(state, model)
+                        else -> LegacyFrame(state, screen, model)
                     }
                   }
                 }
-                LaunchedEffect(state.email,state.demo,state.weatherSite,state.screen) {
-                    if(state.screen in listOf(Screen.Dashboard,Screen.Garden)) model.loadWeather()
-                }
-                LaunchedEffect(state.selectedUnit?.id,state.screen) {
-                    if(state.screen==Screen.Dashboard && !state.demo) model.loadExplanation()
-                }
-                LaunchedEffect(state.selectedUnit?.id,state.screen,state.historyLoaded) {
-                    if (state.screen in listOf(Screen.Dashboard,Screen.History) && state.selectedUnit!=null && !state.historyLoaded) model.loadHistory()
-                    if (state.screen in listOf(Screen.Account,Screen.Rewards) && !state.demo && !state.rewardLoaded) model.loadRewards()
-                    if (state.screen==Screen.Proofs && !state.demo && !state.proofsLoaded) model.loadProofs()
+              }
+            }
+            if (showTabs) GlassTabBar(tabs, when (state.screen) { Screen.History -> 1; Screen.Account, Screen.Rewards, Screen.Proofs, Screen.Gallery -> 2; else -> 0 },
+                { model.navigate(tabScreens[it]) }, Modifier.align(Alignment.BottomCenter))
+        } }
+        LaunchedEffect(state.email,state.demo,state.weatherSite,state.screen) {
+            if(state.screen in listOf(Screen.Dashboard,Screen.Garden)) model.loadWeather()
+        }
+        LaunchedEffect(state.selectedUnit?.id,state.screen) {
+            if(state.screen==Screen.Dashboard && !state.demo) model.loadExplanation()
+        }
+        LaunchedEffect(state.selectedUnit?.id,state.screen,state.historyLoaded) {
+            if (state.screen in listOf(Screen.Dashboard,Screen.History) && state.selectedUnit!=null && !state.historyLoaded) model.loadHistory()
+            if (state.screen in listOf(Screen.Account,Screen.Rewards) && !state.demo && !state.rewardLoaded) model.loadRewards()
+            if (state.screen==Screen.Proofs && !state.demo && !state.proofsLoaded) model.loadProofs()
+        }
+      }
+    }
+}
+
+/** Screens not yet rebuilt on the A3 kit (A4 replaces them one by one): an iOS bar with back and title above the old body. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun LegacyFrame(state: AppState, screen: Screen, model: AgroViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val title = when (screen) {
+        Screen.Login, Screen.Mfa -> ""
+        Screen.Products -> "Tanaman"; Screen.History -> "Aktivitas"; Screen.Account -> "Akun"
+        Screen.Rewards -> "Reward"; Screen.Proofs -> "Bukti chain"; Screen.Gallery -> "Komponen"
+        Screen.Dashboard -> state.selectedUnit?.name ?: "Tanaman"
+        Screen.Garden -> state.gardenPlant?.name ?: "Tanaman"
+    }
+    val back = when (screen) {
+        Screen.Mfa -> "Masuk"; Screen.Dashboard, Screen.Garden -> "Tanaman"; Screen.Rewards, Screen.Proofs -> "Akun"
+        else -> null
+    }
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (screen == Screen.Login) Spacer(Modifier.statusBarsPadding())
+        else NavBar(title, 0f, titleAlpha = 1f, back = back, onBack = if (back != null && !(screen == Screen.Mfa && state.busy)) model::back else null) {
+            if (screen != Screen.Mfa && !state.demo) {
+                if (state.busy) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { ActivityIndicator() }
+                else BarButton(PhosphorPaths.ArrowsClockwise, "Segarkan", model::refreshCurrent)
+            }
+        }
+        if (state.demo) Banner("Mode latihan · data sintetis dari skenario web", Modifier.widthIn(max = 600.dp).padding(horizontal = 16.dp, vertical = 4.dp))
+        state.message?.let { Banner(it, Modifier.widthIn(max = 600.dp).padding(horizontal = 16.dp, vertical = 6.dp), state.messageIsError) }
+        PullToRefreshBox(isRefreshing=state.busy && state.catalogLoaded && !state.demo,
+            onRefresh={ if(!state.busy && !state.demo && screen !in listOf(Screen.Login,Screen.Mfa)) model.refreshCurrent() },
+            modifier=Modifier.weight(1f).widthIn(max=640.dp).fillMaxWidth()) {
+            Box(Modifier.fillMaxSize().padding(bottom = LocalBottomClearance.current)) {
+                when (screen) {
+                    Screen.Login, Screen.Mfa -> LoginScreen(screen==Screen.Mfa,state.busy,state.message!=null,
+                        model.config.valid,model::login,model::verify,model::demo, { model.googleLogin(context) })
+                    Screen.History -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+                        if (state.selectedUnit==null) { Text("Pilih tanaman terlebih dahulu",style=MaterialTheme.typography.headlineSmall); Text("Aktivitas mengikuti persona tanaman yang dipilih.") }
+                        else { Text(state.selectedUnit.name,style=MaterialTheme.typography.headlineMedium); History(state,model::loadHistory,model::loadOlderHistory) }
+                    }
+                    Screen.Account -> AccountScreen(state,model::loadRewards,model::logout,model::updateName,model::navigate)
+                    Screen.Rewards -> RewardsScreen(state,model::loadRewards,model::reserveReward,model::cancelReward,model::restartRewardRequest)
+                    Screen.Proofs -> ProofsScreen(state,model::loadProofs)
+                    Screen.Garden -> GardenPlantScreen(state,model::openUnit,model::loadWeather)
+                    Screen.Gallery, Screen.Products, Screen.Dashboard -> Unit
                 }
             }
         }
     }
-}
 }
 @Composable private fun Notice(text: String, modifier: Modifier = Modifier, error: Boolean = true) {
     Surface(modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, shape = RoundedCornerShape(16.dp), color = if(error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer) {
@@ -217,100 +269,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-@Composable private fun ProductsScreen(state: AppState, open: (PlantUnit)->Unit, select: (Product)->Unit, openGarden: (GardenPlant)->Unit) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var productId by rememberSaveable { mutableStateOf<String?>(null) }
-    val uri=rememberSafeUriHandler()
-    val visible=state.units.filter { unit ->
-        (productId==null || unit.productId==productId) && listOf(unit.name,unit.crop,state.plantCode(unit),state.products.find { it.id==unit.productId }?.serial.orEmpty()).any { it.contains(query.trim(),ignoreCase=true) }
-    }
-    LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        item {
-            Text("Tanaman saya",style=MaterialTheme.typography.headlineLarge)
-            Text("${state.garden?.plants?.count { it.endedOn == null } ?: 0} tanaman · ${state.products.size} produk",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        state.garden?.let { garden ->
-            item { Text("Pot & kebun akun",style=MaterialTheme.typography.titleLarge) }
-            garden.sites.forEach { site ->
-                item(key="site-${site.id}") { Text("${site.name} \u00b7 ${if(site.kind=="garden") "Kebun" else "Pot pribadi"}",style=MaterialTheme.typography.titleMedium) }
-                items(garden.plants.filter { it.siteId==site.id && it.endedOn==null },key={"plant-${it.id}"}) { plant ->
-                    Card(onClick={openGarden(plant)},modifier=Modifier.pressFeedback(),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
-                        Column(Modifier.fillMaxWidth().padding(18.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                            Text(plant.name,style=MaterialTheme.typography.titleMedium)
-                            Text("${plant.tag} \u00b7 ${plant.crop} \u00b7 ${plant.zone}",style=MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-            if(garden.emptySlots>0) item { Text("${garden.emptySlots} zona belum ditanami.",style=MaterialTheme.typography.bodySmall) }
-            if(garden.sites.isEmpty()) item { Text("Belum ada pot atau kebun pada akun. Siapkan melalui website.") }
-            item { Text("Unit perangkat terhubung",style=MaterialTheme.typography.titleLarge) }
-        }
-        item { OutlinedTextField(query,{query=it.take(120)},label={Text("Cari nama, kode, atau produk")},singleLine=true,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(16.dp)) }
-        item { Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected=productId==null,onClick={productId=null},label={Text("Semua produk")})
-            state.products.forEach { product -> FilterChip(selected=productId==product.id,onClick={productId=product.id},label={Text("${product.label} · ${product.serial}")}) }
-        } }
-        items(visible,key={it.id}) { unit ->
-            Card(onClick={open(unit)},modifier=Modifier.pressFeedback(),shape=RoundedCornerShape(20.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
-                Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                    Mascot(Modifier.size(42.dp,54.dp))
-                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                        Text(unit.name,style=MaterialTheme.typography.titleMedium)
-                        Text("${unit.crop} · ${state.plantCode(unit)}",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text("›",style=MaterialTheme.typography.titleLarge)
-                }
-            }
-        }
-        if (visible.isEmpty() && state.units.isNotEmpty()) item { Text("Tidak ada tanaman yang cocok. Coba nama atau kode lain.") }
-        state.products.filter { product -> state.units.none { it.productId==product.id } }.forEach { product -> item(key=product.id) {
-            OutlinedButton(onClick={select(product)},enabled=!state.busy) { Text("${product.label} · ${product.serial} · Belum ada tanaman") }
-        } }
-        if (state.products.isEmpty() && state.garden?.sites.isNullOrEmpty() && state.catalogLoaded && !state.busy) item {
-            Text("Belum ada produk terhubung",style=MaterialTheme.typography.headlineSmall)
-            TextButton(onClick={uri.openUri(WEB+"#profil")}) { Text("Aktifkan produk di website") }
-        }
-
-    }
-}
-@Composable private fun DashboardScreen(state: AppState, refresh: ()->Unit, rename: (String)->Unit, open: (PlantUnit)->Unit, weather: ()->Unit, loadExplanation: ()->Unit, explain: (String)->Unit) {
-    var editing by rememberSaveable(state.selectedUnit?.id) { mutableStateOf(false) }
-    var name by rememberSaveable(state.selectedUnit?.id) { mutableStateOf(state.selectedUnit?.name.orEmpty()) }
-    val uri=rememberSafeUriHandler()
-    val keyboard=LocalSoftwareKeyboardController.current
-    LaunchedEffect(state.selectedUnit?.name) {
-        name=state.selectedUnit?.name.orEmpty()
-        if(editing) { editing=false;keyboard?.hide() }
-    }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        if (state.selectedUnit==null) {
-            Text("Belum ada unit tanaman",style=MaterialTheme.typography.headlineSmall)
-            Text("Atur unit dan penempatan perangkat melalui website, lalu muat ulang.")
-            OutlinedButton(onClick=refresh,enabled=!state.busy) { Text("Muat ulang") }
-            TextButton(onClick={uri.openUri(WEB+"#profil")}) { Text("Atur unit di website") }
-        } else {
-            Text(state.selectedUnit.name,style=MaterialTheme.typography.headlineLarge)
-            Text("${state.selectedUnit.crop} · ${state.plantCode(state.selectedUnit)}",style=MaterialTheme.typography.bodySmall)
-            Text(state.selectedProduct?.serial.orEmpty(),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(Modifier.animateContentSize(spring(dampingRatio=1f,stiffness=400f)),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick={editing=!editing}) { Text(if(editing) "Batal ubah nama" else "Ubah nama tanaman") }
-                if (editing) {
-                    OutlinedTextField(name,{name=it.take(120)},label={Text("Nama tanaman")},modifier=Modifier.fillMaxWidth(),singleLine=true)
-                    Button(onClick={rename(name)},enabled=!state.busy && name.isNotBlank() && name.trim()!=state.selectedUnit.name) { Text("Simpan nama tanaman") }
-                }
-            }
-            if (state.units.size > 1) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(state.units,key={it.id}) { unit ->
-                    FilterChip(selected=unit.id==state.selectedUnit.id,onClick={open(unit)},
-                        modifier=Modifier.semantics { contentDescription="Pilih tanaman ${state.plantCode(unit)}" },
-                        label={Text("${state.plantCode(unit)} · ${unit.name}")})
-                }
-            }
-            Summary(state,refresh,weather,loadExplanation,explain)
-        }
-    }
-}
 @Composable private fun AccountScreen(state: AppState, loadRewards: ()->Unit, logout: ()->Unit, updateName: (String)->Unit, navigate: (Screen)->Unit) {
     val uri=rememberSafeUriHandler()
     var editing by rememberSaveable { mutableStateOf(false) }
@@ -344,6 +302,7 @@ class MainActivity : ComponentActivity() {
 
                 TextButton(onClick={navigate(Screen.Rewards)}) { Text("Buka katalog & penukaran") }
                 TextButton(onClick={navigate(Screen.Proofs)}) { Text("Bukti blockchain kepemilikan") }
+                if (BuildConfig.DEBUG) TextButton(onClick={navigate(Screen.Gallery)}) { Text("Galeri komponen (debug)") }
             }
         }
         Text("Profil & keamanan",style=MaterialTheme.typography.titleLarge)
@@ -353,87 +312,6 @@ class MainActivity : ComponentActivity() {
         Text("Pengaturan lengkap dibuka di website. Sesi browser dan aplikasi terpisah.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         Button(onClick=logout,enabled=!state.busy,modifier=Modifier.fillMaxWidth()) { Text(if(state.demo) "Akhiri latihan" else "Keluar dari aplikasi") }
     }
-}
-@Composable private fun NavIcon(index: Int, modifier: Modifier) {
-    val color = MaterialTheme.colorScheme.onSurface
-    Canvas(modifier) {
-        val w=size.width; val h=size.height
-        when(index) {
-            0 -> { drawOval(color, Offset(w*.2f,h*.1f), androidx.compose.ui.geometry.Size(w*.6f,h*.65f), style=Stroke(2.dp.toPx())); drawLine(color,Offset(w*.5f,h*.3f),Offset(w*.5f,h*.9f),2.dp.toPx()) }
-            1 -> { val path=Path().apply { moveTo(w*.12f,h*.8f); lineTo(w*.4f,h*.45f); lineTo(w*.65f,h*.6f); lineTo(w*.9f,h*.15f) }; drawPath(path,color,style=Stroke(2.dp.toPx(),cap=StrokeCap.Round)) }
-            else -> { drawCircle(color,w*.16f,Offset(w*.5f,h*.25f),style=Stroke(2.dp.toPx())); drawArc(color,180f,180f,false,Offset(w*.16f,h*.5f),androidx.compose.ui.geometry.Size(w*.68f,h*.7f),style=Stroke(2.dp.toPx())) }
-        }
-    }
-}
-@Composable private fun Summary(state: AppState, refresh: () -> Unit, reloadWeather: ()->Unit, loadExplanation: ()->Unit, explain: (String)->Unit) {
-    val weather=state.weather.takeIf { state.weatherSiteId==state.weatherSite?.id && !state.weatherBusy }
-    val unit = state.selectedUnit ?: return
-    val overview = state.overviews.find { it.id == unit.id }
-    var now by remember { mutableStateOf(Instant.now()) }
-    LaunchedEffect(Unit) { while (true) { delay(30000); now = Instant.now() } }
-    val stale = !state.demo && overview?.stale(now) != false
-    val revoked = "device_revoked" in overview?.alerts.orEmpty()
-    val status = if (state.demo) "Skenario latihan" else if (revoked) "Perangkat dicabut" else if (stale) "Menunggu data terbaru" else stateLabels[overview?.state] ?: "Data perangkat tersimpan"
-    val moisture=overview?.readings?.find { it.sensor==Sensor.Moisture && it.quality=="ok" && it.synced }?.takeIf { state.demo || !stale && !revoked && fresh(it.at, now) }?.value
-    var cutaway by rememberSaveable { mutableStateOf(true) }
-    Card(shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(unit.crop, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            SuggestionChip(onClick = refresh, enabled = !state.busy, label = { Text(status) })
-            PlantScene(Modifier.fillMaxWidth().height(210.dp).semantics { contentDescription = "Ilustrasi pot dan akar tanaman; bukan prediksi pertumbuhan" },
-                interactive = true, onion = unit.crop.contains("bawang", ignoreCase = true), moisture = moisture, cutaway = cutaway, cloudy=weather?.let { it.condition!="cerah" })
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Lihat zona akar", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                Switch(checked = cutaway, onCheckedChange = { cutaway = it }, modifier = Modifier.semantics { contentDescription = "Tampilkan bagian dalam pot" })
-            }
-            Text("Fase tumbuh ilustratif; sensor tidak mengukur bentuk tanaman.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-    state.demoAdvice[unit.id]?.let { (action, reason) ->
-        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(action, style = MaterialTheme.typography.titleMedium)
-                Text(reason, style = MaterialTheme.typography.bodyMedium)
-                Text("Hasil aturan dari skenario web; bukan diagnosis tanaman Anda.", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-    Text("Kondisi zona akar", style = MaterialTheme.typography.headlineSmall)
-    var expanded by rememberSaveable(unit.id) { mutableStateOf<Sensor?>(null) }
-    Sensor.entries.forEach { sensor ->
-        val reading = overview?.readings?.find { it.sensor == sensor }
-        val readingStale = !state.demo && (stale || reading == null || !fresh(reading.at, now))
-        val label = when { reading == null -> "Belum diukur"; reading.quality == "error" -> "Sensor galat"; reading.quality != "ok" -> "Belum diukur"; revoked -> "Perangkat dicabut"; readingStale -> "Bacaan terakhir \u00b7 data usang"; else -> if (state.demo) "Data sintetis skenario" else "Bacaan tersimpan" }
-        val container = when (sensor) { Sensor.Moisture -> MaterialTheme.colorScheme.surfaceVariant; Sensor.Temperature -> MaterialTheme.colorScheme.primaryContainer; Sensor.Ph -> MaterialTheme.colorScheme.surface }
-        Surface(onClick={expanded=if(expanded==sensor) null else sensor},shape=RoundedCornerShape(22.dp), color = container) {
-            Column(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio=1f,stiffness=400f)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(sensor.label, style = MaterialTheme.typography.titleMedium)
-                Text("${number(reading?.value)} ${sensor.unit}", style = MaterialTheme.typography.headlineMedium)
-                Text(label, style = MaterialTheme.typography.bodySmall)
-                Text(time(reading?.at), style = MaterialTheme.typography.bodySmall)
-                Text(if(expanded==sensor) "Tutup detail" else "Lihat detail",style=MaterialTheme.typography.labelMedium)
-                if(expanded==sensor) {
-                    if(state.historyLoaded) ReadingChart(state.history,sensor)
-                    else Text("Riwayat belum tersedia.",style=MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-    }
-    overview?.alerts?.forEach { alert -> Text(alertLabels[alert] ?: "Peringatan baru dari layanan; periksa detail di website.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
-
-    if(!state.demo) {
-        key(unit.id) { ExplanationSection(state.explanation.takeIf { state.explanationUnitId==unit.id },state.explanationBusy,state.explanationMessage,
-            loadExplanation,explain,state.explanationUnitId==unit.id && state.explanationDeviceId!=null) }
-        WeatherSection(state.weatherSite,weather,state.weatherBusy,state.weatherMessage,reloadWeather)
-    }
-    Surface(shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surface) {
-        Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Mascot(Modifier.size(56.dp,66.dp).semantics { contentDescription="Maskot kelembapan" },interactive=true,sad=moisture!=null&&moisture<60,happy=moisture!=null&&moisture in 60.0..80.0)
-            Column { Text(when { moisture==null->"Menunggu kelembapan terbaru";moisture<60->"Media mulai kering";moisture>80->"Media lebih basah";else->"Media cukup lembap" },style=MaterialTheme.typography.titleSmall)
-                Text("Ekspresi kelembapan, bukan diagnosis tanaman.",style=MaterialTheme.typography.bodySmall) }
-        }
-    }
-
 }
 @Composable private fun History(state: AppState, load: () -> Unit, older: () -> Unit) {
     var sensor by rememberSaveable { mutableStateOf(Sensor.Moisture) }

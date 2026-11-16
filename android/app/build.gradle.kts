@@ -61,6 +61,7 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.04.01"))
     implementation("androidx.compose.material3:material3")
+    implementation("dev.chrisbanes.haze:haze:1.6.10")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     // Credential Manager is required for Google's native, nonce-protected account picker.

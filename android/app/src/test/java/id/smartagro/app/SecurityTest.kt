@@ -60,12 +60,11 @@ class SecurityTest {
         compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         compose.onNodeWithText("Tanaman saya").assertIsDisplayed()
     }
-    @Test fun themeChoiceSurvivesActivityRecreation() {
+    @Test fun appearanceFollowsTheSystemAcrossRecreation() {
         secure(false)
         account("alice@example.test")
-        compose.onNodeWithText("Mode gelap").performClick()
+        compose.onNodeWithText("Mode gelap").assertDoesNotExist()
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithText("Mode terang").assertIsDisplayed()
         compose.onNodeWithText("Tanaman saya").assertIsDisplayed()
     }
     @Test fun practiceStillWorksWithoutDeviceLock() {
@@ -112,13 +111,13 @@ class SecurityTest {
         }
         compose.activityRule.scenario.recreate()
         account("alice@example.test")
-        listOf("Smart Agro","Segarkan","Mode gelap").forEach { text ->
+        listOf("Aktivitas","Akun","Tanaman saya").forEach { text ->
             val node=compose.onNodeWithText(text).assertIsDisplayed()
             val layouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
             node.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
             // Every character is laid out and visible (nothing cut or ellipsized), and the text stays inside a 320 dp screen.
-            // Not hasVisualOverflow: under Robolectric it reported a 188 px "Smart Agro" in a 288 px slot as overflowing, while
-            // the same header on an API 35 emulator at 320 dp and 200 % text shows the title whole (2026-11-16).
+            // Tab labels grow only to 1.3x (HIG large content), so they stay whole in a 320 dp capsule; the page title wraps.
+            // Not hasVisualOverflow: under Robolectric it reported whole text in a wide slot as overflowing (2026-11-16).
             val layout=layouts.single()
             assertEquals("all of \"$text\" is visible",text.length,layout.getLineEnd(layout.lineCount-1,visibleEnd=true))
             assertTrue("\"$text\" fits its height",!layout.didOverflowHeight)

@@ -150,9 +150,8 @@ class AppFlowTest {
     }
     @Test fun loginDemoProductsDashboardHistoryAndBack() {
         compose.onNodeWithText("Selamat datang kembali").assertIsDisplayed()
-        compose.onNodeWithText("Mode gelap").performClick()
-        screenshot("00-login-dark")
-        compose.onNodeWithText("Mode terang").performClick()
+        // Appearance follows the system (HIG); the app has no light/dark switch of its own.
+        compose.onNodeWithText("Mode gelap").assertDoesNotExist()
         compose.onNodeWithText("Email").performTextInput("grower@example.test")
         compose.onNodeWithText("Kata sandi").performTextInput("local-ui-check")
         screenshot("01-login-password")
@@ -161,17 +160,17 @@ class AppFlowTest {
         screenshot("02-products")
         compose.onNodeWithText("Cari nama, kode, atau produk").performTextInput("T-CASE0")
         compose.onNodeWithText("Cabai · T-CASE0").performScrollTo().performClick()
-        compose.onNodeWithText("Lihat zona akar").performScrollTo().assertIsDisplayed()
-        screenshot("03-dashboard-roots")
-        compose.onNodeWithContentDescription("Tampilkan bagian dalam pot").performClick()
+        compose.onNodeWithText("kelembapan tanah").assertIsDisplayed()
         screenshot("03-dashboard")
-        compose.onNodeWithText("Kelembapan").performScrollTo().performClick()
-        compose.onNodeWithText("Tutup detail").performScrollTo().assertIsDisplayed()
-        screenshot("03-inline-sensor")
-        compose.onNodeWithText("Ubah nama tanaman").performScrollTo().performClick()
-        compose.onNodeWithText("Nama tanaman").performTextReplacement("Cabai teras")
-        compose.onNodeWithText("Simpan nama tanaman").performClick()
-        compose.onNodeWithText("Cabai teras").assertExists()
+        // Choosing a reading row puts that sensor in the trend chart.
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("pH tanah"))
+        compose.onNodeWithText("pH tanah").performClick()
+        compose.onNodeWithContentDescription("Ditampilkan di tren").assertExists()
+        screenshot("03-trend-ph")
+        compose.onNodeWithContentDescription("Ubah nama tanaman").performClick()
+        compose.onNodeWithContentDescription("Nama tanaman").performTextReplacement("Cabai teras")
+        compose.onNodeWithText("Simpan nama tanaman").performScrollTo().performClick()
+        compose.onAllNodesWithText("Cabai teras").onFirst().assertExists()
         compose.onNodeWithText("Aktivitas").performClick()
         compose.onNodeWithText("Riwayat sensor").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("pH tanah").performClick()
@@ -204,7 +203,7 @@ class AppFlowTest {
         compose.onNodeWithText("Belum ada unit sensor terhubung ke zona ini. Aplikasi tidak menampilkan bacaan atau saran perangkat tanpa data.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Lihat sensor perangkat").assertDoesNotExist()
         screenshot("11-native-garden-orchid")
-        compose.onNodeWithContentDescription("Kembali ke produk saya").performClick()
+        compose.onNodeWithContentDescription("Kembali ke Tanaman").performClick()
         compose.onNodeWithText("Tanaman saya").assertIsDisplayed()
     }
 
