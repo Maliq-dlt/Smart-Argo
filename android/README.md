@@ -2,6 +2,18 @@
 
 Aplikasi Android native Kotlin + Jetpack Compose, terpisah dari website React. Source, konfigurasi, APK dan cache aplikasi berada di `android/`; laporan HTML pengujian berada di `android/.tmp/reports/` (relatif terhadap root repository). Tidak ada WebView, perubahan backend, atau perubahan source website.
 
+## Status UI Apple-native lengkap — 17 November 2026
+
+Seluruh layar A4a–A4g telah terhubung ke layar native berdesain Apple HIG (`Theme.kt`, `Kit.kt`, `Delight.kt`) dan `LegacyFrame` telah dihapus:
+- `PlantsHome` + `PlantDetail` (`PlantScreens.kt`, `Illustrations.kt`): ubin bergrup ala Apple Home, hero ring kelembapan + langit lokasi, tahap 2D interaktif dengan perangkat pada bibir pot, sakelar akar, dan Mode Belajar (`SpeciesCatalog.kt`, `Observation.kt`).
+- `GardenScreen.kt` + `GardenDialogs.kt`: tambah pot/kebun, tanam zona kosong, ganti tanaman, riwayat siklus, opt-in berbagi, dan pengetahuan komunitas berlabel `belum dikurasi`.
+- `ActivityScreen.kt`: segmen `Riwayat | Jurnal | Banding`, grafik sentuh, catatan perawatan persisten (`append_my_care_journal`), perbandingan 7 hari, serta ekspor CSV (`CreateDocument` / Share Sheet `FileProvider`).
+- `AccountScreens.kt`: profil & pengaturan keamanan 2FA TOTP (QR via `com.google.zxing:core:3.5.3`), 10 kode pemulihan sekali pakai, kata sandi, dan riwayat keamanan (`FLAG_SECURE` saat kode tampil).
+- `ProductsScreen.kt`: kelola unit & penempatan perangkat, arsip/pulihkan, pindai QR lewat kamera/galeri tanpa izin `CAMERA`, cek status registri, aktivasi challenge/claim, transfer 32-hex, dan pemulihan kepemilikan.
+- `FeatureScreens.kt`: `RewardsScreen` (katalog, energi 15 menit, banding `reward_cases`) dan `ProofsScreen` pada `TitledScreen`.
+
+Verifikasi terakhir (17 November 2026): `testDebugUnitTest` **97/97 lulus (0 gagal/dilewati)**, `lintDebug` & `lintRelease` **0 error**, debug APK (`17.561.790 byte`) dan release R8 bertanda tangan (`2.301.221 byte`) dibangun, `shots.mjs` (40 tangkapan layar terang/gelap/360dp/200%) & cold launch release di `sa-api35` (`TotalTime: 2151 ms`) lulus. Akun cloud nyata, kamera fisik, dan GitHub Release (A5) belum diuji/diterbitkan.
+
 ## Status non-UI terbaru — 16 November 2026
 
 Sesuai arahan pemilik, pekerjaan desain/UI berikutnya diserahkan kepada Claude. Modul berikut sudah diimplementasikan pada lapisan API/domain dan **belum dihubungkan ke layar**; aplikasi belum menyediakan semua fitur ini lewat tombol/menu.

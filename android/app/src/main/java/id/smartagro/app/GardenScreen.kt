@@ -1,32 +1,136 @@
 package id.smartagro.app
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-@Composable internal fun GardenPlantScreen(state: AppState, openUnit: (PlantUnit)->Unit, reloadWeather: ()->Unit = {}) {
-    val plant=state.gardenPlant ?: return
-    val site=state.garden?.sites?.find { it.id==plant.siteId }
-    val unit=state.units.find { it.id==plant.unitId }
-    val uri=rememberSafeUriHandler()
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        Text(plant.name,style=MaterialTheme.typography.headlineLarge)
-        Text("${plant.tag} \u00b7 ${plant.crop}",style=MaterialTheme.typography.titleMedium)
-        Text("${site?.name.orEmpty()} \u00b7 ${plant.zone}")
-        PlantScene(Modifier.fillMaxWidth().height(240.dp),onion=plant.species==2,speciesId=plant.species,
-            day=ChronoUnit.DAYS.between(plant.plantedOn,LocalDate.now()).coerceIn(0,180).toInt(),interactive=true)
-        Text("Ditanam ${plant.plantedOn} \u00b7 Kode ${plant.code}",style=MaterialTheme.typography.bodySmall)
-        if(plant.species !in 1..2) Text("Mengamati \u00b7 profil perawatan spesies ini belum dikurasi.")
-        Text("Ilustrasi tanaman; bukan pengukuran bentuk atau diagnosis.",style=MaterialTheme.typography.bodySmall)
-        if(unit!=null) Button(onClick={openUnit(unit)}) { Text("Lihat sensor perangkat") }
-        else Text("Belum ada unit sensor terhubung ke zona ini. Aplikasi tidak menampilkan bacaan atau saran perangkat tanpa data.")
-        if(!state.demo) WeatherSection(site,state.weather.takeIf { state.weatherSiteId==site?.id },state.weatherBusy,state.weatherMessage,reloadWeather)
-        TextButton(onClick={uri.openUri("https://smart-agro-demo.pages.dev/#simulasi")}) { Text("Kelola pot dan kebun di website") }
+/** A garden cycle on the A3 Apple surface kit: species stage, phase guide, learning mode, cycles, and community sharing. */
+@Composable
+internal fun GardenPlantScreen(state: AppState, model: AgroViewModel) {
+    val plant = state.gardenPlant ?: return
+    val p = palette
+    val site = state.garden?.sites?.find { it.id == plant.siteId }
+    val slot = state.garden?.slots?.find { it.id == plant.slotId }
+    val unit = plant.unitId?.let { id -> state.units.find { it.id == id } }
+    val species = SpeciesCatalog.byCode(plant.species)
+    val days = ChronoUnit.DAYS.between(plant.plantedOn, LocalDate.now()).toInt().coerceAtLeast(0)
+    var cutaway by rememberSaveable(plant.id) { mutableStateOf(false) }
+    var switching by rememberSaveable(plant.id) { mutableStateOf(false) }
+    var showCommunity by rememberSaveable(plant.id) { mutableStateOf(false) }
+    var shareTarget by remember { mutableStateOf<GardenPlant?>(null) }
+
+    val weather = state.weather.takeIf { state.weatherSiteId == site?.id }
+    val outdoor = site?.placement?.let { it != "indoor" } == true
+    val slotHistory = remember(state.garden, plant.slotId) {
+        state.garden?.plants.orEmpty().filter { it.slotId == plant.slotId && it.endedOn != null }.sortedByDescending { it.plantedOn }
     }
+
+    TitledScreen(
+        plant.name,
+        subtitle = "${plant.tag} \u00b7 ${plant.crop}",
+        back = "Tanaman",
+        onBack = model::back,
+        actions = {
+            if (!state.demo) BarButton(PhosphorPaths.ArrowsLeftRight, "Ganti tanaman", { switching = true }, enabled = !state.busy)
+        },
+    ) {
+        notices(state)
+        item(key = "stage") {
+            Panel {
+                PlantScene(
+                    Modifier.fillMaxWidth().height(252.dp),
+                    onion = plant.species == 2,
+                    speciesId = plant.species,
+                    cutaway = cutaway,
+                    day = days.coerceAtLeast(8),
+                    interactive = true,
+                    daylight = if (outdoor) weather?.condition != "malam" else null,
+                    cloudy = weather?.condition in listOf("berawan", "mendung", "hujan"),
+                )
+                ToggleCell("Lihat akar & media", cutaway, { cutaway = it })
+            }
+        }
+        item(key = "identity") {
+            SectionTitle("Siklus berjalan")
+            Group(
+                footer = if (species?.curated == false) "Mengamati \u00b7 profil perawatan spesies ini belum dikurasi."
+                else "Kode permanen ${plant.code} di zona ${plant.zone}.",
+            ) {
+                Cell("Lokasi", value = listOfNotNull(site?.name, plant.zone).joinToString(" · "), chevron = false)
+                Cell("Ditanam", value = "${plant.plantedOn} ($days hari)", chevron = false)
+                if (unit != null) {
+                    Cell("Unit sensor", value = unit.name, onClick = { model.openUnit(unit) })
+                }
+            }
+        }
+        if (unit == null) {
+            item(key = "no-unit") {
+                Spacer(Modifier.height(12.dp))
+                Banner("Belum ada unit sensor terhubung ke zona ini. Aplikasi tidak menampilkan bacaan atau saran perangkat tanpa data.", Modifier.padding(horizontal = 16.dp))
+            }
+        }
+        if (species != null) {
+            item(key = "phases") {
+                SectionTitle("Panduan fase")
+                Group {
+                    SpeciesCatalog.phaseRanges(species.speciesId).forEach { (range, label) ->
+                        Cell(label, value = "HST $range", chevron = false)
+                    }
+                }
+            }
+        }
+        if (site != null) {
+            item(key = "weather-title") { SectionTitle("Cuaca di ${site.name}") }
+            item(key = "weather") { WeatherSection(site, weather, state.weatherBusy, state.weatherMessage, model::loadWeather) }
+        }
+        item(key = "community") {
+            SectionTitle("Komunitas & opsi")
+            Group(inset = 60.dp) {
+                if (slot != null && !state.demo) {
+                    ToggleCell(
+                        "Bagikan pola siklus ke komunitas",
+                        slot.share,
+                        { model.setSlotSharing(slot.id, it) },
+                        subtitle = "Membagikan siklus selesai secara anonim di zona Anda.",
+                        glyph = PhosphorPaths.ShareNetwork,
+                        glyphColor = p.tint,
+                        enabled = !state.busy,
+                    )
+                }
+                Cell("Pengetahuan komunitas", subtitle = "Ringkasan pola dari pemilik di zona iklim sama", glyph = PhosphorPaths.UsersThree, glyphColor = p.secondary, onClick = { showCommunity = true })
+                if (!state.demo) {
+                    Cell("Ganti atau tutup siklus", subtitle = "Catat hasil panen lalu mulai spesies baru", glyph = PhosphorPaths.ArrowsLeftRight, glyphColor = p.tint, onClick = { switching = true })
+                }
+            }
+        }
+        if (slotHistory.isNotEmpty()) {
+            item(key = "cycle-history") {
+                SectionTitle("Riwayat siklus zona ini")
+                Group {
+                    slotHistory.forEach { old ->
+                        Cell(
+                            "${old.tag} · ${old.name}",
+                            subtitle = "${old.plantedOn} s/d ${old.endedOn} · ${old.outcome ?: "selesai"}",
+                            chevron = false,
+                            trailing = {
+                                when {
+                                    old.shared && !state.demo -> PlainButton("Tarik", { model.unshareGardenCycle(old.id) }, enabled = !state.busy)
+                                    slot?.share == true && old.outcome == "berhasil" && !state.demo -> PlainButton("Bagikan", { shareTarget = old }, enabled = !state.busy)
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (switching) SwitchPlantSheet(plant, state, model) { switching = false }
+    if (showCommunity) CommunityKnowledgeSheet(plant.species, state, model) { showCommunity = false }
+    shareTarget?.let { target -> ShareCycleSheet(target, state, model) { shareTarget = null } }
 }

@@ -149,7 +149,7 @@ class AppFlowTest {
         assertEquals("Daun mulai menguning",submitted)
     }
     @Test fun loginDemoProductsDashboardHistoryAndBack() {
-        compose.onNodeWithText("Selamat datang kembali").assertIsDisplayed()
+        compose.onNodeWithText("Masuk ke Smart Agro").assertIsDisplayed()
         // Appearance follows the system (HIG); the app has no light/dark switch of its own.
         compose.onNodeWithText("Mode gelap").assertDoesNotExist()
         compose.onNodeWithText("Email").performTextInput("grower@example.test")
@@ -183,7 +183,7 @@ class AppFlowTest {
         compose.onNode(hasText("Akun") and hasClickAction()).performClick()
         compose.onNodeWithText("Akhiri latihan").performScrollTo().performClick()
         screenshot("10-logout-return")
-        compose.onNodeWithText("Selamat datang kembali").assertIsDisplayed()
+        compose.onNodeWithText("Masuk ke Smart Agro").assertIsDisplayed()
     }
     @Test fun serverGardenUsesSpeciesCodeAndDoesNotInventDeviceMeasurements() {
         compose.runOnIdle {

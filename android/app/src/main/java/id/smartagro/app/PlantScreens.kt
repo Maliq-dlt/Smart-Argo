@@ -132,6 +132,8 @@ internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
     val now = rememberNow()
     var query by rememberSaveable { mutableStateOf("") }
     var productId by rememberSaveable { mutableStateOf<String?>(null) }
+    var addingSite by rememberSaveable { mutableStateOf(false) }
+    var plantingSlot by remember { mutableStateOf<GardenSlot?>(null) }
     val uri = rememberSafeUriHandler()
     val columns = if (LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale < 300) 1 else 2
     val visible = state.units.filter { unit ->
@@ -140,7 +142,10 @@ internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
     }
     val healths = state.units.associate { it.id to health(state, it, now) }
     TitledScreen("Tanaman saya", subtitle = "${state.garden?.plants?.count { it.endedOn == null } ?: state.units.size} tanaman · ${state.products.size} produk",
-        actions = { RefreshAction(state, model) }) {
+        actions = {
+            if (!state.demo) BarButton(PhosphorPaths.PlusBold, "Tambah pot atau kebun", { addingSite = true }, enabled = !state.busy)
+            RefreshAction(state, model)
+        }) {
         notices(state)
         if (state.units.isNotEmpty()) item(key = "highlight") { Highlight(state, healths, model::openUnit) }
         state.garden?.let { garden ->
@@ -150,7 +155,7 @@ internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
                     SectionTitle(site.name) { Text(if (site.kind == "garden") "Kebun" else "Pot pribadi", style = T.subhead, color = p.secondary) }
                 }
                 items(plants.chunked(columns), key = { row -> "plants-" + row.joinToString { it.id } }) { row ->
-                    TileRow(columns) {
+                    TileRow(columns == 2 && row.size < columns) {
                         row.forEach { plant ->
                             val unitHealth = plant.unitId?.let { healths[it] }
                             PlantTile(plant.name, "${plant.tag} · ${plant.zone}", unitHealth?.moisture,
@@ -159,7 +164,17 @@ internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
                     }
                 }
             }
-            if (garden.emptySlots > 0) item { Footnote("${garden.emptySlots} zona belum ditanami. Atur di website.") }
+            val openSlots = garden.slots.filter { slot -> garden.plants.none { it.slotId == slot.id && it.endedOn == null } }
+            if (openSlots.isNotEmpty()) item(key = "empty-slots") {
+                SectionTitle("Zona siap ditanami")
+                Group {
+                    openSlots.forEach { slot ->
+                        val siteName = garden.sites.find { it.id == slot.siteId }?.name.orEmpty()
+                        Cell(slot.name, subtitle = "$siteName · Ketuk untuk mulai tanam", glyph = PhosphorPaths.PlusBold, glyphColor = p.tint,
+                            enabled = !state.busy, onClick = { plantingSlot = slot })
+                    }
+                }
+            } else if (garden.emptySlots > 0) item { Footnote("${garden.emptySlots} zona belum ditanami.") }
         }
         if (state.units.isNotEmpty()) {
             item(key = "units-title") { SectionTitle(if (state.garden == null) "Unit perangkat" else "Unit perangkat terhubung") }
@@ -171,7 +186,7 @@ internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
                 }
             } else item { Spacer(Modifier.height(10.dp)) }
             items(visible.chunked(columns), key = { row -> "units-" + row.joinToString { it.id } }) { row ->
-                TileRow(columns) {
+                TileRow(columns == 2 && row.size < columns) {
                     row.forEach { unit ->
                         val h = healths.getValue(unit.id)
                         PlantTile(unit.name, "${unit.crop} \u00b7 ${state.plantCode(unit)}", h.moisture, h.status, h.attention, Modifier.weight(1f), zoomKey = "unit-${unit.id}",
@@ -189,9 +204,13 @@ internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
             Group { bare.forEach { product -> Cell("${product.label} · ${product.serial}", subtitle = "Belum ada tanaman", enabled = !state.busy, onClick = { model.select(product) }) } }
         }
         if (state.products.isEmpty() && state.garden?.sites.isNullOrEmpty() && state.catalogLoaded && !state.busy) item(key = "empty") {
-            EmptyState("Belum ada produk terhubung", "Aktifkan pot Smart Agro Anda, lalu tanamannya muncul di sini.", "Aktifkan produk di website") { uri.openUri(WEB + "#profil") }
+            EmptyState("Belum ada produk terhubung", "Aktifkan pot Smart Agro atau tambah kebun manual untuk mulai.", if (state.demo) "Akhiri latihan" else "Kelola produk & QR") {
+                if (state.demo) model.logout() else model.navigate(Screen.ManageProducts)
+            }
         }
     }
+    if (addingSite) AddSiteSheet(state, model) { addingSite = false }
+    plantingSlot?.let { slot -> PlantSlotSheet(slot, state, model) { plantingSlot = null } }
 }
 
 @Composable internal fun RefreshAction(state: AppState, model: AgroViewModel) {
@@ -206,10 +225,10 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
     state.message?.let { message -> item(key = "message") { Banner(message, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), state.messageIsError) } }
 }
 
-@Composable private fun TileRow(columns: Int, content: @Composable RowScope.() -> Unit) {
+@Composable private fun TileRow(padEmptyHalf: Boolean, content: @Composable RowScope.() -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         content()
-        if (columns == 2) Unit
+        if (padEmptyHalf) Spacer(Modifier.weight(1f))
     }
 }
 
@@ -331,9 +350,22 @@ private data class Quad(val path: String, val color: Color, val title: String, v
     val product = state.products.find { it.id == unit.productId }
     var renaming by rememberSaveable(unit.id) { mutableStateOf(false) }
     var why by rememberSaveable(unit.id) { mutableStateOf(false) }
+    var cutaway by rememberSaveable(unit.id) { mutableStateOf(false) }
     var sensor by rememberSaveable(unit.id) { mutableStateOf(Sensor.Moisture) }
     var range by rememberSaveable(unit.id) { mutableIntStateOf(0) }
     val uri = rememberSafeUriHandler()
+    val linkedCycle = state.garden?.plants?.firstOrNull { it.unitId == unit.id && it.endedOn == null }
+    val species = remember(linkedCycle?.species, unit.crop) {
+        linkedCycle?.let { SpeciesCatalog.byCode(it.species) } ?: SpeciesCatalog.ofCrop(unit.crop)
+    }
+    val cycleDays = remember(linkedCycle?.plantedOn) {
+        linkedCycle?.let { java.time.temporal.ChronoUnit.DAYS.between(it.plantedOn, java.time.LocalDate.now()).toInt().coerceAtLeast(1) } ?: 35
+    }
+    LaunchedEffect(unit.id, state.demo, state.email, state.busy) {
+        if (!state.demo && state.email.isNotBlank() && !state.busy && state.careUnitId != unit.id) {
+            model.loadCareJournal(unit.id)
+        }
+    }
     val weather = state.weather.takeIf { state.weatherSiteId == state.weatherSite?.id }
     val outdoor = state.weatherSite?.placement?.let { it != "indoor" } == true
     val hour = weather?.at?.substring(11, 13)?.toIntOrNull() ?: java.time.LocalTime.now().hour
@@ -359,8 +391,38 @@ private data class Quad(val path: String, val color: Color, val title: String, v
             Text(if (state.demo) "Data sintetis" else "Diperbarui ${ago(h.at, now).lowercase(ID)}", Modifier.fillMaxWidth().padding(top = 8.dp),
                 style = T.footnote, color = p.secondary, textAlign = TextAlign.Center)
         }
+        item(key = "stage-title") { SectionTitle("Kondisi pot") }
+        item(key = "stage") {
+            Panel {
+                PlantScene(
+                    Modifier.fillMaxWidth().height(232.dp),
+                    onion = species.speciesId == 2,
+                    speciesId = species.speciesId,
+                    moisture = h.moisture,
+                    cutaway = cutaway,
+                    day = cycleDays,
+                    interactive = true,
+                    daylight = if (outdoor) weather?.condition != "malam" else null,
+                    cloudy = weather?.condition in listOf("berawan", "mendung", "hujan"),
+                )
+                ToggleCell("Lihat akar & media", cutaway, { cutaway = it })
+                Text("Ketuk daun untuk melihat respons pot.", style = T.footnote, color = p.secondary)
+            }
+        }
         item(key = "advice-title") { SectionTitle("Saran") }
         item(key = "advice") { Advice(state, unit) { why = true } }
+        if (!species.curated) {
+            item(key = "learning-title") { SectionTitle("Mode belajar") }
+            item(key = "learning") {
+                val journal = state.careJournal.filter { it.unitId == unit.id }
+                val (summary, lastCheck) = remember(species.name, state.history, journal) {
+                    ObservationEngine.fromHistory(species.name, state.history, journal)
+                }
+                ModeBelajarCard(species.name, summary, lastCheck, state.busy) { picked ->
+                    logLearningCheck(model, unit.id, picked)
+                }
+            }
+        }
         item(key = "readings-title") { SectionTitle("Bacaan") }
         item(key = "readings") {
             Group(inset = 60.dp, footer = product?.let { "Perangkat ${it.serial} · bacaan tiap 30 menit" }) {

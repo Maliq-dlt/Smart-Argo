@@ -39,6 +39,11 @@ class SessionStore(private val context: Context, endpoint: String, private val k
     fun rewardRequest(email: String, itemId: String): String = requestIdentity(email,itemId,"reward")
     fun explanationRequest(email: String, unitId: String, deviceId: String, question: String): String =
         requestIdentity(email,"$unitId:$deviceId:$question","explanation")
+    /** Preserves the caller-owned request UUID across retries of an identical payload, including process death. */
+    fun payloadRequest(email: String, kind: String, key: String, payloadHash: String): String =
+        requestIdentity(email, "$key:$payloadHash", kind)
+    fun finishPayloadRequest(email: String, kind: String, key: String, payloadHash: String) =
+        finishRequest(email, "$key:$payloadHash", kind)
     private fun requestIdentity(email: String, key: String, kind: String): String {
         val file = requestFile(email,key,kind)
         val atomic = android.util.AtomicFile(file)
@@ -59,8 +64,11 @@ class SessionStore(private val context: Context, endpoint: String, private val k
             return value
         }
         if(file.exists() || File(file.path+".copy").exists()) throw ApiFailure(
-            if(kind=="reward") "Identitas reservasi di HP rusak. Periksa penukaran di website sebelum membuat permintaan baru."
-            else "Identitas penjelasan tersimpan rusak. Tidak ada permintaan baru dikirim.",code="request_identity_corrupt")
+            when (kind) {
+                "reward" -> "Identitas reservasi di HP rusak. Periksa penukaran di website sebelum membuat permintaan baru."
+                "explanation" -> "Identitas penjelasan tersimpan rusak. Tidak ada permintaan baru dikirim."
+                else -> "Identitas permintaan tersimpan rusak. Tidak ada permintaan baru dikirim."
+            }, code="request_identity_corrupt")
         val id = java.util.UUID.randomUUID().toString()
         val backup = mirror.startWrite()
         try { backup.write(id.toByteArray(Charsets.UTF_8));mirror.finishWrite(backup) }
@@ -100,4 +108,14 @@ private fun androidSessionKey(): SecretKey {
         init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
     }.generateKey()
+}
+
+internal fun payloadHash(vararg parts: Any?): String {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    parts.forEach { part ->
+        val bytes = (part?.toString() ?: "\u0000").toByteArray(Charsets.UTF_8)
+        digest.update("${bytes.size}:".toByteArray(Charsets.UTF_8))
+        digest.update(bytes)
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
 }

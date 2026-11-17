@@ -24,7 +24,7 @@ function nodes() {
 }
 async function tap(label, { scrolls = 6 } = {}) {
   for (let i = 0; i <= scrolls; i++) {
-    const hit = nodes().find(n => (n.text === label || n.desc === label || n.text.startsWith(label)) && (n.y < 1900 || ['Akun', 'Coba mode latihan'].includes(label)));
+    const hit = nodes().find(n => (n.text === label || n.desc === label || n.text.startsWith(label)) && (n.y < 1900 || ['Aktivitas', 'Akun', 'Coba mode latihan'].includes(label)));
     if (hit) { adb('shell', 'input', 'tap', hit.x, hit.y); await sleep(1200); return; }
     adb('shell', 'input', 'swipe', '540', '1700', '540', '900', '400'); await sleep(700);
   }
@@ -40,6 +40,11 @@ const scroll = async () => { adb('shell', 'input', 'swipe', '540', '1800', '540'
 async function tour(tag) {
   adb('shell', 'am', 'force-stop', 'id.smartagro.app');
   adb('shell', 'am', 'start', '-n', 'id.smartagro.app/.MainActivity'); await sleep(3500);
+  // Signed-out pages only: nothing is submitted, because the debug build talks to the production backend.
+  await shot(`${tag}-00a-masuk`);
+  await tap('Daftar'); await shot(`${tag}-00b-daftar`);
+  await tap('Masuk'); await tap('Lupa kata sandi?'); await shot(`${tag}-00c-lupa-sandi`);
+  adb('shell', 'input', 'keyevent', 'KEYCODE_BACK'); await sleep(1200);
   // A tap during the first frames can be lost, so retry until the plants screen is there.
   for (let attempt = 0; attempt < 4 && !nodes().some(n => n.text === 'Tanaman saya'); attempt++) {
     await tap('Coba mode latihan'); // scrolls the sign-in page when the button is below the fold
@@ -52,7 +57,9 @@ async function tour(tag) {
   await scroll(); await shot(`${tag}-03-detail-bawah`);
   await scroll(); await shot(`${tag}-04-detail-akhir`);
   adb('shell', 'input', 'keyevent', 'KEYCODE_BACK'); await sleep(1200);
-  await tap('Akun'); await shot(`${tag}-05-akun`);
+  await tap('Aktivitas'); await shot(`${tag}-05-aktivitas`);
+  await tap('Jurnal'); await shot(`${tag}-06-aktivitas-jurnal`);
+  await tap('Akun'); await shot(`${tag}-07-akun`);
 }
 
 const theme = mode => adb('shell', 'cmd', 'uimode', 'night', mode);

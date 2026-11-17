@@ -79,11 +79,16 @@ class AccountWorkflowsTest {
         reply("/auth/v1/user",user(true),"GET")
         assertFalse(account.verifySignupCode("grower@example.test","123456"));assertNull(api.session);assertNull(store.read());assertNotNull(api.pendingSession)
     }
-    @Test fun resetPkceNeverPublishesRecoverySessionAndRetriesPasswordWrite() = runBlocking {
-        reply("/auth/v1/recover?redirect_to=https%3A%2F%2Fexample.test%2Freset") { body,_->assertEquals("s256",body.getString("code_challenge_method")) }
-        account.requestPasswordReset("grower@example.test","https://example.test/reset")
-        reply("/auth/v1/token?grant_type=pkce",token("recovery-only")) { body,_->assertEquals("returned-code",body.getString("auth_code"));assertEquals(43,body.getString("code_verifier").length) }
-        account.beginPasswordReset("returned-code");assertTrue(account.resetting);assertNull(api.session);assertNull(store.read())
+    private fun verifyRecovery(json: JSONObject=token("recovery-only"))=reply("/auth/v1/verify",json) { body,auth->
+        assertNull(auth);assertEquals("recovery",body.getString("type"));assertEquals("grower@example.test",body.getString("email"));assertEquals("123456",body.getString("token"))
+    }
+    @Test fun resetCodeNeverPublishesRecoverySessionAndRetriesPasswordWrite() = runBlocking {
+        // PKCE only keeps the email's web link free of tokens; the app itself verifies the 6-digit code.
+        reply("/auth/v1/recover") { body,_->assertEquals("s256",body.getString("code_challenge_method"));assertEquals("grower@example.test",body.getString("email")) }
+        account.requestPasswordReset(" grower@example.test ")
+        assertTrue(account.resetting);assertFalse(account.recovered)
+        verifyRecovery()
+        account.beginPasswordReset("123456");assertTrue(account.recovered);assertNull(api.session);assertNull(store.read())
         reply("/auth/v1/user",method="PUT",status=503) { _,auth->assertEquals("Bearer recovery-only",auth) }
         try { account.setRecoveredPassword("new-password-123");fail("Expected outage") } catch (_: ApiFailure) { }
         assertTrue(account.resetting);assertNull(store.read())
@@ -92,10 +97,10 @@ class AccountWorkflowsTest {
         assertEquals(PasswordResetResult.PasswordChanged,account.setRecoveredPassword("new-password-123"));assertFalse(account.resetting);assertNull(api.session);assertNull(store.read())
     }
     @Test fun passwordChangedRemainsSuccessfulWhenRecoveryLogoutIsUnconfirmed() = runBlocking {
-        reply("/auth/v1/recover?redirect_to=https%3A%2F%2Fexample.test%2Freset")
-        account.requestPasswordReset("grower@example.test","https://example.test/reset")
-        reply("/auth/v1/token?grant_type=pkce",token("recovery-only"))
-        account.beginPasswordReset("returned-code")
+        reply("/auth/v1/recover")
+        account.requestPasswordReset("grower@example.test")
+        verifyRecovery()
+        account.beginPasswordReset("123456")
         reply("/auth/v1/user",user(),"PUT") { body,auth->
             assertEquals("new-password-123",body.getString("password"));assertEquals("Bearer recovery-only",auth)
         }
@@ -103,7 +108,7 @@ class AccountWorkflowsTest {
         assertEquals(PasswordResetResult.PasswordChangedLogoutUnconfirmed,account.setRecoveredPassword("new-password-123"))
         assertFalse(account.resetting);assertNull(api.session);assertNull(store.read())
         try { account.setRecoveredPassword("new-password-123");fail("Recovery must be cleared") } catch (_: ApiFailure) { }
-        try { account.beginPasswordReset("returned-code");fail("Verifier must be cleared") } catch (_: ApiFailure) { }
+        try { account.beginPasswordReset("123456");fail("Reset must be cleared") } catch (_: ApiFailure) { }
     }
     @Test fun enrollmentAndVerificationRejectCrossAccountResponse() = runBlocking {
         login()
@@ -146,23 +151,25 @@ class AccountWorkflowsTest {
     }
 
     @Test fun resetRejectsExpiredOrDifferentAccountAndNeverStoresEither() = runBlocking {
-        reply("/auth/v1/recover?redirect_to=https%3A%2F%2Fexample.test%2Freset")
-        account.requestPasswordReset("grower@example.test","https://example.test/reset")
-        reply("/auth/v1/token?grant_type=pkce",token().put("expires_at",Instant.now().epochSecond-1))
-        try { account.beginPasswordReset("expired");fail("Expired recovery") } catch (_: IllegalArgumentException) { }
-        assertNull(api.session);assertNull(store.read())
-        reply("/auth/v1/token?grant_type=pkce",token().put("user",user().put("email","other@example.test")))
-        try { account.beginPasswordReset("wrong-user");fail("Wrong recovery account") } catch (_: IllegalArgumentException) { }
+        reply("/auth/v1/recover")
+        account.requestPasswordReset("grower@example.test")
+        verifyRecovery(token().put("expires_at",Instant.now().epochSecond-1))
+        try { account.beginPasswordReset("123456");fail("Expired recovery") } catch (_: IllegalArgumentException) { }
+        assertNull(api.session);assertNull(store.read());assertFalse(account.recovered)
+        verifyRecovery(token().put("user",user().put("email","other@example.test")))
+        try { account.beginPasswordReset("123456");fail("Wrong recovery account") } catch (_: IllegalArgumentException) { }
         account.cancelPasswordReset();assertFalse(account.resetting);assertNull(store.read())
     }
 
-    @Test fun failedResetDeliveryKeepsSameVerifierForSafeRetry() = runBlocking {
-        var challenge=""
-        reply("/auth/v1/recover?redirect_to=https%3A%2F%2Fexample.test%2Freset",status=503) { body,_->challenge=body.getString("code_challenge") }
-        try { account.requestPasswordReset("grower@example.test","https://example.test/reset");fail("Delivery response failed") } catch (_: ApiFailure) { }
+    @Test fun resetCodeNeedsARequestAndSixDigitsAndSurvivesAnUnconfirmedDelivery() = runBlocking {
+        try { account.beginPasswordReset("123456");fail("No reset requested") } catch (_: ApiFailure) { }
+        // The email may have gone out even when the response was lost, so its code stays usable.
+        reply("/auth/v1/recover",status=503)
+        try { account.requestPasswordReset("grower@example.test");fail("Delivery response failed") } catch (_: ApiFailure) { }
         assertTrue(account.resetting)
-        reply("/auth/v1/recover?redirect_to=https%3A%2F%2Fexample.test%2Freset") { body,_->assertEquals(challenge,body.getString("code_challenge")) }
-        account.requestPasswordReset("grower@example.test","https://example.test/reset")
+        try { account.beginPasswordReset("12ab56");fail("Malformed code") } catch (_: IllegalArgumentException) { }
+        verifyRecovery()
+        account.beginPasswordReset("123456");assertTrue(account.recovered)
         account.cancelPasswordReset();assertFalse(account.resetting);assertNull(store.read())
     }
 

@@ -58,7 +58,8 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
                 if (status !in 200..299 || json == null || json.opt("ok") == false) {
                     val expired = token != null && token == session?.accessToken &&
                         (status == 401 || json?.optString("code") in listOf("unauthorized", "invalid_session"))
-                    throw ApiFailure(friendlyError(status, json), expired, json?.optString("code"), status)
+                    // GoTrue puts its name in error_code (code is the HTTP number); PostgREST and functions use code.
+                    throw ApiFailure(friendlyError(status, json), expired, json?.optString("error_code")?.ifEmpty { null } ?: json?.optString("code"), status)
                 }
                 json
             } finally { connection.disconnect() }
@@ -165,7 +166,7 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
         }
     }
     suspend fun rpc(name: String, body: JSONObject = JSONObject()): JSONObject {
-        require(name in setOf("ensure_my_account", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden", "my_device_units", "unit_explanations", "add_my_site", "plant_in_my_slot", "switch_my_plant", "append_my_care_journal", "read_my_care_journal", "read_my_measurement_history", "compare_my_measurement_history", "security_workspace", "create_my_recovery_codes", "my_recovery_codes_status", "issue_activation_nonce", "create_transfer_offer", "cancel_transfer_offer", "accept_transfer", "open_ownership_recovery", "withdraw_ownership_recovery", "my_ownership_recoveries", "open_reward_appeal", "my_reward_cases", "energy_workspace", "set_slot_sharing", "share_my_cycle", "unshare_my_cycle", "community_knowledge"))
+        require(name in setOf("ensure_my_account", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "archive_my_unit", "restore_my_unit", "place_my_device", "my_unit_history", "product_public_status", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden", "my_device_units", "unit_explanations", "add_my_site", "plant_in_my_slot", "switch_my_plant", "append_my_care_journal", "read_my_care_journal", "read_my_measurement_history", "compare_my_measurement_history", "security_workspace", "create_my_recovery_codes", "my_recovery_codes_status", "issue_activation_nonce", "create_transfer_offer", "cancel_transfer_offer", "accept_transfer", "open_ownership_recovery", "withdraw_ownership_recovery", "my_ownership_recoveries", "open_reward_appeal", "my_reward_cases", "energy_workspace", "set_slot_sharing", "share_my_cycle", "unshare_my_cycle", "community_knowledge"))
         refresh()
         return request("/rest/v1/rpc/$name", body, session!!.accessToken)
     }
@@ -173,6 +174,14 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
         require(path == "/functions/v1/product-claim") { "Fungsi akun tidak didukung." }
         refresh()
         return request(path, body, session!!.accessToken)
+    }
+    internal suspend fun <T> withIdempotentRequest(kind: String, key: String, hash: String, block: suspend (String) -> T): T {
+        refresh()
+        val email = requireNotNull(session).email
+        val requestId = withContext(Dispatchers.IO) { store.payloadRequest(email, kind, key, hash) }
+        val result = block(requestId)
+        withContext(Dispatchers.IO) { store.finishPayloadRequest(email, kind, key, hash) }
+        return result
     }
     suspend fun weather(latitude: Double, longitude: Double): WeatherSnapshot {
         require(latitude.isFinite() && longitude.isFinite() && latitude in -90.0..90.0 && longitude in -180.0..180.0) { "Koordinat kebun tidak valid." }
@@ -271,6 +280,10 @@ internal fun friendlyError(status: Int, json: JSONObject?): String {
     return when {
         "invalid login credentials" in detail || "invalid_credentials" in detail -> "Email atau kata sandi salah. Coba periksa kembali."
         "email not confirmed" in detail || "email_not_confirmed" in detail -> "Konfirmasi email Anda terlebih dahulu, lalu masuk kembali."
+        "user_already_exists" in detail || "email_exists" in detail -> "Email ini sudah terdaftar. Silakan masuk."
+        "weak_password" in detail -> "Kata sandi minimal 10 karakter."
+        "otp_expired" in detail -> "Kode salah atau sudah kedaluwarsa. Periksa email terbaru, atau minta kode baru."
+        "over_email_send_rate_limit" in detail -> "Email baru saja dikirim. Tunggu sebentar sebelum meminta lagi."
         "mfa" in detail || "verification" in detail || "otp" in detail -> "Kode verifikasi tidak berlaku. Gunakan kode terbaru dari autentikator."
         status == 429 -> "Terlalu banyak percobaan. Tunggu sebentar, lalu coba lagi."
         status == 401 || "refresh_token" in detail -> "Sesi berakhir. Silakan masuk kembali."

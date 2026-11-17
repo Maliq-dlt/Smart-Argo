@@ -136,6 +136,14 @@ class ModelsTest {
         assertEquals("Masukkan kode autentikator terbaru, lalu konfirmasi kembali.",friendlyError(200,JSONObject().put("code","step_up_required")))
         assertFalse(friendlyError(200,JSONObject().put("code","insufficient_points")).contains("gagal"))
     }
+    @Test fun authErrorsFromGoTrueReadAsTheirCauseNotAsAConnectionProblem() {
+        fun gotrue(status: Int, name: String, msg: String) = friendlyError(status, JSONObject().put("code", status).put("error_code", name).put("msg", msg))
+        assertEquals("Email ini sudah terdaftar. Silakan masuk.", gotrue(422, "user_already_exists", "User already registered"))
+        assertEquals("Kata sandi minimal 10 karakter.", gotrue(422, "weak_password", "Password should be at least 10 characters."))
+        // An expired email code is not an authenticator problem.
+        assertTrue(gotrue(403, "otp_expired", "Token has expired or is invalid").contains("email"))
+        assertTrue(gotrue(429, "over_email_send_rate_limit", "email rate limit exceeded").contains("Tunggu"))
+    }
 
     @Test fun newAlertsAndSensorsDoNotHideKnownReadings() {
         val sensor = JSONObject().put("sensor_id","moisture").put("quality_status","ok").put("value_nullable",50).put("measured_at","2026-11-15T00:00:00Z")

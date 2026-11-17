@@ -6,7 +6,8 @@ import * as P from '@phosphor-icons/react/dist/ssr'
 const want = ['Plant','Plant:fill','Notebook','Notebook:fill','UserCircle','UserCircle:fill','Drop','Drop:fill','Thermometer','Flask','CaretRight:bold','CaretLeft:bold',
  'Plus:bold','DotsThree:bold','CloudRain','Cloud','CloudSun','Sun','Moon','QrCode','ShieldCheck','Key','ClockCounterClockwise','Medal','Lightning','LinkSimple','SignOut',
  'Check:bold','CheckCircle:fill','Warning:fill','Info','PencilSimple','ArrowsClockwise','UsersThree','DownloadSimple','ChartLine','X:bold','Sparkle','Package','MapPin',
- 'Wind','GoogleLogo','EnvelopeSimple','LockSimple','Eye','EyeSlash','SquaresFour','Swatches','MagnifyingGlass','CloudLightning','ArrowUpRight','Leaf']
+ 'Wind','GoogleLogo','EnvelopeSimple','LockSimple','Eye','EyeSlash','SquaresFour','Swatches','MagnifyingGlass','CloudLightning','ArrowUpRight','Leaf',
+ 'Camera','Image','Copy','Archive','ArrowCounterClockwise','ArrowsLeftRight','ShareNetwork','Trash','SlidersHorizontal','Keyhole','ShieldWarning']
 let kt = 'package id.smartagro.app\n\n// Generated from Phosphor Icons 2.1 (MIT, phosphoricons.com) path data; 256-unit viewport. Do not edit by hand.\ninternal object PhosphorPaths {\n'
 const odd = []
 for (const spec of want) {

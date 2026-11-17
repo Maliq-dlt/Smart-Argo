@@ -3,8 +3,6 @@ package id.smartagro.app
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
-import java.net.URI
-import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
@@ -22,10 +20,11 @@ enum class PasswordResetResult { PasswordChanged, PasswordChangedLogoutUnconfirm
 class AccountWorkflows(private val api: AgroApi) {
     private val lock = Mutex()
     private var signupVerifier: String? = null
-    private var resetVerifier: String? = null
     private var resetEmail: String? = null
     private var recovery: Session? = null
-    val resetting: Boolean get() = resetVerifier != null || recovery != null
+    val resetting: Boolean get() = resetEmail != null || recovery != null
+    /** The emailed code was accepted; only the new password is still missing. */
+    val recovered: Boolean get() = recovery != null
 
     suspend fun signup(email: String, password: String, name: String): SignupResult = lock.withLock {
         signedOut()
@@ -63,37 +62,34 @@ class AccountWorkflows(private val api: AgroApi) {
         signupVerifier = null
         api.acceptLogin(result,version)
     }
-    /** returnTo is a trusted app URL, also checked by Supabase Auth's configured redirect allowlist. */
-    suspend fun requestPasswordReset(email: String, returnTo: String) = lock.withLock {
+    /**
+     * Emails a 6-digit code (template `recovery.html`). The PKCE challenge is sent only so the same email's website
+     * link never carries tokens; GoTrue accepts the code for a PKCE request too (`isOtpValid`, auth v2.197).
+     */
+    suspend fun requestPasswordReset(email: String) = lock.withLock {
         signedOut()
-        val uri = URI(returnTo)
-        require(returnTo.length <= 2048 && uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) { "Alamat kembali reset tidak valid." }
         val address = email(email)
-        val next = resetVerifier?.takeIf { resetEmail == address } ?: verifier()
-        // Retain before HTTP: an interrupted response may still have sent the email. Same-address retries reuse PKCE.
-        resetVerifier = next
+        // Kept before HTTP: an interrupted response may still have sent the email, and its code must stay usable.
         resetEmail = address
         recovery = null
-        api.request("/auth/v1/recover?redirect_to=" + URLEncoder.encode(returnTo, "UTF-8"), JSONObject().put("email", email(email))
-            .put("code_challenge", challenge(next)).put("code_challenge_method", "s256"))
+        api.request("/auth/v1/recover", JSONObject().put("email", address).put("code_challenge", challenge(verifier())).put("code_challenge_method", "s256"))
     }
     suspend fun beginPasswordReset(code: String) = lock.withLock {
         signedOut()
-        val verifier = resetVerifier ?: throw ApiFailure("Reset tidak dimulai di aplikasi ini. Minta tautan baru.")
-        val result = Session.parse(exchange(code, verifier))
-        check(resetVerifier == verifier) { "Reset sandi sudah dibatalkan." }
+        val address = resetEmail ?: throw ApiFailure("Minta kode reset terlebih dahulu.")
+        val result = Session.parse(api.request("/auth/v1/verify", JSONObject().put("type", "recovery").put("email", address).put("token", otp(code))))
+        check(resetEmail == address) { "Reset sandi sudah dibatalkan." }
         signedOut()
-        require(result.email.equals(resetEmail, ignoreCase=true)) { "Akun reset tidak sesuai." }
-        require(result.expiresAt > Instant.now().epochSecond) { "Tautan reset sudah kedaluwarsa." }
-        resetVerifier = null
+        require(result.email.equals(address, ignoreCase=true)) { "Akun reset tidak sesuai." }
+        require(result.expiresAt > Instant.now().epochSecond) { "Kode reset sudah kedaluwarsa. Minta kode baru." }
         recovery = result
     }
     /** On success the owner signs in normally, including 2FA; a recovery link never opens account data here. */
     suspend fun setRecoveredPassword(password: String) = lock.withLock {
         signedOut()
         password(password)
-        val candidate = recovery ?: throw ApiFailure("Buka tautan reset sebelum mengganti sandi.")
-        require(candidate.expiresAt > Instant.now().epochSecond) { "Sesi reset sudah kedaluwarsa. Minta tautan baru." }
+        val candidate = recovery ?: throw ApiFailure("Masukkan kode reset sebelum mengganti sandi.")
+        require(candidate.expiresAt > Instant.now().epochSecond) { "Sesi reset sudah kedaluwarsa. Minta kode baru." }
         api.request("/auth/v1/user", JSONObject().put("password", password), candidate.accessToken, "PUT")
         recovery = null
         resetEmail = null
@@ -105,7 +101,7 @@ class AccountWorkflows(private val api: AgroApi) {
             PasswordResetResult.PasswordChangedLogoutUnconfirmed
         }
     }
-    fun cancelPasswordReset() { resetVerifier = null; resetEmail = null; recovery = null }
+    fun cancelPasswordReset() { resetEmail = null; recovery = null }
     suspend fun setPassword(password: String) = lock.withLock {
         password(password)
         val token = active().accessToken

@@ -1,7 +1,15 @@
 package id.smartagro.app
 
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,6 +81,16 @@ private fun Modifier.glassOver(state: HazeState?, p: Palette): Modifier =
 // ---------------------------------------------------------------- Navigation
 
 /**
+ * The iOS navigation stack: a pushed screen slides in from the trailing edge on a critically damped spring while the
+ * old one drifts a quarter width and dims to 40 % (never to nothing, so no frame is blank); a pop reverses it.
+ */
+fun <S> AnimatedContentTransitionScope<S>.stack(forward: Boolean): ContentTransform {
+    val push = spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = IntOffset.VisibilityThreshold)
+    return if (forward) slideInHorizontally(push) { it } togetherWith (slideOutHorizontally(push) { -it / 4 } + fadeOut(tween(260), .4f))
+    else ((slideInHorizontally(push) { -it / 4 } + fadeIn(tween(220), .4f)) togetherWith slideOutHorizontally(push) { it }).apply { targetContentZIndex = -1f }
+}
+
+/**
  * A navigation bar: back button with the previous screen's name, an inline title that appears once the large title
  * has scrolled away, and trailing actions. Glass only when content is under it (HIG materials: navigation layer only).
  */
@@ -84,7 +102,7 @@ private fun Modifier.glassOver(state: HazeState?, p: Palette): Modifier =
         Box(Modifier.matchParentSize().graphicsLayer { alpha = glass }.glassOver(haze, p)
             .drawBehind { drawLine(p.separator, Offset(0f, size.height), Offset(size.width, size.height), 1f) })
         Box(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 52.dp).padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
-            if (progress > .01f) Text(title, Modifier.padding(horizontal = if (back != null) 112.dp else 64.dp).graphicsLayer { alpha = progress },
+            if (progress > .01f) Text(title, Modifier.padding(start = if (back != null) 128.dp else 64.dp, end = 64.dp).graphicsLayer { alpha = progress },
                 style = T.headline.copy(fontSize = capped(17)), color = p.ink, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 if (back != null && onBack != null) BackButton(back, onBack)
@@ -295,8 +313,8 @@ data class TabItem(val label: String, val path: String, val selectedPath: String
             Box(Modifier.weight(1f).heightIn(min = 40.dp).selectable(on, interactionSource = null, indication = null, role = Role.RadioButton) {
                 if (!on) { haptics.tick(); onSelect(index) }
             }.padding(horizontal = 6.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
-                Text(label, style = T.subhead.copy(fontWeight = if (on) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
-                    color = p.ink, textAlign = TextAlign.Center)
+                Text(label, style = T.subhead.copy(fontSize = capped(15, 1.3f), lineHeight = capped(18, 1.3f), fontWeight = if (on) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
+                    color = p.ink, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
