@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -44,13 +46,16 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -64,6 +69,7 @@ import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.Instant
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private val ID = Locale.forLanguageTag("id-ID")
 internal fun percent(value: Double?) = value?.let { String.format(ID, "%.0f%%", it) } ?: "—"
@@ -174,7 +180,7 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     val activeUnit = visible.getOrNull(activeIndex)
 
     // Optional calm 8-second auto-cycle between registered plants (never runs under reduced motion; stops on manual touch).
-    LaunchedEffect(autoRotate, visible.size, activeIndex, reduced) {
+    LaunchedEffect(autoRotate, visible, activeIndex, reduced) {
         if (!autoRotate || visible.size <= 1 || reduced) return@LaunchedEffect
         delay(8_000)
         val next = visible[(activeIndex + 1) % visible.size]
@@ -211,7 +217,8 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                         activeIndex = activeIndex,
                         healths = healths,
                         autoRotate = autoRotate && !reduced,
-                        onToggleAuto = { if (!reduced) { haptics.tick(); autoRotate = !autoRotate } },
+                        onToggleAuto = if (reduced) null else ({ haptics.tick(); autoRotate = !autoRotate }),
+                        onPauseAuto = { autoRotate = false },
                         onPromote = promoteUnit,
                         onOpen = { autoRotate = false; model.openUnit(it) },
                         onOpenHistory = { autoRotate = false; model.openHistoryFor(it, Sensor.Moisture) },
@@ -400,7 +407,8 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     activeIndex: Int,
     healths: Map<String, Health>,
     autoRotate: Boolean,
-    onToggleAuto: () -> Unit,
+    onToggleAuto: (() -> Unit)?,
+    onPauseAuto: () -> Unit,
     onPromote: (PlantUnit) -> Unit,
     onOpen: (PlantUnit) -> Unit,
     onOpenHistory: (PlantUnit) -> Unit,
@@ -416,6 +424,8 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     var cardBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var dragAccum by remember { mutableFloatStateOf(0f) }
+    val pauseAuto by rememberUpdatedState(onPauseAuto)
+    val promote by rememberUpdatedState(onPromote)
 
     val linkedCycle = state.garden?.plants?.firstOrNull { it.unitId == active.id && it.endedOn == null }
     val species = remember(linkedCycle?.species, active.crop) {
@@ -439,16 +449,20 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                     Modifier
                         .clip(RoundedCornerShape(50))
                         .background(if (autoRotate) p.tint else p.fill)
-                        .clickable(role = Role.Switch) { onToggleAuto() }
+                        .clickable(enabled = onToggleAuto != null, role = Role.Switch) { onToggleAuto?.invoke() }
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                         .semantics(mergeDescendants = true) {
-                            stateDescription = if (autoRotate) "Aktif" else "Nonaktif"
+                            stateDescription = when {
+                                 onToggleAuto == null -> "Gerakan dikurangi"
+                                 autoRotate -> "Aktif"
+                                 else -> "Nonaktif"
+                             }
                         },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     Icon(icon(PhosphorPaths.ArrowsClockwise), null, Modifier.size(13.dp), tint = if (autoRotate) p.onTint else p.secondary)
-                    Text("Putar otomatis", style = T.caption, color = if (autoRotate) p.onTint else p.ink, maxLines = 1)
+                    Text(if (onToggleAuto == null) "Gerakan dikurangi" else "Putar otomatis", style = T.caption, color = if (autoRotate) p.onTint else p.ink, maxLines = 1)
                 }
             }
         }
@@ -625,14 +639,20 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                     .onGloballyPositioned { cardBounds = it.boundsInWindow() }
                     .shadow(16.dp, RoundedCornerShape(28.dp), ambientColor = p.shadow, spotColor = p.shadow)
                     .zoom("unit-${active.id}")
-                    .pointerInput(units, activeIndex) {
+                    .pointerInput(Unit) {
+                         awaitEachGesture {
+                             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                             pauseAuto()
+                         }
+                     }
+                     .pointerInput(units, activeIndex) {
                         if (units.size <= 1) return@pointerInput
                         detectHorizontalDragGestures(
                             onDragStart = { dragAccum = 0f },
                             onHorizontalDrag = { _, amount -> dragAccum += amount },
                             onDragEnd = {
-                                if (dragAccum < -64f) onPromote(units[(activeIndex + 1) % units.size])
-                                else if (dragAccum > 64f) onPromote(units[(activeIndex - 1 + units.size) % units.size])
+                                if (dragAccum < -64.dp.toPx()) promote(units[(activeIndex + 1) % units.size])
+                                else if (dragAccum > 64.dp.toPx()) promote(units[(activeIndex - 1 + units.size) % units.size])
                                 dragAccum = 0f
                             },
                             onDragCancel = { dragAccum = 0f },
@@ -1018,6 +1038,11 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
 
 // ---------------------------------------------------------------- Peak Chart (smooth monotone cubic Bezier + steady halo)
 
+internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int): Int {
+    val span = (width - 2 * inset).coerceAtLeast(1f)
+    return (((x - inset) / span) * (count - 1)).roundToInt().coerceIn(0, count - 1)
+}
+
 /**
  * Interactive Peak Chart (ported from @louisstudios/components/peak-chart):
  * smooth monotone cubic Bezier spline, ambient sage card gradient, steady concentric halo marker (no blink/pulse),
@@ -1073,6 +1098,19 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
     val activeIdx = scrubIdx ?: syncedIdx ?: points.lastIndex
     val shown = points[activeIdx]
     val isPinned = scrubIdx != null || syncedIdx != null
+    val currentSelection by rememberUpdatedState(syncedIdx)
+    val selectReading by rememberUpdatedState(onSelect)
+    val chartInset = 6.dp
+    fun selectSample(index: Int) {
+        haptics.tick()
+        val listener = selectReading
+        if (listener == null) {
+            scrubIdx = index
+        } else {
+            scrubIdx = null
+            listener(points[index])
+        }
+    }
 
     Column(
         modifier
@@ -1110,15 +1148,6 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
             }
         }
 
-        fun indexAt(x: Float, width: Float): Int = ((x / width.coerceAtLeast(1f)) * (points.size - 1)).toInt().coerceIn(0, points.lastIndex)
-        fun pickPoint(i: Int) {
-            if (scrubIdx != i) {
-                scrubIdx = i
-                haptics.tick()
-                onSelect?.invoke(points[i])
-            }
-        }
-
         val dashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f) }
         Canvas(
             Modifier
@@ -1127,11 +1156,12 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
                 .padding(top = 12.dp)
                 .pointerInput(points) {
                     detectTapGestures(onTap = { pos ->
-                        val i = indexAt(pos.x, size.width.toFloat())
+                        val i = chartSampleIndex(pos.x, size.width.toFloat(), chartInset.toPx(), points.size)
+                        val listener = selectReading
                         haptics.tick()
-                        if (onSelect != null) {
+                        if (listener != null) {
                             scrubIdx = null
-                            onSelect(if (syncedIdx == i) null else points[i])
+                            listener(if (currentSelection == i) null else points[i])
                         } else {
                             scrubIdx = if (scrubIdx == i) null else i
                         }
@@ -1139,21 +1169,38 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
                 }
                 .pointerInput(points) {
                     detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (onSelect == null) scrubIdx = null
-                            else scrubIdx = null
-                        },
+                        onDragEnd = { if (selectReading != null) scrubIdx = null },
                         onDragCancel = { scrubIdx = null },
                     ) { change, _ ->
-                        pickPoint(indexAt(change.position.x, size.width.toFloat()))
+                        val i = chartSampleIndex(change.position.x, size.width.toFloat(), chartInset.toPx(), points.size)
+                        if (scrubIdx != i) {
+                            scrubIdx = i
+                            haptics.tick()
+                            selectReading?.invoke(points[i])
+                        }
                     }
                 }
                 .semantics {
                     contentDescription = "${sensor.label}: terendah ${reading(sensor, minVal)}, puncak ${reading(sensor, peakVal)}, terakhir ${reading(sensor, values.last())}"
+                    stateDescription = "Sampel ${activeIdx + 1} dari ${points.size}, ${time(shown.at)}, ${reading(sensor, shown.value)}"
+                    customActions = buildList {
+                        if (activeIdx > 0) {
+                            add(CustomAccessibilityAction("Sampel sebelumnya") {
+                                selectSample(activeIdx - 1)
+                                true
+                            })
+                        }
+                        if (activeIdx < points.lastIndex) {
+                            add(CustomAccessibilityAction("Sampel berikutnya") {
+                                selectSample(activeIdx + 1)
+                                true
+                            })
+                        }
+                    }
                 },
         ) {
             val padY = 12.dp.toPx()
-            val padX = 6.dp.toPx()
+            val padX = chartInset.toPx()
             val usableW = (size.width - padX * 2).coerceAtLeast(1f)
             val usableH = (size.height - padY * 2).coerceAtLeast(1f)
             fun x(i: Int) = padX + usableW * i / (points.size - 1)

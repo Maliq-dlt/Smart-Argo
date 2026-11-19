@@ -39,7 +39,7 @@ Sesuai arahan pemilik, pekerjaan desain/UI berikutnya diserahkan kepada Claude. 
 
 Alur ini mengikuti endpoint Auth/RPC/Edge yang sudah ada. Tidak menambah dependency, endpoint backend, layar, izin kamera, ataupun integrasi lembar berbagi Android. Request ID untuk tindakan baru harus disimpan pemanggil bersama payload dan dipakai ulang bila hasil jaringan belum pasti. ID permintaan penjelasan kini disimpan otomatis di no-backup storage, termasuk setelah proses berhenti; isi pertanyaan tidak ditulis ke berkas identitas.
 
-Reset sandi mengikuti tautan PKCE pada template server yang tersedia, bukan kode reset email. `AccountWorkflows` yang sama harus menerima tautan kembali; verifier hanya berada di memori. Claude perlu memasang app link yang sesuai allowlist Supabase dan memeriksa origin/path sebelum meneruskan kode. Jika proses mati, minta tautan baru. Setelah sandi berubah, hasil `PasswordChangedLogoutUnconfirmed` berarti pergantian sudah berhasil tetapi logout server belum dapat dikonfirmasi; jangan tampilkan sebagai kegagalan mengganti sandi. Pengguna tetap masuk ulang melalui login/MFA biasa.
+Reset sandi Android menggunakan kode 6 digit dari template `recovery.html`. `AccountWorkflows` mengirim permintaan reset, memverifikasi kode, lalu memakai sesi pemulihan sementara di memori untuk menyimpan sandi baru. Jika proses mati, minta kode baru. Setelah sandi berubah, `PasswordChangedLogoutUnconfirmed` berarti sandi sudah tersimpan dan logout sesi pemulihan belum terkonfirmasi. Pengguna masuk ulang melalui login dan MFA biasa. Layar reset juga menyediakan tautan ke alur web.
 
 CSV dibuat di memori dari RPC terautentikasi, dengan snapshot/cursor tetap, 14 kolom, BOM/CRLF dan pelindung formula. Batasnya 5.000 baris/4 MiB/10 halaman dan timeout coroutine 15 detik; pembacaan HTTP yang blocking dapat baru berhenti setelah timeout koneksi/bacanya. Tidak mengembalikan CSV parsial atau hasil setelah akun berubah. Detail pemanggilan dan pekerjaan layar yang tersisa ada di [HANDOFF.md](HANDOFF.md).
 
@@ -188,9 +188,34 @@ $env:JAVA_HOME = 'C:/path/to/jdk'
 ./android/build.ps1 -Tasks @('testDebugUnitTest','lintDebug','assembleRelease','lintRelease')
 ```
 
-`prepare-release.ps1` membuat key RSA 3072-bit dan password acak lokal di `android/.private/` tanpa mencetak password atau menimpa pasangan yang sudah ada. Folder ini diabaikan Git. **Simpan backup terenkripsi kedua file** (`release.p12` dan `release.properties`) di tempat aman sebelum membagikan APK. File properties memuat password; jangan dikirim bersama source atau APK. Kunci ini merupakan kunci release lokal; proses Google Play App Signing, upload key, pemulihan, dan publikasi belum dilakukan.
+`prepare-release.ps1` membuat key RSA 3072-bit dan password acak lokal di `android/.private/` tanpa mencetak password atau menimpa pasangan yang sudah ada. Folder ini diabaikan Git. **Simpan backup terenkripsi kedua file** (`release.p12` dan `release.properties`) di tempat aman sebelum membagikan APK. File properties memuat password; jangan dikirim bersama source atau APK. Kunci ini merupakan kunci rilis untuk distribusi APK langsung. Google Play App Signing dan upload key belum disiapkan.
 
 Release mengaktifkan R8, resource shrinking, serta `debuggable=false`. Build release berhenti jika signing tidak lengkap; tidak beralih ke debug signing atau APK unsigned. APK: `android/app/build/outputs/apk/release/app-release.apk`. Debug dan release memiliki sertifikat berbeda sehingga pemasangan release di atas debug dengan package sama memerlukan uninstall debug (data lokal hilang); jangan uninstall aplikasi berisi data penting tanpa backup yang sesuai. Mapping R8 tersedia di `android/app/build/outputs/mapping/release/mapping.txt`; simpan bersama versi APK untuk membaca laporan crash.
+
+### Distribusi GitHub v0.1.1
+
+Rilis publik saat ini adalah [`android-v0.1.0`](https://github.com/Maliq-dlt/Smart-Argo/releases/tag/android-v0.1.0), dengan package `id.smartagro.app` dan `versionCode=1`. SHA-256 APK publik adalah `5e94be7acd76ab817281dde7c46188ef9ccc7d67d8ff98f4bf85ab080faec403`. Versi 0.1.1 memakai `versionCode=2` dan sertifikat rilis yang sama agar bisa dipasang sebagai pembaruan.
+
+1. Pakai pasangan signing rilis yang sudah ada dan jalankan build release di atas.
+2. Dari root repository, jalankan verifikasi berikut. Isi `$buildTools` dengan direktori Android SDK Build Tools yang memuat alat tersebut.
+
+   ```powershell
+   $buildTools = 'C:/path/to/Android/Sdk/build-tools/36.0.0'
+   $apk = 'android/app/build/outputs/apk/release/app-release.apk'
+   & "$buildTools/apksigner.bat" verify --verbose --print-certs $apk
+   & "$buildTools/zipalign.exe" -c -P 16 4 $apk
+   & "$buildTools/aapt.exe" dump badging $apk | Select-String '^package:'
+   Get-FileHash -Algorithm SHA256 $apk
+   ```
+
+   Pastikan signature v2 valid dan metadata menunjukkan `id.smartagro.app`, kode 2, versi 0.1.1. Sidik jari SHA-256 sertifikat rilis adalah `8dce31222fefddc34d10fadb091d22a75908c506a1cae3385559d91e45313d09`. SHA-1 sertifikat untuk OAuth Android adalah `747efcc666821c6183d95c2f4d61aba9f4478c21`. SHA-256 file APK berubah saat isi APK berubah.
+3. Uji pemasangan dari APK baru dan pembaruan dari APK GitHub v0.1.0. Setelah siap diterbitkan, buat GitHub Release `android-v0.1.1` dari commit yang dibangun, lampirkan APK yang diuji, dan catat SHA-256 file di catatan rilis. Unduh kembali aset publik dan cocokkan hash dengan hasil build.
+
+`apksigner` memeriksa tanda tangan dan integritas APK. Google Play Protect menilai keamanan aplikasi secara terpisah dan dapat menawarkan pemindaian APK yang diunduh di luar Google Play. Jalankan pemindaian dengan Play Protect tetap aktif. Jika Google menandai APK berbahaya, catat pesan persis, package name dan SHA-256 APK untuk pengajuan banding. [Panduan Play Protect](https://support.google.com/googleplay/answer/2812853?hl=en) · [Formulir banding](https://support.google.com/googleplay/android-developer/contact/protectappeals)
+
+Untuk distribusi di luar Google Play, daftarkan `id.smartagro.app` dan SHA-256 sertifikat rilis di Android Developer Console. Jika diminta, buktikan kepemilikan paket dengan APK yang ditandatangani memakai kunci rilis. [Verifikasi pengembang Android](https://developer.android.com/developer-verification/guides/android-developer-console)
+
+Login Google juga perlu registrasi package dan SHA-1 sertifikat distribusi di OAuth, sesuai konfigurasi di atas. Jika distribusi pindah ke Play dan pengguna perlu bisa memperbarui APK GitHub yang sudah terpasang, gunakan sertifikat distribusi yang sesuai saat mendaftarkan Play App Signing dan siapkan upload key terpisah. [Panduan Play App Signing](https://developer.android.com/studio/publish/app-signing)
 
 Uji isolasi akun dan reward pada backend lokal, setelah `node scripts/phase1-local.mjs` siap:
 

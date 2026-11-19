@@ -135,25 +135,31 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         state = state.copy(auth = AuthStep.SignIn, message = if (result == PasswordResetResult.PasswordChanged) "Kata sandi diganti. Masuk dengan sandi baru."
             else "Kata sandi diganti. Sesi reset di server akan berakhir sendiri. Masuk dengan sandi baru.")
     }
-    private suspend fun load() {
+    private suspend fun load(successMessage: String? = null) {
         api.rpc("ensure_my_account")
         val products = parseProducts(api.rpc("my_products"))
-        // Commit all related data together; a failed load cannot mix users or product snapshots.
+        // Core product data is committed together.
         val owned = parseOwnedUnitsWorkspace(api.rpc("my_units"))
         val units = owned.active
         val overviews = parseOverviews(api.rpc("my_unit_overview"))
-        val garden = parseGarden(api.rpc("my_garden"))
+        val gardenResult = fetchOptionalGarden { parseGarden(api.rpc("my_garden")) }
+        val garden = gardenResult.getOrElse { state.garden }
+        val gardenWarning = if (gardenResult.isFailure) {
+            if (garden == null) "Data kebun belum dapat dimuat. Coba segarkan."
+            else "Data kebun belum dapat diperbarui. Menampilkan data sebelumnya."
+        } else null
         val selected = products.find { it.id == state.selectedProduct?.id }
         val unit = units.find { it.id == state.selectedUnit?.id && it.productId == selected?.id }
-        val nextScreen = if ((state.screen == Screen.Dashboard && selected == null) || (state.screen == Screen.Garden && garden.plants.none { it.id==state.gardenPlant?.id })) Screen.Products else state.screen
+        val nextScreen = if ((state.screen == Screen.Dashboard && selected == null) || (state.screen == Screen.Garden && garden?.plants?.none { it.id==state.gardenPlant?.id } != false)) Screen.Products else state.screen
         val activeUnit = unit ?: units.firstOrNull()
         val activeProduct = selected ?: activeUnit?.let { u -> products.find { it.id == u.productId } }
-        state = state.copy(catalogLoaded = true, garden = garden, gardenPlant = garden.plants.find { it.id==state.gardenPlant?.id }, products = products, units = units,
+        state = state.copy(catalogLoaded = true, garden = garden, gardenPlant = garden?.plants?.find { it.id==state.gardenPlant?.id }, products = products, units = units,
             archivedUnits = owned.archived, devices = owned.devices, overviews = overviews,
             selectedProduct = activeProduct, selectedUnit = activeUnit, history = emptyList(), historyLoaded = false,
             careJournal = if (activeUnit?.id == state.careUnitId) state.careJournal else emptyList(), careLoaded = activeUnit?.id == state.careUnitId && state.careLoaded,
             historyComparison = if (activeUnit?.id == state.comparisonUnitId) state.historyComparison else null,
-            screen = nextScreen)
+            screen = nextScreen, message = listOfNotNull(successMessage, gardenWarning).joinToString(" ").ifEmpty { null },
+            messageIsError = gardenWarning != null)
     }
     fun demo() {
         if (state.busy) return
@@ -582,30 +588,26 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     fun claimScannedProduct(nonceId: String, sealedCode: String, signature: String, onDone: () -> Unit = {}) = run {
         api.claimProduct(nonceId, sealedCode, signature.trim())
         state = state.copy(activationChallenge = null, publicStatus = null)
-        load()
-        state = state.copy(message = "Produk berhasil diklaim ke akun Anda.")
+        load("Produk berhasil diklaim ke akun Anda.")
         onDone()
     }
 
     fun archiveUnit(unitId: String) = run {
         require(!state.demo)
         api.archiveUnit(unitId)
-        load()
-        state = state.copy(message = "Unit diarsipkan. Riwayat bacaan tetap tersimpan.")
+        load("Unit diarsipkan. Riwayat bacaan tetap tersimpan.")
     }
 
     fun restoreUnit(unitId: String) = run {
         require(!state.demo)
         api.restoreUnit(unitId)
-        load()
-        state = state.copy(message = "Unit dipulihkan ke daftar aktif.")
+        load("Unit dipulihkan ke daftar aktif.")
     }
 
     fun placeDevice(deviceId: String, unitId: String?) = run {
         require(!state.demo)
         api.placeDevice(deviceId, unitId)
-        load()
-        state = state.copy(message = "Penempatan perangkat diperbarui.")
+        load("Penempatan perangkat diperbarui.")
     }
 
     fun loadUnitLifecycleEvents(unitId: String) = run {
@@ -632,8 +634,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     fun acceptProductTransfer(serial: String, code: String, onDone: () -> Unit = {}) = run {
         require(!state.demo)
         api.acceptTransfer(serial, code)
-        load()
-        state = state.copy(message = "Produk ${serial.trim().uppercase()} berhasil dipindahkan ke akun Anda.")
+        load("Produk ${serial.trim().uppercase()} berhasil dipindahkan ke akun Anda.")
         onDone()
     }
 
@@ -688,4 +689,13 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         catch (error: CancellationException) { throw error }
         catch (_: Exception) { state = AppState(messageIsError = true, message = "Sesi di HP sudah dihapus. Server tidak terhubung; sesi server akan kedaluwarsa sesuai waktunya.") }
     }
+}
+
+internal suspend fun fetchOptionalGarden(fetch: suspend () -> Garden): Result<Garden> = try {
+    Result.success(fetch())
+} catch (error: CancellationException) {
+    throw error
+} catch (error: Exception) {
+    if (error is ApiFailure && error.expired) throw error
+    Result.failure(error)
 }

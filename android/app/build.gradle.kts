@@ -25,8 +25,8 @@ android {
         applicationId = "id.smartagro.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", quoted(publicSetting("GOOGLE_WEB_CLIENT_ID")))
         buildConfigField("String", "SUPABASE_URL", quoted(publicSetting("SUPABASE_URL")))
         buildConfigField("String", "SUPABASE_ANON_KEY", quoted(publicSetting("SUPABASE_ANON_KEY")))

@@ -62,6 +62,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import java.time.LocalTime
 import kotlin.math.min
 
 /* Signed-out screens (A4a). The web's sign-in card, rebuilt as an iOS form: labelled fields in one grouped cell, a
@@ -91,10 +92,16 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
 /** Brand-first welcome cover: live local-time sky, layered terasering, Smart Agro mark, separate access actions, zero mascot. */
 @Composable private fun AuthWelcome(state: AppState, model: AgroViewModel, google: (() -> Unit)?) {
     val p = palette
-    val phase = remember { timePhaseFor() }
+    val localTime by produceState(LocalTime.now()) {
+        while (true) {
+            value = LocalTime.now()
+            delay(60_000L - value.second * 1_000L - value.nano / 1_000_000L)
+        }
+    }
+    val phase = timePhaseFor(localTime.hour)
     val configured = model.config.valid
     Box(Modifier.fillMaxSize()) {
-        BotanicalSkyBackdrop(phase, Modifier.fillMaxSize())
+        BotanicalSkyBackdrop(localTime, Modifier.fillMaxSize())
         // Gentle readability veil so hero text stays crisp across all 4 local-time sky phases.
         Box(
             Modifier

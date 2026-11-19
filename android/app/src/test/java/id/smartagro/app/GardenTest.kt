@@ -1,5 +1,7 @@
 package id.smartagro.app
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -37,4 +39,19 @@ class GardenTest {
         val doubled=garden();doubled.getJSONArray("cycles").put(JSONObject(doubled.getJSONArray("cycles").getJSONObject(0).toString()).put("id",id(4)))
         assertThrows(IllegalArgumentException::class.java) { parseGarden(doubled) }
     }
+    @Test fun optionalGardenRetainsPriorSnapshotAndPropagatesSessionAndCancellation() {
+        val previous = parseGarden(garden())
+        val unavailable = ApiFailure("Kebun tidak tersedia", status = 503)
+        val failed = runBlocking { fetchOptionalGarden { throw unavailable } }
+        assertSame(unavailable, failed.exceptionOrNull())
+        assertSame(previous, failed.getOrElse { previous })
+        val expired = ApiFailure("Sesi berakhir", expired = true)
+        assertSame(expired, assertThrows(ApiFailure::class.java) {
+            runBlocking { fetchOptionalGarden { throw expired } }
+        })
+        assertThrows(CancellationException::class.java) {
+            runBlocking { fetchOptionalGarden { throw CancellationException() } }
+        }
+    }
+
 }

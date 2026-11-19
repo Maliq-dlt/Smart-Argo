@@ -41,6 +41,19 @@ class AppFlowTest {
         val view = compose.activity.window.decorView
         Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888).also { view.draw(Canvas(it)) }
     }
+    @Test fun chartTouchSelectsTheNearestPlottedSample() {
+        val count = 6
+        val width = 112f
+        val inset = 6f
+        for (index in 0 until count) {
+            val plottedX = inset + (width - 2 * inset) * index / (count - 1)
+            assertEquals(index, chartSampleIndex(plottedX, width, inset, count))
+        }
+        assertEquals(2, chartSampleIndex(37f, width, inset, count))
+        assertEquals(0, chartSampleIndex(0f, width, inset, count))
+        assertEquals(5, chartSampleIndex(width, width, inset, count))
+    }
+
     @Test fun leafTouchAndSpeciesChangeKeepPotAnchored() {
         var onion by mutableStateOf(false)
         compose.mainClock.autoAdvance = false

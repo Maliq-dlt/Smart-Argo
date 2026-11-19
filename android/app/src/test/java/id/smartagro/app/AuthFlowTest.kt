@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.WindowManager
 import java.io.File
+import java.time.LocalTime
 import org.robolectric.annotation.GraphicsMode
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.semantics.SemanticsActions
@@ -31,6 +32,18 @@ class AuthFlowTest {
     }
     private val secureFlag get() = compose.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
     private fun button(text: String) = compose.onNode(hasText(text) and hasClickAction())
+
+    @Test fun welcomeSkyFollowsLocalTime() {
+        val phases = mapOf(4 to TimePhase.Malam, 5 to TimePhase.Pagi, 10 to TimePhase.Siang,
+            16 to TimePhase.Sore, 19 to TimePhase.Malam)
+        phases.forEach { (hour, phase) -> assertEquals(phase, timePhaseFor(hour)) }
+
+        val morning = daylightSunPosition(LocalTime.of(7, 0))
+        val midday = daylightSunPosition(LocalTime.NOON)
+        val afternoon = daylightSunPosition(LocalTime.of(17, 0))
+        assertTrue(morning.x < midday.x && midday.x < afternoon.x)
+        assertTrue(midday.y < morning.y && midday.y < afternoon.y)
+    }
 
     @Test fun welcomeShowsBrandAndSeparateAccessPathsWithoutMascot() {
         compose.onNodeWithText("Smart Agro").assertIsDisplayed()
