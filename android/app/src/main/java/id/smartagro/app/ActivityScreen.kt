@@ -33,10 +33,15 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
     val context = LocalContext.current
     val unit = state.selectedUnit ?: state.units.firstOrNull()
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    var sensor by rememberSaveable { mutableStateOf(Sensor.Moisture) }
+    var sensor by rememberSaveable { mutableStateOf(state.historySensor) }
     var range by rememberSaveable { mutableIntStateOf(0) }
+    var selectedAt by remember(unit?.id, sensor, range) { mutableStateOf<Instant?>(null) }
     var journaling by rememberSaveable { mutableStateOf(false) }
     var pendingCsv by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(state.historySensor) {
+        sensor = state.historySensor
+    }
 
     val saveCsvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri: Uri? ->
         val csvText = pendingCsv
@@ -89,21 +94,23 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Sensor.entries.forEach { s ->
-                                Pill(s.label, sensor == s) { sensor = s }
+                                Pill(s.label, sensor == s) { sensor = s; model.selectHistorySensor(s) }
                             }
                         }
                     }
                     item(key = "chart") {
                         val color = when (sensor) { Sensor.Moisture -> p.water; Sensor.Temperature -> p.sun; Sensor.Ph -> p.tint }
-                        Panel {
+                        Column(Modifier.padding(horizontal = 16.dp)) {
                             Segmented(listOf("24 jam", "7 hari"), range, { range = it })
-                            Spacer(Modifier.height(14.dp))
+                            Spacer(Modifier.height(12.dp))
                             val latest = state.history.maxOfOrNull { it.at }
                             val since = latest?.minus(if (range == 0) 24L else 24L * 7, ChronoUnit.HOURS)
                             TrendChart(
                                 state.history.filter { it.sensor == sensor && it.value != null && since != null && !it.at.isBefore(since) },
                                 sensor,
                                 color,
+                                selectedAt = selectedAt,
+                                onSelect = { picked -> selectedAt = picked?.at },
                             )
                         }
                     }
@@ -158,11 +165,14 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
                         item(key = "readings-group") {
                             Group {
                                 shown.take(40).forEach { r ->
+                                    val picked = selectedAt == r.at
                                     Cell(
                                         reading(r.sensor, r.value),
-                                        subtitle = if (r.quality == "ok") (if (r.synced) "Terverifikasi" else "Jam perangkat belum sinkron") else "Galat sensor",
+                                        subtitle = if (picked) "Disorot di grafik · ${if (r.synced) "Terverifikasi" else "Jam belum sinkron"}"
+                                            else if (r.quality == "ok") (if (r.synced) "Terverifikasi" else "Jam perangkat belum sinkron") else "Galat sensor",
                                         value = time(r.at),
                                         chevron = false,
+                                        onClick = if (r.value != null && r.quality == "ok") ({ selectedAt = if (picked) null else r.at }) else null,
                                     )
                                 }
                             }

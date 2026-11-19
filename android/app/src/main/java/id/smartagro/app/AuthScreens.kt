@@ -30,10 +30,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
@@ -68,7 +70,7 @@ import kotlin.math.min
 private val EMAIL = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
 private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
 
-/** Form, signup code and the two reset steps as one navigation stack; each step keeps what was typed when revisited. */
+/** Welcome cover, email form, signup code and the two reset steps as one navigation stack; typed inputs survive revisiting. */
 @Composable internal fun AuthFlow(state: AppState, model: AgroViewModel, google: (() -> Unit)?) {
     val saved = rememberSaveableStateHolder()
     val page = if (state.auth == AuthStep.SignUp) AuthStep.SignIn else state.auth
@@ -76,10 +78,154 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
         label = "Langkah masuk") { step ->
         saved.SaveableStateProvider(step.name) {
             when (step) {
+                AuthStep.Welcome -> AuthWelcome(state, model, google)
                 AuthStep.SignIn, AuthStep.SignUp -> AuthForm(state, model, google)
                 AuthStep.SignupCode -> SignupCode(state, model)
                 AuthStep.ResetEmail -> ResetEmail(state, model)
                 AuthStep.ResetCode -> ResetCode(state, model)
+            }
+        }
+    }
+}
+
+/** Brand-first welcome cover: live local-time sky, layered terasering, Smart Agro mark, separate access actions, zero mascot. */
+@Composable private fun AuthWelcome(state: AppState, model: AgroViewModel, google: (() -> Unit)?) {
+    val p = palette
+    val phase = remember { timePhaseFor() }
+    val configured = model.config.valid
+    Box(Modifier.fillMaxSize()) {
+        BotanicalSkyBackdrop(phase, Modifier.fillMaxSize())
+        // Gentle readability veil so hero text stays crisp across all 4 local-time sky phases.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0x380A1D16), Color(0x280A1D16), Color(0x880A1D16)),
+                    ),
+                ),
+        )
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                Modifier.widthIn(max = 460.dp).fillMaxWidth().padding(top = 12.dp, bottom = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0x52091B14))
+                        .border(.75.dp, Color.White.copy(alpha = .24f), RoundedCornerShape(50))
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    Icon(icon(phase.glyph), null, Modifier.size(16.dp), tint = Color(0xFFE7F5D8))
+                    Text(phase.greeting, style = T.footnote.copy(fontWeight = FontWeight.Medium), color = Color(0xFFF3F8F2))
+                }
+                Spacer(Modifier.height(26.dp))
+                Box(
+                    Modifier
+                        .size(80.dp)
+                        .shadow(20.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x80071A13), spotColor = Color(0x80071A13))
+                        .clip(RoundedCornerShape(22.dp))
+                        .border(1.dp, Color.White.copy(alpha = .28f), RoundedCornerShape(22.dp)),
+                ) {
+                    SmartAgroMark(Modifier.fillMaxSize())
+                }
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    "Smart Agro",
+                    Modifier.padding(horizontal = 12.dp).semantics { heading() },
+                    style = T.largeTitle.balanced(),
+                    color = Color(0xFFF7FBF6),
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    "Pantau kelembapan, suhu, dan pH pot Anda dengan tenang.",
+                    Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                    style = T.subhead.balanced(),
+                    color = Color(0xFFE0ECE3),
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            Column(
+                Modifier
+                    .widthIn(max = 460.dp)
+                    .fillMaxWidth()
+                    .shadow(24.dp, RoundedCornerShape(30.dp), ambientColor = Color(0x55000000), spotColor = Color(0x55000000))
+                    .clip(RoundedCornerShape(30.dp))
+                    .background(p.cell)
+                    .border(.75.dp, p.separator, RoundedCornerShape(30.dp))
+                    .padding(horizontal = 18.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (!configured) {
+                    Banner(
+                        "Layanan akun belum tersedia pada versi aplikasi ini. Anda tetap bisa mencoba mode latihan.",
+                        Modifier.padding(bottom = 12.dp),
+                    )
+                }
+                state.message?.let { msg ->
+                    Banner(msg, Modifier.padding(bottom = 12.dp), state.messageIsError)
+                }
+                if (google != null) {
+                    PrimaryButton(
+                        if (state.busy) "Menghubungkan Google…" else "Lanjutkan dengan Google",
+                        google,
+                        Modifier.fillMaxWidth(),
+                        enabled = configured && !state.busy,
+                        busy = state.busy,
+                        path = PhosphorPaths.GoogleLogo,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    TintedButton(
+                        "Masuk dengan email",
+                        { model.authStep(AuthStep.SignIn) },
+                        Modifier.fillMaxWidth(),
+                        enabled = !state.busy,
+                        path = PhosphorPaths.EnvelopeSimple,
+                    )
+                } else {
+                    PrimaryButton(
+                        "Masuk dengan email",
+                        { model.authStep(AuthStep.SignIn) },
+                        Modifier.fillMaxWidth(),
+                        enabled = !state.busy,
+                        path = PhosphorPaths.EnvelopeSimple,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                TintedButton(
+                    "Buat akun",
+                    { model.authStep(AuthStep.SignUp) },
+                    Modifier.fillMaxWidth(),
+                    enabled = !state.busy,
+                    path = PhosphorPaths.PlusBold,
+                )
+                PlainButton(
+                    "Jelajahi mode latihan",
+                    model::demo,
+                    Modifier.padding(top = 6.dp),
+                    enabled = !state.busy,
+                    path = PhosphorPaths.Leaf,
+                )
+                Text(
+                    "Akun yang sama dengan website Smart Agro.",
+                    Modifier.padding(top = 4.dp, start = 12.dp, end = 12.dp),
+                    style = T.footnote.balanced(),
+                    color = p.secondary,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }
@@ -94,62 +240,92 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
     // Passwords stay in memory only: never in saved state, logs or preferences.
     var password by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
+    var nameFocused by remember { mutableStateOf(false) }
     var emailFocused by remember { mutableStateOf(false) }
     var secretFocused by remember { mutableStateOf(false) }
     val configured = model.config.valid
     val ready = configured && !state.busy && EMAIL.matches(email.trim()) &&
         if (signUp) name.isNotBlank() && password.length >= 10 && confirm == password else password.isNotEmpty()
+    val signUpPasswordIssue = signUp && ((password.isNotEmpty() && password.length < 10) || (confirm.isNotEmpty() && confirm != password))
+    val mascotMood = when {
+        secretFocused -> MascotMood.Shy
+        state.messageIsError && state.message != null -> MascotMood.Care
+        signUpPasswordIssue -> MascotMood.Care
+        ready -> MascotMood.Happy
+        emailFocused || nameFocused -> MascotMood.Reading
+        else -> MascotMood.Smile
+    }
+    val mascotLabel = when {
+        secretFocused -> "Menjaga sandi"
+        state.messageIsError && state.message != null -> "Perlu diperiksa"
+        signUpPasswordIssue -> "Periksa sandi"
+        ready -> if (signUp) "Siap daftar" else "Siap masuk"
+        emailFocused || nameFocused -> "Mengamati"
+        else -> "Tenang"
+    }
     val submit = {
         if (ready) {
             focus.clearFocus()
             if (signUp) model.signup(name, email, password) else { model.login(email, password); password = "" }
         }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().navigationBarsPadding().padding(bottom = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(Modifier.widthIn(max = 480.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Mascot(Modifier.padding(top = 20.dp).size(104.dp, 118.dp), hidden = secretFocused,
-                gaze = if (emailFocused) min(1f, email.length / 36f) else .2f, sad = state.messageIsError && state.message != null)
-            AnimatedContent(signUp, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) }, label = "Judul masuk") { up ->
-                Text(if (up) "Buat akun Smart Agro" else "Masuk ke Smart Agro", Modifier.padding(start = 24.dp, end = 24.dp, top = 10.dp).semantics { heading() },
-                    style = T.title1.balanced(), color = p.ink, textAlign = TextAlign.Center)
-            }
-            Text("Satu akun untuk pot, data sensor, dan poin Anda.", Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp),
-                style = T.subhead.balanced(), color = p.secondary, textAlign = TextAlign.Center)
-            Segmented(listOf("Masuk", "Daftar"), if (signUp) 1 else 0, { model.authStep(if (it == 1) AuthStep.SignUp else AuthStep.SignIn, email) },
-                Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 16.dp))
-            Group {
-                Reveal(signUp) {
-                    FieldRow("Nama", name, { if (it.length <= 40) name = it }, placeholder = "Nama panggilan", type = ContentType.PersonFullName,
-                        capitalize = true, enabled = !state.busy)
+    Column(Modifier.fillMaxSize().background(p.canvas)) {
+        NavBar("", 0f, titleAlpha = 0f, back = "Awal", onBack = { if (!state.busy) model.authStep(AuthStep.Welcome, email) })
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.widthIn(max = 480.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Mascot(
+                    Modifier.padding(top = 4.dp).size(104.dp, 116.dp),
+                    mood = mascotMood,
+                    gaze = when {
+                        emailFocused -> min(1f, email.length / 32f)
+                        nameFocused -> min(1f, name.length / 20f)
+                        else -> .35f
+                    },
+                    interactive = true,
+                )
+                MascotPill(mascotMood, Modifier.padding(top = 2.dp), customLabel = mascotLabel)
+                AnimatedContent(signUp, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) }, label = "Judul masuk") { up ->
+                    Text(if (up) "Buat akun Smart Agro" else "Masuk ke Smart Agro", Modifier.padding(start = 24.dp, end = 24.dp, top = 10.dp).semantics { heading() },
+                        style = T.title1.balanced(), color = p.ink, textAlign = TextAlign.Center)
                 }
-                FieldRow("Email", email, { if (it.length <= 320) email = it }, placeholder = "nama@email.com", keyboard = KeyboardType.Email,
-                    type = ContentType.Username + ContentType.EmailAddress, onFocus = { emailFocused = it }, enabled = !state.busy)
-                FieldRow("Kata sandi", password, { password = it.take(256) }, placeholder = if (signUp) "Minimal 10 karakter" else "Wajib diisi",
-                    secure = true, type = if (signUp) ContentType.NewPassword else ContentType.Password, ime = if (signUp) ImeAction.Next else ImeAction.Done,
-                    onIme = if (signUp) null else submit, onFocus = { secretFocused = it }, enabled = !state.busy)
-                Reveal(signUp) {
-                    FieldRow("Konfirmasi", confirm, { confirm = it.take(256) }, placeholder = "Ketik ulang sandi", secure = true,
-                        type = ContentType.NewPassword, ime = ImeAction.Done, onIme = submit, onFocus = { secretFocused = it }, enabled = !state.busy)
+                Text("Satu akun untuk pot, data sensor, dan poin Anda.", Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp),
+                    style = T.subhead.balanced(), color = p.secondary, textAlign = TextAlign.Center)
+                Segmented(listOf("Masuk", "Daftar"), if (signUp) 1 else 0, { model.authStep(if (it == 1) AuthStep.SignUp else AuthStep.SignIn, email) },
+                    Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 14.dp))
+                Group {
+                    Reveal(signUp) {
+                        FieldRow("Nama", name, { if (it.length <= 40) name = it }, placeholder = "Nama panggilan", type = ContentType.PersonFullName,
+                            capitalize = true, onFocus = { nameFocused = it }, enabled = !state.busy)
+                    }
+                    FieldRow("Email", email, { if (it.length <= 320) email = it }, placeholder = "nama@email.com", keyboard = KeyboardType.Email,
+                        type = ContentType.Username + ContentType.EmailAddress, onFocus = { emailFocused = it }, enabled = !state.busy)
+                    FieldRow("Kata sandi", password, { password = it.take(256) }, placeholder = if (signUp) "Minimal 10 karakter" else "Wajib diisi",
+                        secure = true, type = if (signUp) ContentType.NewPassword else ContentType.Password, ime = if (signUp) ImeAction.Next else ImeAction.Done,
+                        onIme = if (signUp) null else submit, onFocus = { secretFocused = it }, enabled = !state.busy)
+                    Reveal(signUp) {
+                        FieldRow("Konfirmasi", confirm, { confirm = it.take(256) }, placeholder = "Ketik ulang sandi", secure = true,
+                            type = ContentType.NewPassword, ime = ImeAction.Done, onIme = submit, onFocus = { secretFocused = it }, enabled = !state.busy)
+                    }
                 }
+                Reveal(signUp) { PasswordHint(password, confirm) }
+                if (!configured) Banner("Layanan akun belum tersedia pada versi aplikasi ini. Anda tetap bisa mencoba mode latihan.",
+                    Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp))
+                Message(state)
+                PrimaryButton(when { signUp && state.busy -> "Membuat akun…"; signUp -> "Buat akun"; state.busy -> "Memeriksa…"; else -> "Masuk" }, submit,
+                    Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp).fillMaxWidth(), enabled = ready || state.busy, busy = state.busy)
+                Reveal(!signUp) {
+                    PlainButton("Lupa kata sandi?", { model.authStep(AuthStep.ResetEmail, email) }, Modifier.padding(top = 4.dp), enabled = !state.busy)
+                }
+                if (google != null) {
+                    OrDivider()
+                    TintedButton("Lanjut dengan Google", google, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), enabled = configured && !state.busy,
+                        path = PhosphorPaths.GoogleLogo)
+                }
+                PlainButton("Coba mode latihan", model::demo, Modifier.padding(top = 8.dp), enabled = !state.busy)
+                Text("Akun yang sama dengan website Smart Agro.", Modifier.padding(horizontal = 32.dp), style = T.footnote.balanced(), color = p.secondary,
+                    textAlign = TextAlign.Center)
             }
-            Reveal(signUp) { PasswordHint(password, confirm) }
-            if (!configured) Banner("Layanan akun belum tersedia pada versi aplikasi ini. Anda tetap bisa mencoba mode latihan.",
-                Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp))
-            Message(state)
-            PrimaryButton(when { signUp && state.busy -> "Membuat akun…"; signUp -> "Buat akun"; state.busy -> "Memeriksa…"; else -> "Masuk" }, submit,
-                Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp).fillMaxWidth(), enabled = ready || state.busy, busy = state.busy)
-            Reveal(!signUp) {
-                PlainButton("Lupa kata sandi?", { model.authStep(AuthStep.ResetEmail, email) }, Modifier.padding(top = 4.dp), enabled = !state.busy)
-            }
-            if (google != null) {
-                OrDivider()
-                TintedButton("Lanjut dengan Google", google, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), enabled = configured && !state.busy,
-                    path = PhosphorPaths.GoogleLogo)
-            }
-            PlainButton("Coba mode latihan", model::demo, Modifier.padding(top = 8.dp), enabled = !state.busy)
-            Text("Akun yang sama dengan website Smart Agro.", Modifier.padding(horizontal = 32.dp), style = T.footnote.balanced(), color = p.secondary,
-                textAlign = TextAlign.Center)
         }
     }
 }

@@ -14,11 +14,12 @@ import java.time.Instant
 import java.time.LocalDate
 
 enum class Screen { Login, Mfa, Products, Dashboard, History, Account, Rewards, Proofs, Garden, Security, ManageProducts, Gallery }
-/** Where the signed-out owner is: the Masuk/Daftar form, the emailed signup code, or the two reset steps. */
-enum class AuthStep { SignIn, SignUp, SignupCode, ResetEmail, ResetCode }
+/** Where the signed-out owner is: the welcome cover, Masuk/Daftar form, the emailed signup code, or the two reset steps. */
+enum class AuthStep { Welcome, SignIn, SignUp, SignupCode, ResetEmail, ResetCode }
 data class AppState(
     val screen: Screen = Screen.Login, val busy: Boolean = false, val message: String? = null, val messageIsError: Boolean = false,
-    val auth: AuthStep = AuthStep.SignIn, val authEmail: String = "", val welcome: Boolean = false,
+    val auth: AuthStep = AuthStep.Welcome, val authEmail: String = "", val welcome: Boolean = false, val introPlaying: Boolean = false,
+    val historySensor: Sensor = Sensor.Moisture,
     val products: List<Product> = emptyList(), val units: List<PlantUnit> = emptyList(),
     val overviews: List<Overview> = emptyList(), val selectedProduct: Product? = null,
     val selectedUnit: PlantUnit? = null, val history: List<Reading> = emptyList(), val historyLoaded: Boolean = false, val historyBefore: java.time.Instant? = null, val historyHasMore: Boolean = false,
@@ -75,15 +76,19 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     private val prefs get() = getApplication<Application>().getSharedPreferences("smart-agro", 0)
+    private val autoPlayIntro get() = !android.os.Build.FINGERPRINT.equals("robolectric", ignoreCase = true)
     /** A complete sign-in, however it happened; the short welcome shows once per install. */
     private suspend fun signedIn(complete: Boolean) {
         if (!complete) { state = state.copy(screen = Screen.Mfa); return }
         accountFlows.cancelPasswordReset()
         val session = api.session!!
-        state = state.copy(screen = Screen.Products, email = session.email, displayName = session.displayName, auth = AuthStep.SignIn,
-            welcome = !prefs.getBoolean("welcome-seen", false))
+        state = state.copy(screen = Screen.Products, email = session.email, displayName = session.displayName, auth = AuthStep.Welcome,
+            welcome = !prefs.getBoolean("welcome-seen", false), introPlaying = autoPlayIntro)
         load()
     }
+    fun replayIntro() { state = state.copy(introPlaying = true) }
+    fun finishIntro() { if (state.introPlaying) state = state.copy(introPlaying = false) }
+    fun selectHistorySensor(sensor: Sensor) { state = state.copy(historySensor = sensor) }
     fun login(email: String, password: String) = run { signedIn(api.login(email.trim(), password)) }
     fun googleLogin(context: android.content.Context) = run {
         val credential = googleCredential(context, BuildConfig.GOOGLE_WEB_CLIENT_ID)
@@ -140,16 +145,32 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         val garden = parseGarden(api.rpc("my_garden"))
         val selected = products.find { it.id == state.selectedProduct?.id }
         val unit = units.find { it.id == state.selectedUnit?.id && it.productId == selected?.id }
+        val nextScreen = if ((state.screen == Screen.Dashboard && selected == null) || (state.screen == Screen.Garden && garden.plants.none { it.id==state.gardenPlant?.id })) Screen.Products else state.screen
+        val activeUnit = unit ?: units.firstOrNull()
+        val activeProduct = selected ?: activeUnit?.let { u -> products.find { it.id == u.productId } }
         state = state.copy(catalogLoaded = true, garden = garden, gardenPlant = garden.plants.find { it.id==state.gardenPlant?.id }, products = products, units = units,
             archivedUnits = owned.archived, devices = owned.devices, overviews = overviews,
-            selectedProduct = selected, selectedUnit = unit, history = emptyList(), historyLoaded = false,
-            careJournal = if (unit?.id == state.careUnitId) state.careJournal else emptyList(), careLoaded = unit?.id == state.careUnitId && state.careLoaded,
-            historyComparison = if (unit?.id == state.comparisonUnitId) state.historyComparison else null,
-            screen = if ((state.screen == Screen.Dashboard && selected == null) || (state.screen == Screen.Garden && garden.plants.none { it.id==state.gardenPlant?.id })) Screen.Products else state.screen)
+            selectedProduct = activeProduct, selectedUnit = activeUnit, history = emptyList(), historyLoaded = false,
+            careJournal = if (activeUnit?.id == state.careUnitId) state.careJournal else emptyList(), careLoaded = activeUnit?.id == state.careUnitId && state.careLoaded,
+            historyComparison = if (activeUnit?.id == state.comparisonUnitId) state.historyComparison else null,
+            screen = nextScreen)
     }
     fun demo() {
         if (state.busy) return
-        try { state = readDemo(getApplication()) }
+        try {
+            val base = readDemo(getApplication())
+            val firstUnit = base.units.firstOrNull()
+            val firstProduct = firstUnit?.let { u -> base.products.find { it.id == u.productId } } ?: base.products.firstOrNull()
+            state = base.copy(
+                selectedProduct = firstProduct,
+                selectedUnit = firstUnit,
+                history = firstUnit?.let { demoHistory(getApplication(), it.id) }.orEmpty(),
+                historyLoaded = true,
+                careUnitId = firstUnit?.id,
+                careLoaded = true,
+                introPlaying = autoPlayIntro,
+            )
+        }
         catch (_: Exception) { state = state.copy(messageIsError = true, message = "Skenario latihan tidak dapat dibaca.") }
     }
     fun refreshCurrent() {
@@ -176,11 +197,16 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
             historyComparison = null, comparisonUnitId = null, message = null)
     }
     fun selectUnit(unit: PlantUnit) {
-        if (unit.productId != state.selectedProduct?.id) return
-        state = state.copy(selectedUnit = unit, history = if (state.demo) demoHistory(getApplication(), unit.id) else emptyList(),
+        val product = state.products.find { it.id == unit.productId } ?: return
+        state = state.copy(selectedProduct = product, selectedUnit = unit, history = if (state.demo) demoHistory(getApplication(), unit.id) else emptyList(),
             historyLoaded = state.demo, historyBefore = null, historyHasMore = false,
             careJournal = emptyList(), careUnitId = unit.id, careLoaded = state.demo,
             historyComparison = null, comparisonUnitId = null, message = null)
+    }
+    fun openHistoryFor(unit: PlantUnit, sensor: Sensor) {
+        if (state.units.none { it.id == unit.id }) return
+        selectUnit(unit)
+        state = state.copy(screen = Screen.History, historySensor = sensor, message = null)
     }
     fun loadHistory() = loadHistoryPage(false)
     fun loadOlderHistory() = loadHistoryPage(true)
@@ -337,10 +363,11 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         if (state.busy && state.screen==Screen.Mfa) return
         when (state.screen) {
             Screen.Login -> when (state.auth) {
+                AuthStep.SignIn, AuthStep.SignUp -> authStep(AuthStep.Welcome)
                 AuthStep.SignupCode -> authStep(AuthStep.SignUp)
                 AuthStep.ResetEmail -> authStep(AuthStep.SignIn)
                 AuthStep.ResetCode -> authStep(AuthStep.ResetEmail)
-                else -> Unit
+                AuthStep.Welcome -> Unit
             }
             Screen.Mfa -> { api.cancelMfa(); state = AppState() }
             Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery -> state = state.copy(screen = Screen.Account,

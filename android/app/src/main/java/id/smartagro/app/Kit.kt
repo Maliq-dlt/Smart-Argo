@@ -43,8 +43,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.Layout
@@ -61,6 +63,7 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import kotlin.math.abs
 import kotlin.math.min
 
 /* Smart Agro's Apple-style kit. Navigation and controls keep iOS sizes, placement and behavior; identity lives in the
@@ -173,20 +176,31 @@ fun <S> AnimatedContentTransitionScope<S>.stack(forward: Boolean): ContentTransf
 data class TabItem(val label: String, val path: String, val selectedPath: String)
 
 /**
- * The floating glass tab bar (iOS 26 shape): a capsule over the content with a lens that slides to the selected tab on a
- * bouncy spring, filled symbols for the selected tab, and a tick on change. Tabs navigate only (HIG tab bars).
+ * Floating Liquid Glass tab bar: translucent capsule over Haze with a smooth critically-damped gliding glass lens
+ * (subtle fluid width stretch in transit, specular top rim, zero bounce), filled active icons, and tick haptics.
  */
 @Composable fun GlassTabBar(items: List<TabItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     val p = palette
     val haptics = rememberHaptics()
     val shape = RoundedCornerShape(50)
-    val lens by animateFloatAsState(selected.toFloat(), Springs.snappy(), label = "Lensa tab")
+    val lens by animateFloatAsState(selected.toFloat(), spring(dampingRatio = 1f, stiffness = 460f), label = "Lensa tab")
+    val barSheen = if (p.dark) listOf(Color.White.copy(alpha = .11f), Color.Transparent) else listOf(Color.White.copy(alpha = .58f), Color.Transparent)
+    val lensTop = if (p.dark) p.tint.copy(alpha = .24f) else Color.White.copy(alpha = .82f)
+    val lensBottom = if (p.dark) p.tint.copy(alpha = .11f) else p.soft.copy(alpha = .62f)
+    val lensRim = if (p.dark) Color.White.copy(alpha = .18f) else Color.White.copy(alpha = .92f)
     Row(modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp).widthIn(max = 440.dp).fillMaxWidth()
         .shadow(22.dp, shape, ambientColor = p.shadow, spotColor = p.shadow).clip(shape).glassOver(LocalShellHaze.current, p)
-        .border(.6.dp, p.barEdge, shape).padding(4.dp)
+        .background(Brush.verticalGradient(barSheen))
+        .border(.75.dp, p.barEdge, shape).padding(4.dp)
         .drawBehind {
             val w = size.width / items.size
-            drawRoundRect(p.fill, Offset(w * lens, 0f), Size(w, size.height), CornerRadius(size.height / 2))
+            val travel = abs(selected - lens).coerceIn(0f, 1f)
+            val stretch = w * (.09f * travel)
+            val left = (w * lens - stretch * .5f).coerceIn(0f, size.width - w)
+            val width = (w + stretch).coerceAtMost(size.width - left)
+            val cr = CornerRadius(size.height / 2)
+            drawRoundRect(Brush.verticalGradient(listOf(lensTop, lensBottom)), Offset(left, 0f), Size(width, size.height), cr)
+            drawRoundRect(lensRim, Offset(left + .6f, .6f), Size(width - 1.2f, size.height - 1.2f), cr, style = Stroke(1.dp.toPx()))
         }.selectableGroup()) {
         items.forEachIndexed { index, item ->
             val on = index == selected
@@ -194,7 +208,7 @@ data class TabItem(val label: String, val path: String, val selectedPath: String
             Column(Modifier.weight(1f).heightIn(min = 54.dp).clip(shape)
                 .selectable(on, interactionSource = null, indication = null, role = Role.Tab) { if (!on) { haptics.tick(); onSelect(index) } }
                 .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(icon(if (on) item.selectedPath else item.path), null, Modifier.size(25.dp), tint = tint)
+                Icon(icon(if (on) item.selectedPath else item.path), null, Modifier.size(24.dp), tint = tint)
                 Text(item.label, style = T.caption.copy(fontSize = capped(11, 1.3f), lineHeight = capped(13, 1.3f)), color = tint, maxLines = 1, softWrap = false)
             }
         }

@@ -61,6 +61,18 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                     PrimaryButton("Akhiri latihan", model::logout, Modifier.padding(top = 14.dp).fillMaxWidth(), destructive = true, path = PhosphorPaths.SignOut)
                 }
             }
+            item(key = "demo-intro") {
+                SectionTitle("Tampilan")
+                Group(inset = 60.dp) {
+                    Cell(
+                        "Putar animasi masuk",
+                        subtitle = "Pratinjau layar kaca cair Smart Agro",
+                        glyph = PhosphorPaths.Sparkle,
+                        glyphColor = p.tint,
+                        onClick = model::replayIntro,
+                    )
+                }
+            }
         } else {
             item(key = "profile") {
                 val shownName = state.displayName.ifBlank { state.email.substringBefore('@') }.ifBlank { "Pemilik Smart Agro" }
@@ -115,6 +127,13 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                         glyph = PhosphorPaths.ShieldCheck,
                         glyphColor = p.tint,
                         onClick = { model.navigate(Screen.Security) },
+                    )
+                    Cell(
+                        "Putar animasi masuk",
+                        subtitle = "Pratinjau layar kaca cair Smart Agro",
+                        glyph = PhosphorPaths.Sparkle,
+                        glyphColor = p.tint,
+                        onClick = model::replayIntro,
                     )
                     Cell(
                         "Buka profil di website",
@@ -213,7 +232,7 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
         }
         item(key = "pw") {
             SectionTitle("Kata sandi & perangkat")
-            Group(inset = 60.dp) {
+            Group(inset = 60.dp, footer = "Akun Google juga dapat mengatur kata sandi di sini agar dapat masuk memakai email.") {
                 Cell("Atur atau ganti kata sandi", glyph = PhosphorPaths.LockSimple, glyphColor = p.tint, enabled = !state.busy, onClick = { settingPassword = true })
                 Cell("Keluar dari semua perangkat lain", glyph = PhosphorPaths.SignOut, glyphColor = p.warn, enabled = !state.busy, onClick = { model.signOutOtherSessions() })
             }

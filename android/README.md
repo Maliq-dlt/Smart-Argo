@@ -2,7 +2,20 @@
 
 Aplikasi Android native Kotlin + Jetpack Compose, terpisah dari website React. Source, konfigurasi, APK dan cache aplikasi berada di `android/`; laporan HTML pengujian berada di `android/.tmp/reports/` (relatif terhadap root repository). Tidak ada WebView, perubahan backend, atau perubahan source website.
 
-## Status UI Apple-native lengkap — 17 November 2026
+## Status UI Apple-native & Konsep Kebun — 19 November 2026
+
+Porting desain `konsep-kebun` ke aplikasi Android native Kotlin + Jetpack Compose telah selesai tanpa dependency baru dan tanpa `bounce`/`blink`:
+- **Adaptive Launcher Icon (`res/mipmap-anydpi-v26/ic_agro.xml`, `res/drawable/ic_agro_bg.xml`, `ic_agro_fg.xml`, `ic_agro_mono.xml`, `ic_agro.xml`):** Emblem daun tunggal bergaris terasering (`ikon.svg`) terpisah menjadi layer background gradien zamrud, foreground terpusat di safe zone 66dp, dan monochrome untuk Android 13+ Themed Icons.
+- **Welcome Cover & Akses Terpisah (`AuthScreens.kt`, `Delight.kt`, `GoogleSignIn.kt`):** Layar `AuthStep.Welcome` menampilkan langit 4 fase waktu lokal (`Pagi`, `Siang`, `Sore`, `Malam` tanpa matahari + bintang statis) + bukit terasering berlapis + emblem & wordmark `Smart Agro` (**tanpa maskot**) + tombol terpisah (`Lanjutkan dengan Google`, `Masuk dengan email`, `Buat akun`, `Jelajahi mode latihan`). Penanganan `NoCredentialException` dan `GoogleIdTokenParsingException` dipisahkan dari kegagalan umum.
+- **Liquid Glass Logo Reveal (`Delight.kt`, `MainActivity.kt`, `AccountScreens.kt`):** Transisi masuk kebun memakai AGSL `RuntimeShader` refraksi kaca cair pada Android 13+ (API 33+) dan fallback Canvas kaca pada API 26–32, dengan tipografi kinetik `Smart Agro`, tap-to-skip, penghormatan `ANIMATOR_DURATION_SCALE == 0f`, serta tombol **Akun → Putar animasi masuk**.
+- **Tumpukan Kartu Tanaman Vertikal Gaya Apple Wallet + 3 Metrik Sensor Atas (`PlantScreens.kt`):** Baris 3 metrik sensor (`Kelembapan | Suhu tanah | pH tanah`) yang langsung membuka `ActivityScreen` pada sensor terkait, diikuti tumpukan kartu tanaman bertingkat vertikal (2 kartu belakang menyembul di atas kartu aktif depan, geser/ketuk untuk ganti tanaman, sakelar `Putar otomatis` 8 detik, dan tahap 2D interaktif `PlantScene`).
+- **Maskot Interaktif 6 Keadaan (`Illustrations.kt`, `AuthScreens.kt`, `PlantScreens.kt`):** `MascotMood` (`Smile`/Tenang, `Reading`/Mengamati, `Working`/Merawat, `Happy`/Optimal berbunga, `Care`/Perlu air dengan alis khawatir + tetes air, `Shy`/Menjaga sandi menutup mata dengan tangan daun), `MascotPill`, kartu perawatan di bawah tumpukan tanaman, dan `MascotStage` dengan pemilih 4 ekspresi di lembar saran.
+- **Peak Chart (`PlantScreens.kt`, `ActivityScreen.kt`):** Kurva monotone cubic Bezier halus tanpa overshoot, gradien kartu sage terang/gelap, badge `Puncak …`, titik halo konsentris tenang (tanpa kedip/pulse), scrub sentuh dengan haptics, dan sinkronisasi dua arah dengan baris daftar bacaan di `ActivityScreen`.
+- **Liquid Glass Floating Tab Bar (`Kit.kt`, `Theme.kt`):** Semua pegas memakai `dampingRatio = 1f` (critically damped, nol pantulan); lensa tab kaca meluncur mulus dengan regangan horizontal proporsional saat berpindah tab.
+
+Verifikasi terakhir (19 November 2026): `./android/build.ps1 -Tasks @('testDebugUnitTest','lintDebug','assembleDebug','assembleRelease','lintRelease')` **lulus penuh** — `testDebugUnitTest` **98/98 lulus (0 gagal)**, `lintDebug` & `lintRelease` **0 error**, APK debug dan release R8 bertanda tangan berhasil dibangun, serta tangkapan layar Robolectric (`00-welcome`, `01-login-password`, `02-products`, `03-dashboard`, `03-trend-ph`, `04-history`, `05-account`, terang/gelap/320dp 200%) telah ditinjau visual.
+
+## Status UI Apple-native sebelumnya — 17 November 2026
 
 Seluruh layar A4a–A4g telah terhubung ke layar native berdesain Apple HIG (`Theme.kt`, `Kit.kt`, `Delight.kt`) dan `LegacyFrame` telah dihapus:
 - `PlantsHome` + `PlantDetail` (`PlantScreens.kt`, `Illustrations.kt`): ubin bergrup ala Apple Home, hero ring kelembapan + langit lokasi, tahap 2D interaktif dengan perangkat pada bibir pot, sakelar akar, dan Mode Belajar (`SpeciesCatalog.kt`, `Observation.kt`).

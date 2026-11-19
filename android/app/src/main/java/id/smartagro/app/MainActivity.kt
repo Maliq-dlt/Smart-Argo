@@ -95,10 +95,11 @@ private fun SmartAgroApp(model: AgroViewModel) {
         onDispose { }
     }
     val view = LocalView.current
+    val darkHeroTop = state.introPlaying || (state.screen == Screen.Login && state.auth == AuthStep.Welcome)
     SideEffect {
         (view.context as? android.app.Activity)?.window?.let { window ->
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !dark
+                isAppearanceLightStatusBars = !dark && !darkHeroTop
                 isAppearanceLightNavigationBars = !dark
             }
         }
@@ -107,7 +108,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
     val google = if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) null else ({ model.googleLogin(context) })
     AgroTheme(dark) {
         val shellHaze = remember { HazeState() }
-        val showTabs = state.screen !in listOf(Screen.Login, Screen.Mfa)
+        val showTabs = state.screen !in listOf(Screen.Login, Screen.Mfa) && !state.introPlaying
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         CompositionLocalProvider(
             LocalRippleConfiguration provides null,
@@ -118,7 +119,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
                 state.screen in listOf(
                     Screen.Dashboard, Screen.Mfa, Screen.History, Screen.Account, Screen.Rewards,
                     Screen.Proofs, Screen.Garden, Screen.Security, Screen.ManageProducts, Screen.Gallery,
-                ) || state.screen == Screen.Login && state.auth !in listOf(AuthStep.SignIn, AuthStep.SignUp),
+                ) || state.screen == Screen.Login && state.auth != AuthStep.Welcome,
             ) { model.back() }
             Surface(Modifier.fillMaxSize(), color = palette.canvas, contentColor = palette.ink) {
                 Box(Modifier.fillMaxSize()) {
@@ -163,7 +164,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
                             }
                         }
                     }
-                    if (state.welcome && state.screen == Screen.Products && !state.demo) WelcomeSheet(model::dismissWelcome)
+                    if (state.welcome && state.screen == Screen.Products && !state.demo && !state.introPlaying) WelcomeSheet(model::dismissWelcome)
                     if (showTabs) GlassTabBar(
                         tabs,
                         when (state.screen) {
@@ -173,6 +174,11 @@ private fun SmartAgroApp(model: AgroViewModel) {
                         },
                         { model.navigate(tabScreens[it]) },
                         Modifier.align(Alignment.BottomCenter),
+                    )
+                    LiquidGlassRevealOverlay(
+                        visible = state.introPlaying,
+                        subtitle = if (state.demo) "Menyiapkan mode latihan dan pot contoh…" else "Menyiapkan kebun dan bacaan sensor Anda…",
+                        onFinished = model::finishIntro,
                     )
                 }
             }

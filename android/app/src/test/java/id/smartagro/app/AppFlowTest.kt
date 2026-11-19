@@ -149,20 +149,30 @@ class AppFlowTest {
         assertEquals("Daun mulai menguning",submitted)
     }
     @Test fun loginDemoProductsDashboardHistoryAndBack() {
-        compose.onNodeWithText("Masuk ke Smart Agro").assertIsDisplayed()
+        compose.onNodeWithText("Smart Agro").assertIsDisplayed()
         // Appearance follows the system (HIG); the app has no light/dark switch of its own.
         compose.onNodeWithText("Mode gelap").assertDoesNotExist()
+        screenshot("00-welcome")
+        compose.onNodeWithText("Masuk dengan email").performScrollTo().performClick()
+        compose.onNodeWithText("Masuk ke Smart Agro").assertIsDisplayed()
         compose.onNodeWithText("Email").performTextInput("grower@example.test")
         compose.onNodeWithText("Kata sandi").performTextInput("local-ui-check")
         screenshot("01-login-password")
         compose.onNodeWithText("Coba mode latihan").performScrollTo().performClick()
         compose.onNodeWithText("Tanaman saya").assertIsDisplayed()
+        compose.onNodeWithText("Kartu tanaman").assertIsDisplayed()
         screenshot("02-products")
+        // Verify Apple Wallet deck rotation works cleanly across registered plants.
+        compose.onNodeWithText("Ganti").performClick()
+        compose.onNodeWithText("2/", substring = true).assertExists()
+        // Filter narrows deck to matching unit and opens PlantDetail.
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Cari nama, kode, atau produk"))
         compose.onNodeWithText("Cari nama, kode, atau produk").performTextInput("T-CASE0")
-        compose.onNodeWithText("Cabai · T-CASE0").performScrollTo().performClick()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Cabai · T-CASE0"))
+        compose.onNodeWithText("Cabai · T-CASE0").performClick()
         compose.onNodeWithText("kelembapan tanah").assertIsDisplayed()
         screenshot("03-dashboard")
-        // Choosing a reading row puts that sensor in the trend chart.
+        // Choosing a reading row puts that sensor in the Peak Chart trend.
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("pH tanah"))
         compose.onNodeWithText("pH tanah").performClick()
         compose.onNodeWithContentDescription("Ditampilkan di tren").assertExists()
@@ -177,13 +187,14 @@ class AppFlowTest {
         screenshot("04-history")
         compose.onNode(hasText("Akun") and hasClickAction()).performClick()
         compose.onNodeWithText("Mode latihan tanpa akun").assertIsDisplayed()
+        compose.onNodeWithText("Putar animasi masuk").performScrollTo().assertIsDisplayed()
         screenshot("05-account")
         compose.onNodeWithText("Tanaman").performClick()
         compose.onNodeWithText("Tanaman saya").assertIsDisplayed()
         compose.onNode(hasText("Akun") and hasClickAction()).performClick()
         compose.onNodeWithText("Akhiri latihan").performScrollTo().performClick()
         screenshot("10-logout-return")
-        compose.onNodeWithText("Masuk ke Smart Agro").assertIsDisplayed()
+        compose.onNodeWithText("Smart Agro").assertIsDisplayed()
     }
     @Test fun serverGardenUsesSpeciesCodeAndDoesNotInventDeviceMeasurements() {
         compose.runOnIdle {

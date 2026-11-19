@@ -32,7 +32,23 @@ class AuthFlowTest {
     private val secureFlag get() = compose.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
     private fun button(text: String) = compose.onNode(hasText(text) and hasClickAction())
 
+    @Test fun welcomeShowsBrandAndSeparateAccessPathsWithoutMascot() {
+        compose.onNodeWithText("Smart Agro").assertIsDisplayed()
+        compose.onNodeWithText("Masuk dengan email").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Buat akun").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Jelajahi mode latihan").performScrollTo().assertIsDisplayed()
+        // Welcome cover carries no mascot (brand-first rule).
+        compose.onNodeWithText("Tenang").assertDoesNotExist()
+        compose.onNodeWithText("Menjaga sandi").assertDoesNotExist()
+        compose.onNodeWithText("Masuk dengan email").performScrollTo().performClick()
+        compose.onNodeWithText("Masuk ke Smart Agro").assertIsDisplayed()
+        compose.onNodeWithText("Tenang").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Kembali ke Awal").performClick()
+        compose.onNodeWithText("Smart Agro").assertIsDisplayed()
+    }
+
     @Test fun signUpGrowsTheFormInPlaceAndChecksThePassword() {
+        compose.onNodeWithText("Masuk dengan email").performScrollTo().performClick()
         compose.onNodeWithText("Masuk ke Smart Agro").assertIsDisplayed()
         compose.onNodeWithText("Nama").assertDoesNotExist()
         compose.onNode(hasText("Daftar") and isSelectable()).performClick()
@@ -40,6 +56,7 @@ class AuthFlowTest {
         compose.onNodeWithText("Nama").performTextInput("Petani")
         compose.onNodeWithText("Email").performTextInput("grower@example.test")
         compose.onNodeWithText("Kata sandi").performTextInput("pendek")
+        compose.onNodeWithText("Menjaga sandi").assertIsDisplayed()
         compose.onNodeWithText("Tambah 4 karakter lagi.").assertIsDisplayed()
         button("Buat akun").assertIsNotEnabled()
         compose.onNodeWithText("Kata sandi").performTextInput("-sekali")
@@ -71,6 +88,7 @@ class AuthFlowTest {
     }
 
     @Test fun forgotPasswordCarriesTheEmailIntoTheCodeAndNewPasswordStep() {
+        compose.onNodeWithText("Masuk dengan email").performScrollTo().performClick()
         compose.onNodeWithText("Email").performTextInput("grower@example.test")
         compose.onNodeWithText("Lupa kata sandi?").performScrollTo().performClick()
         compose.onNodeWithText("Atur ulang kata sandi").assertIsDisplayed()
@@ -121,6 +139,8 @@ class AuthFlowTest {
         File(folder, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
     private fun codePages(tag: String) {
+        state(AppState(auth = AuthStep.Welcome))
+        shot("$tag-0-awal")
         state(AppState(auth = AuthStep.SignupCode, authEmail = "grower@example.test"))
         compose.onNodeWithContentDescription("Kode verifikasi").performTextInput("1234")
         shot("$tag-1-kode-daftar")
@@ -156,6 +176,8 @@ class AuthFlowTest {
             val bounds = node.fetchSemanticsNode().boundsInRoot
             assertTrue("\"$text\" inside the screen: $bounds", bounds.left >= 0 && bounds.right <= 320)
         }
+        whole("Smart Agro")
+        state(AppState(auth = AuthStep.SignIn))
         whole("Masuk ke Smart Agro")
         whole("Satu akun untuk pot, data sensor, dan poin Anda.")
         state(AppState(auth = AuthStep.SignupCode, authEmail = "grower@example.test"))

@@ -1,15 +1,26 @@
 package id.smartagro.app
 
 import android.util.LruCache
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -29,12 +40,62 @@ import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
+
+internal const val SMART_AGRO_LEAF_PATH =
+    "M24 67C15 36 39 24 77 23c1 14-1 24-5 32-9-8-19-14-31-18 10 6 20 14 28 23-3 5-6 9-11 12-7-11-16-20-26-27 8 9 15 20 20 30-8 3-16 3-23 1 0-7-1-13-4-20 1 5 1 8-1 11Z"
+
+/** Brand mark matching ikon.svg: emerald squircle with single terraced leaf. */
+@Composable
+fun SmartAgroMark(modifier: Modifier = Modifier, showTile: Boolean = true) {
+    Canvas(modifier.semantics { contentDescription = "Ikon Smart Agro" }) {
+        val side = min(size.width, size.height)
+        val s = side / 100f
+        withTransform({
+            translate((size.width - side) / 2f, (size.height - side) / 2f)
+            scale(s, s, Offset.Zero)
+        }) {
+            if (showTile) {
+                drawRoundRect(
+                    brush = Brush.linearGradient(
+                        colors = listOf(Color(0xFF2D7257), Color(0xFF0B3D32)),
+                        start = Offset.Zero,
+                        end = Offset(90f, 100f),
+                    ),
+                    size = Size(100f, 100f),
+                    cornerRadius = CornerRadius(23f, 23f),
+                )
+            }
+            drawPath(
+                path = illustrationPaths.get(SMART_AGRO_LEAF_PATH),
+                brush = Brush.linearGradient(
+                    colors = listOf(Color(0xFFA0D099), Color(0xFFF2F8CF)),
+                    start = Offset(20f, 78f),
+                    end = Offset(78f, 22f),
+                ),
+            )
+        }
+    }
+}
+
+/** 6 expressive states ported from konsep-kebun / ai-agent-mascot adaptation (zero blink, zero bounce). */
+enum class MascotMood(val label: String, val caption: String) {
+    Smile("Tenang", "Siap menemani kebun Anda"),
+    Reading("Mengamati", "Memeriksa bacaan sensor terbaru"),
+    Working("Merawat", "Menyiapkan panduan perawatan"),
+    Happy("Optimal", "Tanaman berada di rentang segar"),
+    Care("Perlu air", "Media mulai mengering, perlu dicek"),
+    Shy("Menjaga sandi", "Menutup mata saat kata sandi diisi"),
+}
 
 private val illustrationPaths = object : LruCache<String, Path>(192) {
     override fun create(key: String): Path = PathParser().parsePathString(key).toPath()
@@ -48,7 +109,10 @@ private fun DrawScope.svg(d: String, color: Color, stroke: Float = 0f) {
     )
 }
 
-/** Native Canvas port of Mascot.tsx. Password focus covers the eyes; email length moves the gaze. */
+/**
+ * Interactive Smart Agro terracotta seedling mascot with 6 expressive states (Smile, Reading, Working, Happy, Care, Shy).
+ * Password focus raises leaf hands to cover eyes; email input & pointer touch guide gaze smoothly; tap triggers a calm leaf nod.
+ */
 @Composable
 fun Mascot(
     modifier: Modifier = Modifier,
@@ -57,27 +121,69 @@ fun Mascot(
     sad: Boolean = false,
     happy: Boolean = false,
     interactive: Boolean = false,
+    mood: MascotMood? = null,
 ) {
-    val hands by animateFloatAsState(if (hidden) 1f else 0f, tween(320), label = "Leaf hands")
+    val haptics = rememberHaptics()
+    val resolved = mood ?: when {
+        hidden -> MascotMood.Shy
+        sad -> MascotMood.Care
+        happy -> MascotMood.Happy
+        else -> MascotMood.Smile
+    }
+    val coverEyes = hidden || resolved == MascotMood.Shy
+    val isCare = resolved == MascotMood.Care
+    val isHappy = resolved == MascotMood.Happy
+    val isReading = resolved == MascotMood.Reading
+    val isWorking = resolved == MascotMood.Working
+
+    val hands by animateFloatAsState(if (coverEyes) 1f else if (isWorking) .36f else 0f, tween(320, easing = FastOutSlowInEasing), label = "Leaf hands")
     var touchLook by remember { mutableStateOf<Float?>(null) }
     var greeting by remember { mutableIntStateOf(0) }
     val response = remember { Animatable(0f) }
     LaunchedEffect(greeting) {
         if (greeting > 0) {
             response.animateTo(1f, tween(220, easing = FastOutSlowInEasing))
-            response.animateTo(0f, tween(620, easing = FastOutSlowInEasing))
+            response.animateTo(0f, tween(540, easing = FastOutSlowInEasing))
         }
     }
-    val look by animateFloatAsState(touchLook ?: (gaze.coerceIn(0f, 1f) * 4f), tween(180), label = "Eye gaze")
-    val expression by animateFloatAsState(if (sad) -1f else if (happy) 1f else 0f, tween(420), label = "Moisture expression")
-    val flower by animateFloatAsState(if (happy) 1f else 0f, tween(420), label = "Companion flower")
+    val baseGaze = when {
+        touchLook != null -> touchLook!!
+        isReading -> ((gaze.coerceIn(0f, 1f) - .5f) * 7f).coerceIn(-3.5f, 3.5f)
+        else -> (gaze.coerceIn(0f, 1f) * 4f)
+    }
+    val look by animateFloatAsState(baseGaze, tween(200, easing = FastOutSlowInEasing), label = "Eye gaze")
+    val lookY by animateFloatAsState(if (isReading) 1.8f else if (isWorking) 1f else 0f, tween(220, easing = FastOutSlowInEasing), label = "Eye gaze Y")
+    val expression by animateFloatAsState(
+        when {
+            isCare -> -1f
+            isHappy -> 1f
+            isWorking -> .35f
+            isReading -> -.15f
+            else -> .25f
+        },
+        tween(380, easing = FastOutSlowInEasing),
+        label = "Mood expression",
+    )
+    val flower by animateFloatAsState(if (isHappy) 1f else 0f, tween(420, easing = FastOutSlowInEasing), label = "Companion flower")
+    val careDrop by animateFloatAsState(if (isCare) 1f else 0f, tween(360, easing = FastOutSlowInEasing), label = "Care water drop")
+    val workHalo by animateFloatAsState(if (isWorking || isHappy) 1f else 0f, tween(380, easing = FastOutSlowInEasing), label = "Mood aura")
+    val tilt by animateFloatAsState(
+        when {
+            isCare -> -13f
+            isReading -> 4f
+            isWorking -> 6f
+            else -> 0f
+        },
+        tween(340, easing = FastOutSlowInEasing),
+        label = "Sprout mood",
+    )
     val interaction = if (!interactive) Modifier else Modifier
         .clickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
             role = Role.Button,
-            onClickLabel = "Sapa maskot",
-            onClick = { greeting++ },
+            onClickLabel = "Sapa maskot ${resolved.label}",
+            onClick = { haptics.tick(); greeting++ },
         )
         .pointerInput(Unit) {
             awaitPointerEventScope {
@@ -87,12 +193,19 @@ fun Mascot(
                 }
             }
         }
-    val tilt by animateFloatAsState(if (sad) -14f else 0f, tween(320), label = "Sprout mood")
     Canvas(modifier.then(interaction)) {
         val s = min(size.width / 124f, size.height / 140f)
         withTransform({ translate((size.width - 124 * s) / 2 - 18 * s, (size.height - 140 * s) / 2 - 16 * s); scale(s, s, Offset.Zero) }) {
+            if (workHalo > .01f) {
+                val auraColor = if (isHappy) Color(0xFF93C47D) else Color(0xFF4D8A70)
+                drawCircle(
+                    Brush.radialGradient(listOf(auraColor.copy(alpha = .24f * workHalo), Color.Transparent), Offset(80f, 82f), 64f),
+                    64f,
+                    Offset(80f, 82f),
+                )
+            }
             drawOval(Color(0x2218211B), Offset(42f, 145.5f), Size(76f, 9f))
-            rotate(tilt + response.value * 3f, Offset(80f, 72f)) {
+            rotate(tilt + response.value * 5f, Offset(80f, 72f)) {
                 svg("M80 72C80 60 79 52 80 43", Color(0xFF5B7A52), 4f)
                 svg("M79.5 56C66 58 56 50 57 37C70 35 79.5 43 79.5 56Z", Color(0xFF93B575))
                 svg("M80.5 48C81.5 34 92 26 106 28C106 42 96 50 80.5 48Z", Color(0xFF52714B))
@@ -106,27 +219,142 @@ fun Mascot(
                     drawCircle(Color(0xFFD5B463).copy(alpha = flower), 3f, Offset(80f, 41f))
                 }
             }
+            // Terracotta pot body + rim
             svg("M41 80H119L112.5 133Q110.5 146 97 146H63Q49.5 146 47.5 133Z", Color(0xFFC49778))
             svg("M51 89L54.5 128", Color(0xFFE4BFA2), 3f)
             drawRoundRect(Color(0xFFD4AB8C), Offset(34f, 70f), Size(92f, 18f), CornerRadius(9f))
             drawOval(Color(0xBFCB7766), Offset(49.5f, 112f), Size(13f, 8f))
             drawOval(Color(0xBFCB7766), Offset(97.5f, 112f), Size(13f, 8f))
-            for (x in listOf(66f, 94f)) {
-                if (hands > .7f) svg(if (happy) "M${x - 6.5} 106Q$x 98.5 ${x + 6.5} 106" else "M${x - 6.5} 103.5Q$x 109.5 ${x + 6.5} 103.5", Color(0xFF30271F), 2.6f)
-                else {
-                    drawOval(Color(0xFF30271F), Offset(x - 6.4f + look, 96.6f), Size(12.8f, 14.8f - expression.coerceAtLeast(0f) * 2f))
-                    drawCircle(Color(0xFFFFFBF4), 2.3f, Offset(x - 2.1f + look, 101.3f))
-                    drawCircle(Color(0xFFFFFBF4), 1.1f, Offset(x + 2.2f + look, 106.6f))
+
+            // Care water droplet beside terracotta cheek (steady, non-blinking)
+            if (careDrop > .01f) {
+                withTransform({ translate(114f, 92f); scale(careDrop, careDrop, Offset(6f, 8f)) }) {
+                    svg("M6 0C10 6 12 10 12 13A6 6 0 1 1 0 13C0 10 2 6 6 0Z", Color(0xFF4A8FA8).copy(alpha = careDrop))
+                    drawCircle(Color.White.copy(alpha = .75f * careDrop), 1.5f, Offset(4f, 11.5f))
                 }
             }
-            svg("M74 119Q80 ${122f + expression * 5f} 86 119", Color(0xFF30271F), 2.6f)
+
+            // Eyes & brows
+            for ((idx, x) in listOf(66f, 94f).withIndex()) {
+                val leftEye = idx == 0
+                if (coverEyes && hands > .65f) {
+                    svg("M${x - 6.5} 103.5Q$x 109.5 ${x + 6.5} 103.5", Color(0xFF30271F), 2.6f)
+                } else if (isHappy && !coverEyes) {
+                    svg("M${x - 6.5} 106Q$x 97.5 ${x + 6.5} 106", Color(0xFF30271F), 2.8f)
+                } else {
+                    val eyeH = if (isReading) 12.2f else 14.8f - expression.coerceAtLeast(0f) * 1.4f
+                    val topY = 96.6f + (14.8f - eyeH) * .5f + lookY
+                    drawOval(Color(0xFF30271F), Offset(x - 6.4f + look, topY), Size(12.8f, eyeH))
+                    drawCircle(Color(0xFFFFFBF4), 2.3f, Offset(x - 2.1f + look, topY + 4.4f))
+                    drawCircle(Color(0xFFFFFBF4), 1.1f, Offset(x + 2.2f + look, topY + eyeH - 4.4f))
+                    if (isCare) {
+                        val bStart = if (leftEye) Offset(x - 7f, 93f) else Offset(x - 6f, 89.5f)
+                        val bEnd = if (leftEye) Offset(x + 6f, 89.5f) else Offset(x + 7f, 93f)
+                        drawLine(Color(0xFF30271F), bStart, bEnd, 2.2f, cap = StrokeCap.Round)
+                    } else if (isWorking) {
+                        val bStart = if (leftEye) Offset(x - 6f, 90f) else Offset(x - 6f, 92.5f)
+                        val bEnd = if (leftEye) Offset(x + 6f, 92.5f) else Offset(x + 6f, 90f)
+                        drawLine(Color(0xFF30271F), bStart, bEnd, 2.2f, cap = StrokeCap.Round)
+                    }
+                }
+            }
+            // Mouth
+            if (isReading) {
+                drawLine(Color(0xFF30271F), Offset(76.5f, 119.5f), Offset(83.5f, 119.5f), 2.4f, cap = StrokeCap.Round)
+            } else {
+                svg("M74 119Q80 ${121.5f + expression * 5.2f} 86 119", Color(0xFF30271F), 2.6f)
+            }
+
+            // Leaf hands
             for (right in listOf(false, true)) withTransform({
                 translate(if (right) 118f else 42f, 111f)
                 if (right) scale(-1f, 1f, Offset.Zero)
-                rotate(118f - 134f * hands - response.value * 12f, Offset.Zero)
+                val baseAngle = if (coverEyes) 118f - 134f * hands else 118f - 84f * hands
+                rotate(baseAngle - response.value * 16f, Offset.Zero)
             }) {
                 svg("M0 0C6 -9 19 -10 27 -2C19 6 6 7 0 0Z", Color(0xFF52714B))
                 svg("M3 -.5H21", Color(0xFFA3B383), 1.2f)
+            }
+        }
+    }
+}
+
+/** Frosted status pill paired with the mascot; steady dot (never blinking). */
+@Composable
+fun MascotPill(mood: MascotMood, modifier: Modifier = Modifier, customLabel: String? = null) {
+    val p = palette
+    val dotColor by animateColorAsState(
+        when (mood) {
+            MascotMood.Care -> p.warn
+            MascotMood.Reading -> p.water
+            MascotMood.Working -> p.sun
+            MascotMood.Happy -> p.tint
+            MascotMood.Shy -> p.secondary
+            MascotMood.Smile -> p.tint
+        },
+        Springs.smooth(),
+        label = "Warna status maskot",
+    )
+    val bg = if (p.dark) p.raised.copy(alpha = .92f) else Color(0xEBFFFFFF)
+    Row(
+        modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .border(.75.dp, p.separator, RoundedCornerShape(50))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .semantics(mergeDescendants = true) { },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
+        Text(
+            customLabel ?: mood.label,
+            style = T.footnote.copy(fontWeight = FontWeight.Medium),
+            color = p.ink,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Interactive mascot stage with live status badge and optional state preview strip (advice sheet). */
+@Composable
+fun MascotStage(
+    mood: MascotMood,
+    modifier: Modifier = Modifier,
+    caption: String = mood.caption,
+    previewMoods: List<MascotMood> = emptyList(),
+    onSelectMood: ((MascotMood) -> Unit)? = null,
+) {
+    val p = palette
+    val stageBrush = Brush.verticalGradient(
+        if (p.dark) listOf(Color(0xFF192720), p.cell) else listOf(Color(0xFFEAF3E2), p.cell),
+    )
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(stageBrush)
+            .border(.75.dp, p.separator, RoundedCornerShape(24.dp))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        MascotPill(mood)
+        Mascot(
+            Modifier.padding(top = 8.dp).size(116.dp, 130.dp),
+            mood = mood,
+            interactive = true,
+        )
+        Text(caption, style = T.subhead, color = p.secondary, modifier = Modifier.padding(top = 4.dp))
+        Text("Ketuk maskot untuk menyapa.", style = T.footnote, color = p.secondary, modifier = Modifier.padding(top = 2.dp))
+        if (previewMoods.isNotEmpty() && onSelectMood != null) {
+            Row(
+                Modifier.padding(top = 12.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                previewMoods.forEach { option ->
+                    Pill(option.label, option == mood) { onSelectMood(option) }
+                }
             }
         }
     }

@@ -90,11 +90,11 @@ object T {
     val figure = g(44, 48, FontWeight.Medium, -0.03)
 }
 
-/** Three shared springs, the counterpart of SwiftUI's snappy, smooth and bouncy presets. Interruptible by construction. */
+/** Shared critically-damped springs (zero bounce/overshoot for motion comfort). Interruptible by construction. */
 object Springs {
-    fun <V> snappy(): SpringSpec<V> = spring(dampingRatio = .86f, stiffness = 620f)
+    fun <V> snappy(): SpringSpec<V> = spring(dampingRatio = 1f, stiffness = 540f)
     fun <V> smooth(): SpringSpec<V> = spring(dampingRatio = 1f, stiffness = 300f)
-    fun <V> bouncy(): SpringSpec<V> = spring(dampingRatio = .68f, stiffness = 460f)
+    fun <V> bouncy(): SpringSpec<V> = spring(dampingRatio = 1f, stiffness = 420f)
 }
 
 /** Haptics that mirror iOS feedback: a tick for selection, confirm/reject for outcomes. Silent when the system turns them off. */

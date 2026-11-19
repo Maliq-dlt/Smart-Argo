@@ -24,7 +24,7 @@ function nodes() {
 }
 async function tap(label, { scrolls = 6 } = {}) {
   for (let i = 0; i <= scrolls; i++) {
-    const hit = nodes().find(n => (n.text === label || n.desc === label || n.text.startsWith(label)) && (n.y < 1900 || ['Aktivitas', 'Akun', 'Coba mode latihan'].includes(label)));
+    const hit = nodes().find(n => (n.text === label || n.desc === label || n.text.startsWith(label)) && (n.y < 1900 || ['Aktivitas', 'Akun', 'Coba mode latihan', 'Jelajahi mode latihan', 'Masuk dengan email'].includes(label)));
     if (hit) { adb('shell', 'input', 'tap', hit.x, hit.y); await sleep(1200); return; }
     adb('shell', 'input', 'swipe', '540', '1700', '540', '900', '400'); await sleep(700);
   }
@@ -41,17 +41,18 @@ async function tour(tag) {
   adb('shell', 'am', 'force-stop', 'id.smartagro.app');
   adb('shell', 'am', 'start', '-n', 'id.smartagro.app/.MainActivity'); await sleep(3500);
   // Signed-out pages only: nothing is submitted, because the debug build talks to the production backend.
-  await shot(`${tag}-00a-masuk`);
+  await shot(`${tag}-00-awal`);
+  await tap('Masuk dengan email'); await shot(`${tag}-00a-masuk`);
   await tap('Daftar'); await shot(`${tag}-00b-daftar`);
   await tap('Masuk'); await tap('Lupa kata sandi?'); await shot(`${tag}-00c-lupa-sandi`);
   adb('shell', 'input', 'keyevent', 'KEYCODE_BACK'); await sleep(1200);
   // A tap during the first frames can be lost, so retry until the plants screen is there.
   for (let attempt = 0; attempt < 4 && !nodes().some(n => n.text === 'Tanaman saya'); attempt++) {
     await tap('Coba mode latihan'); // scrolls the sign-in page when the button is below the fold
-    await sleep(2500);
+    await sleep(2800);
   }
   await shot(`${tag}-01-tanaman`);
-  await tap('Cabai', { scrolls: 3 });
+  await tap('Buka detail', { scrolls: 3 });
   await sleep(800);
   await shot(`${tag}-02-detail`);
   await scroll(); await shot(`${tag}-03-detail-bawah`);
