@@ -68,7 +68,7 @@ enum class Sensor(val key: String, val label: String, val unit: String, val min:
     Ph("soil_ph", "pH tanah", "pH", 0.0, 14.0);
     companion object { fun parse(key: String) = entries.find { it.key == key } ?: invalid() }
 }
-data class Reading(val sensor: Sensor, val quality: String, val value: Double?, val at: Instant, val synced: Boolean = true, val id: String? = null) {
+data class Reading(val sensor: Sensor, val quality: String, val value: Double?, val at: Instant, val synced: Boolean = true, val id: String? = null, val receivedAt: Instant? = null) {
     companion object {
         fun parse(json: JSONObject): Reading {
             val sensor = Sensor.parse(json.text("sensor_id"))
@@ -79,7 +79,9 @@ data class Reading(val sensor: Sensor, val quality: String, val value: Double?, 
             if (clock.length > 40) invalid()
             if (quality == "ok") { if (value == null || value !in sensor.min..sensor.max) invalid() }
             else if (quality in listOf("error", "not_measured") && value != null) invalid()
-            return Reading(sensor, quality, if(quality=="ok") value else null, json.instant("measured_at"), clock == "synced")
+            val receivedAt = if (json.isNull("received_at")) null else json.instant("received_at")
+            return Reading(sensor, quality, if (quality == "ok") value else null, json.instant("measured_at"),
+                synced = clock == "synced", receivedAt = receivedAt)
         }
     }
 }

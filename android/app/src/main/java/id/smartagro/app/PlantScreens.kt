@@ -42,7 +42,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -65,11 +64,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.Instant
 import java.util.Locale
-import kotlin.math.roundToInt
 
 private val ID = Locale.forLanguageTag("id-ID")
 internal fun percent(value: Double?) = value?.let { String.format(ID, "%.0f%%", it) } ?: "—"
@@ -90,17 +91,52 @@ internal fun ago(at: Instant?, now: Instant): String {
     }
 }
 
-/** What one unit's latest overview says, with stale or revoked data never shown as a current value. */
-internal data class Health(val moisture: Double?, val temperature: Double?, val ph: Double?, val status: String,
-                           val attention: Boolean, val waiting: Boolean, val at: Instant?) {
-    fun value(sensor: Sensor) = when (sensor) { Sensor.Moisture -> moisture; Sensor.Temperature -> temperature; Sensor.Ph -> ph }
+internal enum class SensorStatus(val label: String) {
+    Ready("Bacaan terbaru"),
+    Waiting("Menunggu bacaan pertama"),
+    Stale("Bacaan lama"),
+    Unmeasured("Belum diukur"),
+    Error("Sensor bermasalah"),
+    UntrustedClock("Jam perangkat belum sinkron"),
+    Revoked("Perangkat dicabut"),
+    Unknown("Status sensor tidak dikenali"),
 }
+
+internal fun sensorStatus(sample: Reading?, now: Instant, stale: Boolean, revoked: Boolean): SensorStatus = when {
+    revoked -> SensorStatus.Revoked
+    sample == null -> SensorStatus.Waiting
+    !sample.synced -> SensorStatus.UntrustedClock
+    stale || !fresh(sample.at, now) -> SensorStatus.Stale
+    sample.quality == "not_measured" -> SensorStatus.Unmeasured
+    sample.quality == "error" -> SensorStatus.Error
+    sample.quality == "ok" && sample.value != null -> SensorStatus.Ready
+    else -> SensorStatus.Unknown
+}
+
+internal data class Health(
+    val samples: Map<Sensor, Reading>,
+    val sensorStatuses: Map<Sensor, SensorStatus>,
+    val status: String,
+    val attention: Boolean,
+    val waiting: Boolean,
+    val at: Instant?,
+) {
+    fun value(sensor: Sensor) = samples[sensor]?.value?.takeIf { sensorStatuses.getValue(sensor) == SensorStatus.Ready }
+    val moisture = value(Sensor.Moisture)
+    val temperature = value(Sensor.Temperature)
+    val ph = value(Sensor.Ph)
+}
+
 internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
     val overview = state.overviews.find { it.id == unit.id }
     val stale = !state.demo && overview?.stale(now) != false
     val revoked = "device_revoked" in overview?.alerts.orEmpty()
-    fun value(sensor: Sensor) = overview?.readings?.find { it.sensor == sensor && it.quality == "ok" && it.synced }
-        ?.takeIf { state.demo || !stale && !revoked && fresh(it.at, now) }?.value
+    val samples = overview?.readings.orEmpty().groupBy { it.sensor }.mapValues { (_, rows) -> rows.maxBy { it.at } }
+    val statuses = Sensor.entries.associateWith { sensor ->
+        val sample = samples[sensor]
+        if (state.demo && sample?.quality == "ok" && sample.value != null) SensorStatus.Ready
+        else sensorStatus(sample, now, stale, revoked)
+    }
     val status = when {
         state.demo -> "Skenario latihan"
         revoked -> "Perangkat dicabut"
@@ -109,7 +145,7 @@ internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
     }
     val attention = !stale && (overview?.state in listOf("sedih_perhatian", "waspada_marah") ||
         overview?.alerts.orEmpty().any { it in listOf("sensor_error", "battery_low", "energy_deficit") }) || revoked
-    return Health(value(Sensor.Moisture), value(Sensor.Temperature), value(Sensor.Ph), status, attention, stale && !revoked, overview?.at)
+    return Health(samples, statuses, status, attention, stale && !revoked, overview?.at)
 }
 
 internal fun mascotMoodFor(h: Health): MascotMood = when {
@@ -120,7 +156,7 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     else -> MascotMood.Smile
 }
 
-@Composable private fun rememberNow(): Instant {
+@Composable internal fun rememberNow(): Instant {
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = Instant.now() } }
     return now
@@ -161,7 +197,7 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     var query by rememberSaveable { mutableStateOf("") }
     var productId by rememberSaveable { mutableStateOf<String?>(null) }
     var addingSite by rememberSaveable { mutableStateOf(false) }
-    var plantingSlot by remember { mutableStateOf<GardenSlot?>(null) }
+    var plantingSlotId by rememberSaveable { mutableStateOf<String?>(null) }
     var autoRotate by rememberSaveable { mutableStateOf(false) }
     var adviceSheetUnitId by rememberSaveable { mutableStateOf<String?>(null) }
     val uri = rememberSafeUriHandler()
@@ -180,8 +216,15 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     val activeUnit = visible.getOrNull(activeIndex)
 
     // Optional calm 8-second auto-cycle between registered plants (never runs under reduced motion; stops on manual touch).
-    LaunchedEffect(autoRotate, visible, activeIndex, reduced) {
-        if (!autoRotate || visible.size <= 1 || reduced) return@LaunchedEffect
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var resumed by remember(lifecycle) { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, _ -> resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(autoRotate, visible, activeIndex, reduced, resumed) {
+        if (!autoRotate || visible.size <= 1 || reduced || !resumed) return@LaunchedEffect
         delay(8_000)
         val next = visible[(activeIndex + 1) % visible.size]
         model.selectUnit(next)
@@ -294,7 +337,7 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                         val siteName = garden.sites.find { it.id == slot.siteId }?.name.orEmpty()
                         Cell(
                             slot.name, subtitle = "$siteName · Ketuk untuk mulai tanam", glyph = PhosphorPaths.PlusBold, glyphColor = p.tint,
-                            enabled = !state.busy, onClick = { plantingSlot = slot },
+                            enabled = !state.busy, onClick = { plantingSlotId = slot.id },
                         )
                     }
                 }
@@ -322,7 +365,7 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     }
 
     if (addingSite) AddSiteSheet(state, model) { addingSite = false }
-    plantingSlot?.let { slot -> PlantSlotSheet(slot, state, model) { plantingSlot = null } }
+    state.garden?.slots?.find { it.id == plantingSlotId }?.let { slot -> PlantSlotSheet(slot, state, model) { plantingSlotId = null } }
     adviceSheetUnitId?.let { id ->
         val unit = state.units.find { it.id == id }
         if (unit != null) {
@@ -431,8 +474,9 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     val species = remember(linkedCycle?.species, active.crop) {
         linkedCycle?.let { SpeciesCatalog.byCode(it.species) } ?: SpeciesCatalog.ofCrop(active.crop)
     }
-    val cycleDays = remember(linkedCycle?.plantedOn) {
-        linkedCycle?.let { java.time.temporal.ChronoUnit.DAYS.between(it.plantedOn, java.time.LocalDate.now()).toInt().coerceAtLeast(1) } ?: 35
+    val cycleDays = remember(linkedCycle?.plantedOn, state.demo, java.time.LocalDate.now()) {
+        linkedCycle?.let { java.time.temporal.ChronoUnit.DAYS.between(it.plantedOn, java.time.LocalDate.now()).toInt().coerceAtLeast(0) }
+            ?: 35.takeIf { state.demo }
     }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -729,7 +773,7 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     val stored = state.explanation.takeIf { state.explanationUnitId == unit.id }
     val demoPair = state.demoAdvice[unit.id]
     val moistureReadings = remember(state.history, unit.id) {
-        if (state.selectedUnit?.id == unit.id) state.history.filter { it.sensor == Sensor.Moisture && it.value != null } else emptyList()
+        if (state.selectedUnit?.id == unit.id) state.history.filter { it.sensor == Sensor.Moisture } else emptyList()
     }
 
     AgroSheet("Saran · ${unit.name}", onDismiss) {
@@ -887,11 +931,12 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
     val species = remember(linkedCycle?.species, unit.crop) {
         linkedCycle?.let { SpeciesCatalog.byCode(it.species) } ?: SpeciesCatalog.ofCrop(unit.crop)
     }
-    val cycleDays = remember(linkedCycle?.plantedOn) {
-        linkedCycle?.let { java.time.temporal.ChronoUnit.DAYS.between(it.plantedOn, java.time.LocalDate.now()).toInt().coerceAtLeast(1) } ?: 35
+    val cycleDays = remember(linkedCycle?.plantedOn, state.demo, java.time.LocalDate.now()) {
+        linkedCycle?.let { java.time.temporal.ChronoUnit.DAYS.between(it.plantedOn, java.time.LocalDate.now()).toInt().coerceAtLeast(0) }
+            ?: 35.takeIf { state.demo }
     }
-    LaunchedEffect(unit.id, state.demo, state.email, state.busy) {
-        if (!state.demo && state.email.isNotBlank() && !state.busy && state.careUnitId != unit.id) {
+    LaunchedEffect(unit.id, state.demo, state.email) {
+        if (!state.demo && state.email.isNotBlank() && (!state.careLoaded || state.careUnitId != unit.id)) {
             model.loadCareJournal(unit.id)
         }
     }
@@ -899,7 +944,7 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
     val outdoor = state.weatherSite?.placement?.let { it != "indoor" } == true
     val hour = weather?.at?.substring(11, 13)?.toIntOrNull() ?: java.time.LocalTime.now().hour
     val sky = skyFor(hour, weather?.condition, outdoor)
-    TitledScreen(unit.name, Modifier.zoom("unit-${unit.id}"), subtitle = "${unit.crop} \u00b7 ${state.plantCode(unit)}", back = "Tanaman", onBack = model::back,
+    TitledScreen(unit.name, Modifier.zoom("unit-${unit.id}"), subtitle = "${unit.crop} \u00b7 ${state.plantCode(unit)}", back = if (state.dashboardFromGarden) "Kebun" else "Tanaman", onBack = model::back,
         actions = { BarButton(PhosphorPaths.PencilSimple, "Ubah nama tanaman", { renaming = true }, enabled = !state.busy) }) {
         notices(state)
         item(key = "hero") {
@@ -916,7 +961,12 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
                     weather?.takeIf { outdoor }?.let { Text("${it.label} \u00b7 ${number(it.tempC)}\u00b0", style = T.headline, color = Color.White, modifier = Modifier.padding(top = 2.dp)) }
                 }
             }
-            Text(if (state.demo) "Data sintetis" else "Diperbarui ${ago(h.at, now).lowercase(ID)}", Modifier.fillMaxWidth().padding(top = 8.dp),
+            val moistureSample = h.samples[Sensor.Moisture]
+            Text(when {
+                state.demo -> "Data sintetis"
+                moistureSample != null -> "Diukur ${time(moistureSample.at)}"
+                else -> "Menunggu bacaan pertama"
+            }, Modifier.fillMaxWidth().padding(top = 8.dp),
                 style = T.footnote, color = p.secondary, textAlign = TextAlign.Center)
         }
         item(key = "stage-title") { SectionTitle("Kondisi pot") }
@@ -934,7 +984,13 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
                     cloudy = weather?.condition in listOf("berawan", "mendung", "hujan"),
                 )
                 ToggleCell("Lihat akar & media", cutaway, { cutaway = it })
-                Text("Ketuk daun untuk melihat respons pot.", style = T.footnote, color = p.secondary)
+                val moistureStatus = h.sensorStatuses.getValue(Sensor.Moisture)
+                Text(
+                    if (!state.demo && moistureStatus != SensorStatus.Ready) moistureStatus.label
+                    else "Ketuk daun untuk melihat respons pot.",
+                    style = T.footnote, color = p.secondary,
+                )
+                if (cycleDays == null) Text("Tanggal tanam belum dicatat", style = T.footnote, color = p.secondary)
             }
         }
         item(key = "advice-title") { SectionTitle("Saran") }
@@ -942,12 +998,19 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
         if (!species.curated) {
             item(key = "learning-title") { SectionTitle("Mode belajar") }
             item(key = "learning") {
-                val journal = state.careJournal.filter { it.unitId == unit.id }
-                val (summary, lastCheck) = remember(species.name, state.history, journal) {
-                    ObservationEngine.fromHistory(species.name, state.history, journal)
-                }
-                ModeBelajarCard(species.name, summary, lastCheck, state.busy) { picked ->
-                    logLearningCheck(model, unit.id, picked)
+                if (!state.demo && (!state.careLoaded || state.careUnitId != unit.id || state.careNext != null)) {
+                    Footnote("Muat riwayat perawatan sebelum menghitung pola pot.")
+                    PlainButton("Muat riwayat perawatan", {
+                        if (state.careNext != null) model.loadOlderCareJournal() else model.loadCareJournal(unit.id)
+                    }, Modifier.padding(horizontal = 16.dp), enabled = !state.busy)
+                } else {
+                    val journal = state.careJournal.filter { it.unitId == unit.id }
+                    val (summary, lastCheck) = remember(species.name, state.history, journal) {
+                        ObservationEngine.fromHistory(species.name, state.history, journal)
+                    }
+                    ModeBelajarCard(species.name, summary, lastCheck, state.busy) { picked ->
+                        logLearningCheck(model, unit.id, picked)
+                    }
                 }
             }
         }
@@ -957,7 +1020,7 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
                 Sensor.entries.forEach { s ->
                     val (path, color) = when (s) { Sensor.Moisture -> PhosphorPaths.DropFill to p.water; Sensor.Temperature -> PhosphorPaths.Thermometer to p.sun; Sensor.Ph -> PhosphorPaths.Flask to p.tint }
                     Cell(s.label.let { if (s == Sensor.Moisture) "Kelembapan" else it }, glyph = path, glyphColor = color, value = reading(s, h.value(s)),
-                        subtitle = if (h.value(s) == null && !state.demo) "Tidak ada bacaan baru" else null, chevron = false,
+                        subtitle = h.sensorStatuses.getValue(s).takeUnless { state.demo || it == SensorStatus.Ready }?.label, chevron = false,
                         trailing = { if (sensor == s) Icon(icon(PhosphorPaths.ChartLine), "Ditampilkan di tren", Modifier.size(18.dp), tint = p.tint) },
                         onClick = { sensor = s })
                 }
@@ -971,9 +1034,10 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
                 val latest = state.history.maxOfOrNull { it.at }
                 val since = latest?.minus(if (range == 0) Duration.ofHours(24) else Duration.ofDays(7))
                 TrendChart(
-                    state.history.filter { it.sensor == sensor && it.value != null && since != null && !it.at.isBefore(since) },
+                    state.history.filter { it.sensor == sensor && since != null && !it.at.isBefore(since) },
                     sensor,
                     when (sensor) { Sensor.Moisture -> p.water; Sensor.Temperature -> p.sun; Sensor.Ph -> p.tint },
+                    waterings = state.careJournal.filter { it.unitId == unit.id && it.kind == "watering" },
                 )
                 if (state.historyHasMore) PlainButton("Muat bacaan lebih lama", model::loadOlderHistory, Modifier.padding(top = 6.dp), enabled = !state.busy)
             }
@@ -1036,18 +1100,16 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
     }
 }
 
-// ---------------------------------------------------------------- Peak Chart (smooth monotone cubic Bezier + steady halo)
-
-internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int): Int {
-    val span = (width - 2 * inset).coerceAtLeast(1f)
-    return (((x - inset) / span) * (count - 1)).roundToInt().coerceIn(0, count - 1)
+internal fun chartTimeFraction(at: Instant, first: Instant, last: Instant): Float {
+    val span = Duration.between(first, last).toMillis()
+    return if (span <= 0) .5f else (Duration.between(first, at).toMillis().toDouble() / span).toFloat().coerceIn(0f, 1f)
 }
 
-/**
- * Interactive Peak Chart (ported from @louisstudios/components/peak-chart):
- * smooth monotone cubic Bezier spline, ambient sage card gradient, steady concentric halo marker (no blink/pulse),
- * direct tap/drag scrub with tick haptics, and optional bidirectional sync with a reading list.
- */
+internal fun chartSampleIndex(x: Float, width: Float, inset: Float, positions: List<Float>): Int {
+    val fraction = (x - inset) / (width - 2 * inset).coerceAtLeast(1f)
+    return positions.indices.minBy { kotlin.math.abs(positions[it] - fraction) }
+}
+
 @Composable internal fun TrendChart(
     readings: List<Reading>,
     sensor: Sensor,
@@ -1055,10 +1117,12 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int):
     modifier: Modifier = Modifier,
     selectedAt: Instant? = null,
     onSelect: ((Reading?) -> Unit)? = null,
+    waterings: List<CareEntry> = emptyList(),
 ) {
     val p = palette
     val haptics = rememberHaptics()
-    val points = remember(readings) { readings.sortedBy { it.at } }
+    val segments = remember(readings, sensor) { chartSegments(readings, sensor) }
+    val points = remember(segments) { segments.flatten() }
     var scrubIdx by remember(points) { mutableStateOf<Int?>(null) }
 
     val cardBg = Brush.verticalGradient(
@@ -1079,6 +1143,13 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int):
         return
     }
 
+    val first = points.first().at
+    val last = points.last().at
+    val positions = remember(points) { points.map { chartTimeFraction(it.at, first, last) } }
+    val visibleWaterings = remember(waterings, sensor, first, last) {
+        if (sensor == Sensor.Moisture) waterings.filter { it.observedAt in first..last }.sortedBy { it.observedAt }
+        else emptyList()
+    }
     val reveal = remember(points, sensor) { Animatable(0f) }
     LaunchedEffect(points, sensor) {
         reveal.snapTo(0f)
@@ -1148,6 +1219,11 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int):
             }
         }
 
+        if (isPinned) {
+            shown.receivedAt?.let {
+                Text("Diterima ${time(it)}", style = T.footnote, color = p.secondary, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
         val dashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f) }
         Canvas(
             Modifier
@@ -1156,7 +1232,7 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int):
                 .padding(top = 12.dp)
                 .pointerInput(points) {
                     detectTapGestures(onTap = { pos ->
-                        val i = chartSampleIndex(pos.x, size.width.toFloat(), chartInset.toPx(), points.size)
+                        val i = chartSampleIndex(pos.x, size.width.toFloat(), chartInset.toPx(), positions)
                         val listener = selectReading
                         haptics.tick()
                         if (listener != null) {
@@ -1172,7 +1248,7 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int):
                         onDragEnd = { if (selectReading != null) scrubIdx = null },
                         onDragCancel = { scrubIdx = null },
                     ) { change, _ ->
-                        val i = chartSampleIndex(change.position.x, size.width.toFloat(), chartInset.toPx(), points.size)
+                        val i = chartSampleIndex(change.position.x, size.width.toFloat(), chartInset.toPx(), positions)
                         if (scrubIdx != i) {
                             scrubIdx = i
                             haptics.tick()
@@ -1203,7 +1279,7 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int):
             val padX = chartInset.toPx()
             val usableW = (size.width - padX * 2).coerceAtLeast(1f)
             val usableH = (size.height - padY * 2).coerceAtLeast(1f)
-            fun x(i: Int) = padX + usableW * i / (points.size - 1)
+            fun x(i: Int) = padX + usableW * positions[i]
             fun y(v: Double) = (padY + usableH * (1.0 - (v - lo) / (hi - lo))).toFloat().coerceIn(padY, size.height - padY)
 
             // Calm dashed horizontal guides
@@ -1212,59 +1288,43 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int):
                 drawLine(p.separator, Offset(0f, gy), Offset(size.width, gy), 1f, pathEffect = dashEffect)
             }
 
-            // Build monotone cubic Bezier path (smooth Peak Chart curve without spline overshoot)
             val xs = FloatArray(points.size) { x(it) }
-            val ys = FloatArray(points.size) { y(points[it].value!!) }
-            val n = points.size
-            val dxs = FloatArray(n - 1) { xs[it + 1] - xs[it] }
-            val slopes = FloatArray(n - 1) { (ys[it + 1] - ys[it]) / dxs[it].coerceAtLeast(1e-3f) }
-            val tangents = FloatArray(n)
-            tangents[0] = slopes[0]
-            tangents[n - 1] = slopes[n - 2]
-            for (i in 1 until n - 1) {
-                tangents[i] = if (slopes[i - 1] * slopes[i] <= 0f) 0f else (slopes[i - 1] + slopes[i]) * 0.5f
-            }
-            for (i in 0 until n - 1) {
-                val s = slopes[i]
-                if (s == 0f) {
-                    tangents[i] = 0f
-                    tangents[i + 1] = 0f
-                } else {
-                    val a = tangents[i] / s
-                    val b = tangents[i + 1] / s
-                    val norm = kotlin.math.hypot(a, b)
-                    if (norm > 3f) {
-                        val scale = 3f / norm
-                        tangents[i] = scale * a * s
-                        tangents[i + 1] = scale * b * s
-                    }
-                }
-            }
-
-            val line = Path().apply {
-                moveTo(xs[0], ys[0])
-                for (i in 0 until n - 1) {
-                    val hStep = dxs[i] / 3f
-                    cubicTo(
-                        xs[i] + hStep, ys[i] + tangents[i] * hStep,
-                        xs[i + 1] - hStep, ys[i + 1] - tangents[i + 1] * hStep,
-                        xs[i + 1], ys[i + 1],
-                    )
-                }
-            }
-            val area = Path().apply {
-                addPath(line)
-                lineTo(xs.last(), size.height)
-                lineTo(xs.first(), size.height)
-                close()
-            }
-
+            val ys = FloatArray(points.size) { y(values[it]) }
             clipRect(right = size.width * reveal.value.coerceIn(0.02f, 1f)) {
-                drawPath(area, Brush.verticalGradient(listOf(color.copy(alpha = if (p.dark) .30f else .22f), color.copy(alpha = 0f))))
-                drawPath(line, color, style = Stroke(2.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                var start = 0
+                for (segment in segments) {
+                    val end = start + segment.lastIndex
+                    if (end == start) {
+                        drawCircle(color, 2.8.dp.toPx(), Offset(xs[start], ys[start]))
+                    } else {
+                        val line = Path().apply {
+                            moveTo(xs[start], ys[start])
+                            for (i in start until end) {
+                                val midX = (xs[i] + xs[i + 1]) / 2f
+                                cubicTo(midX, ys[i], midX, ys[i + 1], xs[i + 1], ys[i + 1])
+                            }
+                        }
+                        val area = Path().apply {
+                            addPath(line)
+                            lineTo(xs[end], size.height)
+                            lineTo(xs[start], size.height)
+                            close()
+                        }
+                        drawPath(area, Brush.verticalGradient(listOf(color.copy(alpha = if (p.dark) .30f else .22f), Color.Transparent)))
+                        drawPath(line, color, style = Stroke(2.8.dp.toPx(), cap = StrokeCap.Round))
+                    }
+                    start = end + 1
+                }
             }
 
-            // Steady peak/active vertical cursor & concentric halo dot (zero blink, zero pulse)
+            for (event in visibleWaterings) {
+                val markX = padX + usableW * chartTimeFraction(event.observedAt, first, last)
+                drawLine(p.tint.copy(alpha = .65f), Offset(markX, padY), Offset(markX, size.height - padY),
+                    strokeWidth = 1.dp.toPx(), pathEffect = dashEffect)
+                drawCircle(p.tint, 3.dp.toPx(), Offset(markX, size.height - padY))
+            }
+
+            // Steady peak/active vertical cursor and halo.
             val markerIdx = if (isPinned) activeIdx else peakIdx
             val mx = xs[markerIdx]
             val my = ys[markerIdx]
@@ -1277,6 +1337,10 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, count: Int):
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(time(points.first().at), style = T.footnote, color = p.secondary)
             Text("Rendah ${reading(sensor, minVal)} · Tinggi ${reading(sensor, peakVal)}", style = T.footnote, color = p.secondary)
+        }
+        visibleWaterings.lastOrNull()?.let { event ->
+            Text("${visibleWaterings.size} catatan siram · Terakhir ${time(event.observedAt)}",
+                style = T.caption, color = p.tint, modifier = Modifier.padding(top = 4.dp))
         }
         Text("Geser atau ketuk grafik untuk memeriksa tiap titik.", style = T.caption, color = p.secondary, modifier = Modifier.padding(top = 4.dp))
     }

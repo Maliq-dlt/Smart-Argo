@@ -442,7 +442,7 @@ fun PlantScene(
     onion: Boolean = false,
     moisture: Double? = null,
     cutaway: Boolean = true,
-    day: Int = 35,
+    day: Int? = 35,
     interactive: Boolean = false,
     daylight: Boolean? = null,
     cloudy: Boolean? = null,
@@ -459,10 +459,15 @@ fun PlantScene(
     }
     val trailing by animateFloatAsState(response.value, tween(160), label = "Leaf follow through")
     val species by animateFloatAsState(if (onion) 1f else 0f, tween(560), label = "Plant species")
-    val dry by animateFloatAsState(((60f - (moisture?.toFloat() ?: 60f)) / 30f).coerceIn(0f, 1f), tween(600), label = "Moisture leaf pose")
+    val observedMoisture = moisture?.takeIf { it.isFinite() && it in 0.0..100.0 }
+    val hasMoisture by animateFloatAsState(if (observedMoisture != null) 1f else 0f, tween(440), label = "Soil reading visibility")
     val shell by animateFloatAsState(if (cutaway) 0f else 1f, tween(560), label = "Pot cutaway")
-    val growth by animateFloatAsState(min(1f, .12f + day / if (onion) 48f else 62f), tween(320), label = "Illustrative growth")
-    val wet by animateFloatAsState((moisture?.div(100)?.toFloat() ?: 0f).coerceIn(0f, 1f), tween(320), label = "Soil moisture")
+    val growth by animateFloatAsState(day?.let { min(1f, .12f + it / if (onion) 48f else 62f) } ?: .65f,
+        tween(320), label = "Illustrative growth")
+    val wet by animateFloatAsState(observedMoisture?.div(100)?.toFloat() ?: .5f, tween(440), label = "Soil moisture")
+    val neutralSoil = Color(0xFF82766D)
+    val observedSoil = androidx.compose.ui.graphics.lerp(Color(0xFFAB8B6C), Color(0xFF473B31), wet)
+    val media = androidx.compose.ui.graphics.lerp(neutralSoil, observedSoil, hasMoisture)
     val sky by animateFloatAsState(if (daylight == null) 0f else 1f, tween(600), label = "Weather scene visibility")
     val night by animateFloatAsState(if (daylight == false) 1f else 0f, tween(600), label = "Weather scene daylight")
     val cloud by animateFloatAsState(if (cloudy == true) 1f else 0f, tween(600), label = "Weather scene clouds")
@@ -487,7 +492,7 @@ fun PlantScene(
             if (orchid) {
                 val barkPath = "M118 316H336L314 435Q226 446 140 435Z"
                 svg(barkPath, Color(0xFF3B2F26))
-                svg(barkPath, Color(0xFF13202A).copy(alpha = wet * .5f))
+                svg(barkPath, Color(0xFF13202A).copy(alpha = wet * hasMoisture * .5f))
                 clipPath(illustrationPaths.get(barkPath)) {
                     repeat(28) { i ->
                         val cx = 132f + ((i * 53) % 192)
@@ -504,8 +509,7 @@ fun PlantScene(
             } else {
                 svg("M104 313H350L321 444Q226 459 133 444Z", Color(0xFFB99B87))
                 val mediaPath = "M114 316H340L314 435H140Z"
-                svg(mediaPath, Color(0xFF998169))
-                svg(mediaPath, Color(0xFF4A3B32).copy(alpha = wet))
+                svg(mediaPath, media)
                 // Soil & drainage gravel band when pot wall is cut open.
                 clipPath(illustrationPaths.get(mediaPath)) {
                     svg("M119 339Q181 334 231 341T335 337M127 372Q175 378 228 371T326 376", Color(0xFF8E745E), 1f)
@@ -530,17 +534,17 @@ fun PlantScene(
             }
 
             // Smart Agro cartoon device sitting cleanly on the right pot rim (y=252..310).
-            drawPotDevice(x = 278f, y = 258f, online = moisture != null)
+            drawPotDevice(x = 278f, y = 258f, online = observedMoisture != null)
 
             // Crown
             for (isOnion in if (speciesId in 1..2) listOf(false, true) else emptyList()) {
                 val opacity = if (isOnion) species else 1f - species
                 if (opacity > .001f) withTransform({ rotate(response.value * 1.4f, Offset(225f, 312f)) }) {
-                    plantCrown(isOnion, growth, day, opacity, dry, response.value, trailing)
+                    plantCrown(isOnion, growth, day ?: 0, opacity, 0f, response.value, trailing)
                 }
             }
             if (speciesId !in 1..2) {
-                orchidOrGenericCrown(speciesId, growth, day, dry, response.value, trailing)
+                orchidOrGenericCrown(speciesId, growth, day ?: 0, 0f, response.value, trailing)
             }
             if (!orchid && shell > .001f) {
                 drawPath(

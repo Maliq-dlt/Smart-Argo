@@ -16,9 +16,11 @@ import java.time.LocalDate
 enum class Screen { Login, Mfa, Products, Dashboard, History, Account, Rewards, Proofs, Garden, Security, ManageProducts, Gallery }
 /** Where the signed-out owner is: the welcome cover, Masuk/Daftar form, the emailed signup code, or the two reset steps. */
 enum class AuthStep { Welcome, SignIn, SignUp, SignupCode, ResetEmail, ResetCode }
+data class DeviceSetupReadings(val device: OwnedDevice, val readings: List<Reading>)
 data class AppState(
     val screen: Screen = Screen.Login, val busy: Boolean = false, val message: String? = null, val messageIsError: Boolean = false,
     val auth: AuthStep = AuthStep.Welcome, val authEmail: String = "", val welcome: Boolean = false, val introPlaying: Boolean = false,
+    val resetCodeRequested: Boolean = false,
     val historySensor: Sensor = Sensor.Moisture,
     val products: List<Product> = emptyList(), val units: List<PlantUnit> = emptyList(),
     val overviews: List<Overview> = emptyList(), val selectedProduct: Product? = null,
@@ -30,9 +32,12 @@ data class AppState(
     val explanationBusy: Boolean = false, val explanationMessage: String? = null,
     val garden: Garden? = null, val gardenPlant: GardenPlant? = null, val catalogLoaded: Boolean = false, val email: String = "", val demo: Boolean = false, val demoAdvice: Map<String, Pair<String, String>> = emptyMap(),
     val archivedUnits: List<PlantUnit> = emptyList(), val devices: List<OwnedDevice> = emptyList(), val unitEvents: Map<String, List<UnitLifecycleEvent>> = emptyMap(),
+    val deviceSetupReadings: DeviceSetupReadings? = null,
     val careJournal: List<CareEntry> = emptyList(), val careUnitId: String? = null, val careLoaded: Boolean = false,
+    val careSnapshot: Instant? = null, val careNext: HistoryCursor? = null,
     val historyComparison: MeasurementComparison? = null, val comparisonUnitId: String? = null,
     val community: CommunityKnowledge? = null, val communitySpeciesId: Int? = null,
+    val communityError: String? = null, val dashboardFromGarden: Boolean = false,
     val security: AccountSecurity? = null, val securityLoaded: Boolean = false, val recoveryStatus: RecoveryCodeStatus? = null,
     val totpEnrollment: TotpEnrollment? = null, val generatedRecoveryCodes: List<String>? = null,
     val publicStatus: ProductPublicStatus? = null, val publicStatusSerial: String = "",
@@ -48,6 +53,7 @@ data class AppState(
 }
 class AgroViewModel(application: Application) : AndroidViewModel(application) {
     val config = BackendConfig(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, allowEmulatorHost = BuildConfig.DEBUG)
+    private var pendingCsv: Pair<String, String>? = null
     private val api = AgroApi(config, SessionStore(application, config.url))
     private val accountFlows = AccountWorkflows(api)
     var state by mutableStateOf(AppState())
@@ -104,8 +110,9 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     /** Moves between the sign-in steps; leaving the reset steps forgets the reset. */
     fun authStep(step: AuthStep, email: String = state.authEmail) {
         if (state.busy) return
-        if (step != AuthStep.ResetCode) accountFlows.cancelPasswordReset()
-        state = state.copy(auth = step, authEmail = email.trim(), message = null)
+        val keepReset = step == AuthStep.ResetCode || step == AuthStep.ResetEmail
+        if (!keepReset) accountFlows.cancelPasswordReset()
+        state = state.copy(auth = step, authEmail = email.trim(), message = null, resetCodeRequested = keepReset && state.resetCodeRequested)
     }
     fun signup(name: String, email: String, password: String) = run {
         try {
@@ -125,14 +132,16 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         state = state.copy(message = "Kode baru dikirim ke ${state.authEmail}.")
     }
     fun requestReset(email: String) = run {
+        val sameEmail = email.trim().equals(state.authEmail, ignoreCase = true)
+        if (!sameEmail) state = state.copy(authEmail = email.trim(), resetCodeRequested = false)
         accountFlows.requestPasswordReset(email)
-        state = state.copy(auth = AuthStep.ResetCode, authEmail = email.trim())
+        state = state.copy(auth = AuthStep.ResetCode, resetCodeRequested = true)
     }
     /** The code is spent on the first try; a retry after a failed password write reuses the accepted code. */
     fun finishReset(code: String, password: String) = run {
         if (!accountFlows.recovered) accountFlows.beginPasswordReset(code)
         val result = accountFlows.setRecoveredPassword(password)
-        state = state.copy(auth = AuthStep.SignIn, message = if (result == PasswordResetResult.PasswordChanged) "Kata sandi diganti. Masuk dengan sandi baru."
+        state = state.copy(auth = AuthStep.SignIn, resetCodeRequested = false, message = if (result == PasswordResetResult.PasswordChanged) "Kata sandi diganti. Masuk dengan sandi baru."
             else "Kata sandi diganti. Sesi reset di server akan berakhir sendiri. Masuk dengan sandi baru.")
     }
     private suspend fun load(successMessage: String? = null) {
@@ -155,8 +164,11 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         val activeProduct = selected ?: activeUnit?.let { u -> products.find { it.id == u.productId } }
         state = state.copy(catalogLoaded = true, garden = garden, gardenPlant = garden?.plants?.find { it.id==state.gardenPlant?.id }, products = products, units = units,
             archivedUnits = owned.archived, devices = owned.devices, overviews = overviews,
+            deviceSetupReadings = state.deviceSetupReadings?.takeIf { it.device in owned.devices },
             selectedProduct = activeProduct, selectedUnit = activeUnit, history = emptyList(), historyLoaded = false,
             careJournal = if (activeUnit?.id == state.careUnitId) state.careJournal else emptyList(), careLoaded = activeUnit?.id == state.careUnitId && state.careLoaded,
+            careSnapshot = state.careSnapshot.takeIf { activeUnit?.id == state.careUnitId },
+            careNext = state.careNext.takeIf { activeUnit?.id == state.careUnitId },
             historyComparison = if (activeUnit?.id == state.comparisonUnitId) state.historyComparison else null,
             screen = nextScreen, message = listOfNotNull(successMessage, gardenWarning).joinToString(" ").ifEmpty { null },
             messageIsError = gardenWarning != null)
@@ -196,17 +208,17 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     } }
     fun select(product: Product) {
         val unit = state.units.firstOrNull { it.productId == product.id }
-        state = state.copy(screen = Screen.Dashboard, selectedProduct = product, selectedUnit = unit,
+        state = state.copy(screen = Screen.Dashboard, dashboardFromGarden = state.screen == Screen.Garden, selectedProduct = product, selectedUnit = unit,
             history = if (state.demo && unit != null) demoHistory(getApplication(), unit.id) else emptyList(),
             historyLoaded = state.demo, historyBefore = null, historyHasMore = false,
-            careJournal = emptyList(), careUnitId = unit?.id, careLoaded = state.demo,
+            careJournal = emptyList(), careUnitId = unit?.id, careLoaded = state.demo, careSnapshot = null, careNext = null,
             historyComparison = null, comparisonUnitId = null, message = null)
     }
     fun selectUnit(unit: PlantUnit) {
         val product = state.products.find { it.id == unit.productId } ?: return
         state = state.copy(selectedProduct = product, selectedUnit = unit, history = if (state.demo) demoHistory(getApplication(), unit.id) else emptyList(),
             historyLoaded = state.demo, historyBefore = null, historyHasMore = false,
-            careJournal = emptyList(), careUnitId = unit.id, careLoaded = state.demo,
+            careJournal = emptyList(), careUnitId = unit.id, careLoaded = state.demo, careSnapshot = null, careNext = null,
             historyComparison = null, comparisonUnitId = null, message = null)
     }
     fun openHistoryFor(unit: PlantUnit, sensor: Sensor) {
@@ -237,11 +249,12 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun openGarden(plant: GardenPlant) {
         if(state.garden?.plants?.none { it.id==plant.id }!=false) return
-        state=state.copy(screen=Screen.Garden,gardenPlant=plant,community=null,communitySpeciesId=null,message=null)
+        state=state.copy(screen=Screen.Garden,gardenPlant=plant,community=null,communitySpeciesId=null,communityError=null,message=null)
     }
+    /** Detail and auth routes require the typed open/sign-in methods that initialize their data. */
     fun navigate(screen: Screen) {
-        if (screen in listOf(Screen.Products,Screen.History,Screen.Account,Screen.Rewards,Screen.Proofs,Screen.Security,Screen.ManageProducts) || screen==Screen.Gallery && BuildConfig.DEBUG)
-            state=state.copy(screen=screen,message=null)
+        require(screen in listOf(Screen.Products,Screen.History,Screen.Account,Screen.Rewards,Screen.Proofs,Screen.Security,Screen.ManageProducts) || screen==Screen.Gallery && BuildConfig.DEBUG)
+        state=state.copy(screen=screen,message=null)
     }
     fun openUnit(unit: PlantUnit) {
         if (state.units.none { it.id==unit.id }) return
@@ -321,14 +334,16 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         if(state.demo) return
         run {
             if(state.selectedUnit?.id!=unitId) return@run
-            state=state.copy(explanation=null,explanationUnitId=unitId,explanationDeviceId=null,explanationBusy=true,explanationMessage=null)
+            val sameUnit = state.explanationUnitId == unitId
+            state=state.copy(explanation=state.explanation.takeIf { sameUnit }, explanationUnitId=unitId,
+                explanationDeviceId=state.explanationDeviceId.takeIf { sameUnit }, explanationBusy=true, explanationMessage=null)
             try {
                 val devices=api.rpc("my_device_units").array("units").objects(300)
                 val candidates=devices.filter { it.id("unit_id")==unitId && it.optString("device_status")=="active" }
                 val placed=candidates.filter { it.optBoolean("placed") }
                 val device=(placed.ifEmpty { candidates }).singleOrNull()
                 if(device==null) {
-                    if(state.selectedUnit?.id==unitId) state=state.copy(explanationMessage=if(candidates.isEmpty()) "Belum ada perangkat aktif pada unit ini." else "Ada beberapa perangkat pada unit ini. Atur penempatannya di website sebelum meminta penjelasan.")
+                    if(state.selectedUnit?.id==unitId) state=state.copy(explanationDeviceId=null, explanationMessage=if(candidates.isEmpty()) "Belum ada perangkat aktif pada unit ini." else "Ada beberapa perangkat pada unit ini. Atur penempatannya di website sebelum meminta penjelasan.")
                     return@run
                 }
                 val deviceId=device.id("device_id")
@@ -378,7 +393,11 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
             Screen.Mfa -> { api.cancelMfa(); state = AppState() }
             Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery -> state = state.copy(screen = Screen.Account,
                 totpEnrollment = null, generatedRecoveryCodes = null, activeTransfer = null, activationChallenge = null, message = null)
-            Screen.Dashboard, Screen.History, Screen.Account, Screen.Garden -> state = state.copy(screen = Screen.Products, message = null)
+            Screen.Dashboard -> state = state.copy(
+                screen = if (state.dashboardFromGarden && state.gardenPlant != null) Screen.Garden else Screen.Products,
+                dashboardFromGarden = false, message = null,
+            )
+            Screen.History, Screen.Account, Screen.Garden -> state = state.copy(screen = Screen.Products, message = null)
             else -> Unit
         }
     }
@@ -461,22 +480,34 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadCommunityKnowledge(speciesId: Int) = run {
         require(!state.demo) { "Pengetahuan komunitas tersedia setelah masuk." }
-        val knowledge = api.communityKnowledge(speciesId)
-        state = state.copy(community = knowledge, communitySpeciesId = speciesId)
+        state = state.copy(communityError = null)
+        try {
+            val knowledge = api.communityKnowledge(speciesId)
+            state = state.copy(community = knowledge, communitySpeciesId = speciesId)
+        } catch (error: CancellationException) { throw error }
+        catch (error: Exception) {
+            if (error is ApiFailure && error.expired) throw error
+            state = state.copy(communityError = "Data komunitas belum dapat dimuat.")
+        }
     }
 
     // -------------------------------------------------------- Jurnal, histori, perbandingan & CSV
 
-    fun loadCareJournal(unitId: String? = state.selectedUnit?.id) {
+    fun loadOlderCareJournal() = loadCareJournal(older = true)
+    fun loadCareJournal(unitId: String? = state.selectedUnit?.id, older: Boolean = false) {
         val target = unitId ?: return
         if (state.demo) {
             state = state.copy(careUnitId = target, careLoaded = true)
             return
         }
         run {
-            val page = api.readCareJournal(target, limit = 50)
+            if (state.selectedUnit?.id != target) return@run
+            val cursor = if (older) state.careNext.takeIf { state.careUnitId == target } ?: return@run else null
+            val page = api.readCareJournal(target, snapshot = state.careSnapshot.takeIf { older }, cursor = cursor)
             if (state.selectedUnit?.id == target) {
-                state = state.copy(careJournal = page.entries, careUnitId = target, careLoaded = true)
+                val entries = if (older) (state.careJournal + page.entries).distinctBy { it.id } else page.entries
+                state = state.copy(careJournal = entries, careUnitId = target, careLoaded = true,
+                    careSnapshot = page.snapshot, careNext = page.next)
             }
         }
     }
@@ -496,7 +527,9 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
             }
             val list = (listOf(entry) + state.careJournal.filter { it.unitId == unitId && it.id != entry.id })
                 .sortedByDescending { it.observedAt }
-            state = state.copy(careJournal = list, careUnitId = unitId, careLoaded = true, message = "Catatan perawatan disimpan.")
+            if (state.selectedUnit?.id == unitId) {
+                state = state.copy(careJournal = list, careUnitId = unitId, message = "Catatan perawatan disimpan.")
+            }
             onDone()
         }
     }
@@ -512,6 +545,25 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         val csv = api.exportMeasurementHistoryCsv(unitId, window)
         state = state.copy(message = "CSV siap: ${csv.rows} baris bacaan.")
         onCsv(csv)
+    }
+
+    fun prepareCsvDocument(csv: HistoryCsv) { pendingCsv = state.email to csv.content }
+    fun finishCsvDocument(uri: android.net.Uri?) {
+        val content = pendingCsv?.takeIf { it.first == state.email }?.second
+        pendingCsv = null
+        if (uri != null && content != null) writeDocument(uri, content)
+        else if (uri != null) reportDocumentError("Ekspor sudah tidak tersedia. Buat CSV kembali.")
+    }
+    fun reportDocumentError(message: String) {
+        state = state.copy(message = message, messageIsError = true)
+    }
+    fun writeDocument(uri: android.net.Uri, text: String) = run {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val stream = getApplication<Application>().contentResolver.openOutputStream(uri)
+                ?: throw IllegalArgumentException("File tidak dapat dibuka untuk ditulis.")
+            stream.bufferedWriter(Charsets.UTF_8).use { it.write(text) }
+        }
+        state = state.copy(message = "File tersimpan.")
     }
 
     // -------------------------------------------------------- Keamanan akun
@@ -610,6 +662,19 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         load("Penempatan perangkat diperbarui.")
     }
 
+    fun checkDeviceSetup(device: OwnedDevice) = run {
+        val unitId = device.unitId ?: return@run
+        require(!state.demo && device.status == "active" && device in state.devices)
+        val now = Instant.now()
+        val from = maxOf(device.placedAt ?: now, now.minusSeconds(86_400))
+        val to = now.plusSeconds(60)
+        val rows = if (from < to) api.readMeasurementHistory(unitId, HistoryWindow(from, to), limit = 500).readings else emptyList()
+        if (device in state.devices) {
+            val readings = rows.filter { it.deviceId == device.id }.map { it.reading }
+            state = state.copy(deviceSetupReadings = DeviceSetupReadings(device, readings.distinctBy { it.sensor }))
+        }
+    }
+
     fun loadUnitLifecycleEvents(unitId: String) = run {
         require(!state.demo)
         val events = api.unitHistory(unitId)
@@ -678,6 +743,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() = run {
+        pendingCsv = null
         weatherJob?.cancel(); weatherGeneration++
         getApplication<Application>().getSharedPreferences("weather-cities", 0).edit().clear().apply()
         if (state.demo) { state = AppState(); return@run }

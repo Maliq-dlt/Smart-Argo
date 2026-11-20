@@ -22,7 +22,7 @@ internal fun GardenPlantScreen(state: AppState, model: AgroViewModel) {
     var cutaway by rememberSaveable(plant.id) { mutableStateOf(false) }
     var switching by rememberSaveable(plant.id) { mutableStateOf(false) }
     var showCommunity by rememberSaveable(plant.id) { mutableStateOf(false) }
-    var shareTarget by remember { mutableStateOf<GardenPlant?>(null) }
+    var shareTargetId by rememberSaveable(plant.id) { mutableStateOf<String?>(null) }
 
     val weather = state.weather.takeIf { state.weatherSiteId == site?.id }
     val outdoor = site?.placement?.let { it != "indoor" } == true
@@ -47,7 +47,7 @@ internal fun GardenPlantScreen(state: AppState, model: AgroViewModel) {
                     onion = plant.species == 2,
                     speciesId = plant.species,
                     cutaway = cutaway,
-                    day = days.coerceAtLeast(8),
+                    day = days,
                     interactive = true,
                     daylight = if (outdoor) weather?.condition != "malam" else null,
                     cloudy = weather?.condition in listOf("berawan", "mendung", "hujan"),
@@ -120,7 +120,7 @@ internal fun GardenPlantScreen(state: AppState, model: AgroViewModel) {
                             trailing = {
                                 when {
                                     old.shared && !state.demo -> PlainButton("Tarik", { model.unshareGardenCycle(old.id) }, enabled = !state.busy)
-                                    slot?.share == true && old.outcome == "berhasil" && !state.demo -> PlainButton("Bagikan", { shareTarget = old }, enabled = !state.busy)
+                                    slot?.share == true && old.outcome == "berhasil" && !state.demo -> PlainButton("Bagikan", { shareTargetId = old.id }, enabled = !state.busy)
                                 }
                             },
                         )
@@ -132,5 +132,5 @@ internal fun GardenPlantScreen(state: AppState, model: AgroViewModel) {
 
     if (switching) SwitchPlantSheet(plant, state, model) { switching = false }
     if (showCommunity) CommunityKnowledgeSheet(plant.species, state, model) { showCommunity = false }
-    shareTarget?.let { target -> ShareCycleSheet(target, state, model) { shareTarget = null } }
+    slotHistory.find { it.id == shareTargetId }?.let { target -> ShareCycleSheet(target, state, model) { shareTargetId = null } }
 }

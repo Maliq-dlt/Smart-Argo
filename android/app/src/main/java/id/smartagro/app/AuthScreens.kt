@@ -273,7 +273,9 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
     val submit = {
         if (ready) {
             focus.clearFocus()
-            if (signUp) model.signup(name, email, password) else { model.login(email, password); password = "" }
+            if (signUp) model.signup(name, email, password) else model.login(email, password)
+            password = ""
+            confirm = ""
         }
     }
     Column(Modifier.fillMaxSize().background(p.canvas)) {
@@ -362,6 +364,9 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
         Message(state)
         PrimaryButton(if (state.busy) "Mengirim…" else "Kirim kode", { model.requestReset(email) },
             Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp).fillMaxWidth(), enabled = ok || state.busy, busy = state.busy)
+        if (state.resetCodeRequested) {
+            PlainButton("Saya sudah punya kode", { model.authStep(AuthStep.ResetCode) }, enabled = !state.busy)
+        }
         WebsiteResetFallback(!state.busy)
     }
 }
@@ -373,7 +378,14 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
     var password by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     val ready = !state.busy && code.length == 6 && password.length >= 10 && confirm == password
-    val save = { if (ready) { focus.clearFocus(); model.finishReset(code, password) } }
+    val save = {
+        if (ready) {
+            focus.clearFocus()
+            model.finishReset(code, password)
+            password = ""
+            confirm = ""
+        }
+    }
     StepPage("Email", model::back, PhosphorPaths.LockSimple, "Buat kata sandi baru",
         sentTo("Masukkan kode yang dikirim ke ", state.authEmail, ", lalu kata sandi baru."), state.busy) {
         CodeBoxes(code, { code = it; if (it.length == 6) focus.moveFocus(FocusDirection.Down) }, enabled = !state.busy)

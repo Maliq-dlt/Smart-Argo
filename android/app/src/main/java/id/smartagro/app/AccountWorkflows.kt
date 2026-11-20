@@ -15,11 +15,9 @@ data class RecoveryCodeStatus(val total: Int, val remaining: Int, val createdAt:
 enum class SignupResult { ConfirmEmail, SignedIn, MfaRequired }
 enum class PasswordResetResult { PasswordChanged, PasswordChangedLogoutUnconfirmed }
 
-/** Account contracts only. Claude's screens must collect codes, protect enrollment/recovery-code screens and route
- * allowlisted PKCE return URLs. Recovery credentials stay here in memory and never become an AgroApi account session. */
+/** Recovery credentials stay here in memory and never become an AgroApi account session. */
 class AccountWorkflows(private val api: AgroApi) {
     private val lock = Mutex()
-    private var signupVerifier: String? = null
     private var resetEmail: String? = null
     private var recovery: Session? = null
     val resetting: Boolean get() = resetEmail != null || recovery != null
@@ -30,41 +28,28 @@ class AccountWorkflows(private val api: AgroApi) {
         signedOut()
         val address = email(email)
         password(password)
-        val verifier = verifier()
-        signupVerifier = verifier
         val body = JSONObject().put("email", address).put("password", password)
             .put("data", JSONObject().put("display_name", displayName(name).also { require(it.length <= 40) { "Nama maksimal 40 karakter." } }))
-            .put("code_challenge", challenge(verifier)).put("code_challenge_method", "s256")
         val version = api.authenticationVersion()
         val result = api.request("/auth/v1/signup", body)
         if (!result.has("access_token") && result.optJSONArray("identities")?.length() == 0)
             throw ApiFailure("Email sudah terdaftar. Silakan masuk.", code = "email_exists")
-        signupVerifier = verifier
         if (!result.has("access_token")) SignupResult.ConfirmEmail
-        else { signupVerifier = null; if (api.acceptLogin(result,version)) SignupResult.SignedIn else SignupResult.MfaRequired }
+        else if (api.acceptLogin(result,version)) SignupResult.SignedIn else SignupResult.MfaRequired
     }
     suspend fun verifySignupCode(email: String, code: String): Boolean = lock.withLock {
         signedOut()
         val version = api.authenticationVersion()
         val result = api.request("/auth/v1/verify", JSONObject().put("type", "signup").put("email", email(email)).put("token", otp(code)))
-        signupVerifier = null
         api.acceptLogin(result,version)
     }
     suspend fun resendSignupCode(email: String) {
         signedOut()
         api.request("/auth/v1/resend", JSONObject().put("type", "signup").put("email", email(email)))
     }
-    suspend fun completeSignupReturn(code: String): Boolean = lock.withLock {
-        signedOut()
-        val verifier = signupVerifier ?: throw ApiFailure("Pendaftaran tidak dimulai di aplikasi ini. Gunakan kode email.")
-        val version = api.authenticationVersion()
-        val result = exchange(code, verifier)
-        signupVerifier = null
-        api.acceptLogin(result,version)
-    }
     /**
      * Emails a 6-digit code (template `recovery.html`). The PKCE challenge is sent only so the same email's website
-     * link never carries tokens; GoTrue accepts the code for a PKCE request too (`isOtpValid`, auth v2.197).
+     * link never carries tokens. Android uses the OTP and does not exchange that link. GoTrue accepts the code (`isOtpValid`, auth v2.197).
      */
     suspend fun requestPasswordReset(email: String) = lock.withLock {
         signedOut()
@@ -177,10 +162,6 @@ class AccountWorkflows(private val api: AgroApi) {
     private fun signedOut() { check(api.session == null && api.pendingSession == null) { "Keluar atau batalkan proses masuk sebelum melanjutkan." } }
     private suspend fun factors(token: String) = api.request("/auth/v1/user",token=token,method="GET").optJSONArray("factors")?.objects(30)
         ?.filter { it.optString("factor_type") == "totp" }.orEmpty()
-    private suspend fun exchange(code: String, verifier: String): JSONObject {
-        require(code.length in 1..2048 && code.none { it.isWhitespace() || it.isISOControl() }) { "Kode tautan tidak valid." }
-        return api.request("/auth/v1/token?grant_type=pkce",JSONObject().put("auth_code",code).put("code_verifier",verifier))
-    }
     private fun email(raw: String): String = raw.trim().also { require(it.length <= 320 && Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$").matches(it)) { "Isi alamat email yang valid." } }
     private fun password(value: String) { require(value.length in 10..256 && value.none(Char::isISOControl)) { "Kata sandi harus 10–256 karakter." } }
     private fun otp(value: String): String = value.also { require(Regex("[0-9]{6}").matches(it)) { "Kode harus 6 angka." } }

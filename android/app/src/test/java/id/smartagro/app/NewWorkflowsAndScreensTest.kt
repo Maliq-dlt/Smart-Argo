@@ -76,7 +76,10 @@ class NewWorkflowsAndScreensTest {
         assertEquals(0, summary0.evidence.level)
         assertTrue(summary0.text.contains("Smart Agro belum punya acuan untuk Anggrek bulan"))
 
-        val summary1 = ObservationEngine.summarize("Anggrek bulan", samples, checks, listOf(30.0, 102.0))
+        val summary1 = ObservationEngine.summarize("Anggrek bulan", samples, checks, listOf(30.0, 102.0)) { hours ->
+            val local = anchor.plusSeconds((hours * 3600).toLong()).atOffset(java.time.ZoneOffset.ofHours(7)).toLocalTime()
+            local.toSecondOfDay() / 3600.0
+        }
         assertEquals(1, summary1.evidence.level)
         assertNotNull(summary1.evidence.healthy)
         assertNotNull(summary1.evidence.dryingPerHour)

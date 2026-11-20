@@ -19,7 +19,9 @@ import androidx.compose.ui.unit.dp
 internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
     val p = palette
     val context = LocalContext.current
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val now = rememberNow()
+    var tab by rememberSaveable { mutableIntStateOf(if (state.products.isEmpty()) 1 else 0) }
+    var setupDeviceId by rememberSaveable { mutableStateOf<String?>(null) }
     var serialInput by rememberSaveable { mutableStateOf("") }
     var scanWarning by rememberSaveable { mutableStateOf<String?>(null) }
     var sealedCode by remember { mutableStateOf("") }
@@ -31,7 +33,7 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
     var recoveryEvidenceRef by rememberSaveable { mutableStateOf("") }
     var renamingUnit by remember { mutableStateOf<PlantUnit?>(null) }
     var archivingUnit by remember { mutableStateOf<PlantUnit?>(null) }
-    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     fun handleQrString(raw: String) {
         val parsed = runCatching { parseProductScan(raw) }.getOrNull()
@@ -82,7 +84,12 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
         }
         when (tab) {
             0 -> {
-                item(key = "active-units-title") { SectionTitle("Unit aktif (${state.units.size})") }
+                item(key = "active-units-title") {
+                    SectionTitle("Unit aktif (${state.units.size})")
+                    if (!state.demo && state.units.isNotEmpty()) {
+                        Footnote("Pilih pot, tetapkan perangkat, lalu periksa bacaan dari probe.")
+                    }
+                }
                 if (state.units.isEmpty()) {
                     item { Footnote("Belum ada unit aktif. Klaim produk terlebih dahulu atau pulihkan arsip.") }
                 } else {
@@ -107,6 +114,38 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                                             glyphColor = p.secondary,
                                             enabled = !state.busy && d.status == "active",
                                         )
+                                        if (placedHere && d.status == "active" && !state.demo) {
+                                            val expanded = setupDeviceId == d.id
+                                            Cell(
+                                                if (expanded) "Tutup pemeriksaan" else "Periksa pemasangan",
+                                                subtitle = if (expanded) null else "Cek bacaan di ${u.name}",
+                                                glyph = PhosphorPaths.DropFill,
+                                                enabled = !state.busy,
+                                                onClick = {
+                                                    setupDeviceId = if (expanded) null else d.id
+                                                    if (!expanded) model.checkDeviceSetup(d)
+                                                },
+                                            )
+                                            if (expanded) {
+                                                val setup = state.deviceSetupReadings?.takeIf { it.device == d }
+                                                Sensor.entries.forEach { sensor ->
+                                                    val sample = setup?.readings?.firstOrNull { it.sensor == sensor }
+                                                    val status = sensorStatus(sample, now, stale = false, revoked = false)
+                                                    Cell(
+                                                        sensor.label,
+                                                        value = sample?.value?.takeIf { status == SensorStatus.Ready }?.let { reading(sensor, it) },
+                                                        subtitle = when {
+                                                            sample != null -> "${status.label} · Diukur ${time(sample.at)}"
+                                                            state.busy -> "Memeriksa…"
+                                                            setup == null -> "Belum diperiksa"
+                                                            else -> "Belum ada bacaan setelah penempatan dalam 24 jam terakhir"
+                                                        },
+                                                        chevron = false,
+                                                    )
+                                                }
+                                                Cell("Segarkan bacaan probe", enabled = !state.busy, onClick = { model.checkDeviceSetup(d) })
+                                            }
+                                        }
                                     }
                                     Cell("Riwayat aktivitas unit", glyph = PhosphorPaths.ClockCounterClockwise, glyphColor = p.secondary, enabled = !state.busy, onClick = { model.loadUnitLifecycleEvents(u.id) })
                                     Cell("Arsipkan unit", glyph = PhosphorPaths.Archive, glyphColor = p.warn, destructive = true, enabled = !state.busy, onClick = { archivingUnit = u })
@@ -140,6 +179,7 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
             1 -> {
                 item(key = "qr-scan") {
                     SectionTitle("Pindai QR atau cek nomor seri")
+                    Footnote("Gunakan QR kemasan untuk klaim produk. Setelah diklaim, tempatkan perangkat di tab Unit.")
                     scanWarning?.let { Banner(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), error = true) }
                     Group {
                         FieldRow("Nomor seri", serialInput, { serialInput = it.take(120) }, "SA-...", keyboard = KeyboardType.Ascii, capitalize = true, ime = ImeAction.Search, onIme = { model.checkPublicProduct(serialInput) })
@@ -148,9 +188,17 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                         TintedButton(
                             "Kamera QR",
                             {
-                                val target = tempCameraQrUri(context)
-                                pendingCameraUri = target
-                                cameraLauncher.launch(target)
+                                try {
+                                    val target = tempCameraQrUri(context)
+                                    pendingCameraUri = target
+                                    cameraLauncher.launch(target)
+                                } catch (_: android.content.ActivityNotFoundException) {
+                                    pendingCameraUri = null
+                                    scanWarning = "Aplikasi kamera tidak tersedia. Pilih foto QR atau isi nomor seri."
+                                } catch (_: SecurityException) {
+                                    pendingCameraUri = null
+                                    scanWarning = "Kamera tidak dapat dibuka. Pilih foto QR atau isi nomor seri."
+                                }
                             },
                             Modifier.weight(1f),
                             enabled = !state.busy,
@@ -202,7 +250,7 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                                 {
                                     val c = sealedCode; val s = signature
                                     sealedCode = ""; signature = ""
-                                    model.claimScannedProduct(ch.nonceId, c, s)
+                                    model.claimScannedProduct(ch.nonceId, c, s) { tab = 0 }
                                 },
                                 Modifier.padding(top = 8.dp).fillMaxWidth(),
                                 enabled = sealedCode.isNotBlank() && signature.isNotBlank() && !state.busy,

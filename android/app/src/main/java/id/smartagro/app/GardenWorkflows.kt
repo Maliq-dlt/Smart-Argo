@@ -246,7 +246,7 @@ suspend fun AgroApi.exportMeasurementHistoryCsv(unitId: String,window: HistoryWi
         page
     }
 }
-internal suspend fun buildMeasurementHistoryCsv(loadPage: suspend (Instant?,HistoryCursor?)->MeasurementHistoryPage): HistoryCsv = withTimeout(15000) {
+internal suspend fun buildMeasurementHistoryCsv(loadPage: suspend (Instant?,HistoryCursor?)->MeasurementHistoryPage): HistoryCsv = withTimeout(60000) {
     val output=StringBuilder("\uFEFF"+historyColumns.joinToString(",")+"\r\n")
     var bytes=output.toString().toByteArray(Charsets.UTF_8).size;var count=0;var snapshot: Instant?=null;var cursor: HistoryCursor?=null
     val seen=HashSet<String>()

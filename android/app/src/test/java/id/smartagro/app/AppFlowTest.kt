@@ -41,17 +41,26 @@ class AppFlowTest {
         val view = compose.activity.window.decorView
         Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888).also { view.draw(Canvas(it)) }
     }
-    @Test fun chartTouchSelectsTheNearestPlottedSample() {
-        val count = 6
-        val width = 112f
-        val inset = 6f
-        for (index in 0 until count) {
-            val plottedX = inset + (width - 2 * inset) * index / (count - 1)
-            assertEquals(index, chartSampleIndex(plottedX, width, inset, count))
-        }
-        assertEquals(2, chartSampleIndex(37f, width, inset, count))
-        assertEquals(0, chartSampleIndex(0f, width, inset, count))
-        assertEquals(5, chartSampleIndex(width, width, inset, count))
+    @Test fun chartTouchUsesMeasurementTimeAndExcludesInvalidSamples() {
+        val first = java.time.Instant.parse("2026-11-20T00:00:00Z")
+        val last = first.plusSeconds(7200)
+        val positions = listOf(first, first.plusSeconds(1800), last).map { chartTimeFraction(it, first, last) }
+        assertEquals(listOf(0f, .25f, 1f), positions)
+        assertEquals(1, chartSampleIndex(31f, 112f, 6f, positions))
+        assertEquals(1, chartSampleIndex(62f, 112f, 6f, positions))
+
+        val at = first
+        val ph = Reading(Sensor.Ph, "not_measured", null, at)
+        val good = ph.copy(quality = "ok", value = 6.2)
+        assertEquals(SensorStatus.Waiting, sensorStatus(null, at, stale = false, revoked = false))
+        assertEquals(SensorStatus.Unmeasured, sensorStatus(ph, at, stale = false, revoked = false))
+        assertEquals(SensorStatus.Error, sensorStatus(ph.copy(quality = "error"), at, stale = false, revoked = false))
+        assertEquals(SensorStatus.Ready, sensorStatus(good, at, stale = false, revoked = false))
+        assertEquals(SensorStatus.Stale, sensorStatus(good, at.plusSeconds(4_501), stale = false, revoked = false))
+        assertEquals(SensorStatus.UntrustedClock, sensorStatus(good.copy(synced = false), at, stale = false, revoked = false))
+        assertEquals(SensorStatus.Revoked, sensorStatus(good, at, stale = false, revoked = true))
+        assertEquals(listOf(listOf(good), listOf(good.copy(at = at.plusSeconds(3600)))),
+            chartSegments(listOf(good, ph.copy(at = at.plusSeconds(1800)), good.copy(at = at.plusSeconds(3600))), Sensor.Ph))
     }
 
     @Test fun leafTouchAndSpeciesChangeKeepPotAnchored() {

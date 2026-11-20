@@ -70,8 +70,8 @@ class AccountWorkflowsTest {
     }
     @Test fun signupResendAndEmailCodeKeepMfaPendingOutOfStorage() = runBlocking {
         reply("/auth/v1/signup",JSONObject().put("id",factor).put("identities",JSONArray().put(JSONObject()))) { body,auth->
-            assertNull(auth);assertEquals("grower@example.test",body.getString("email"));assertEquals("s256",body.getString("code_challenge_method"))
-            assertTrue(Regex("[A-Za-z0-9_-]{43}").matches(body.getString("code_challenge")));assertEquals("Petani",body.getJSONObject("data").getString("display_name"))
+            assertNull(auth);assertEquals("grower@example.test",body.getString("email"));assertFalse(body.has("code_challenge"))
+            assertEquals("Petani",body.getJSONObject("data").getString("display_name"))
         }
         assertEquals(SignupResult.ConfirmEmail,account.signup(" grower@example.test ","a-long-password","Petani"))
         reply("/auth/v1/resend") { body,_->assertEquals("signup",body.getString("type")) };account.resendSignupCode("grower@example.test")

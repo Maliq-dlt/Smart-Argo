@@ -1,12 +1,15 @@
 #include <Arduino.h>
+#include <algorithm>
 #include <ArduinoJson.h>
 #include <DallasTemperature.h>
 #include <HTTPClient.h>
+#include <LittleFS.h>
 #include <OneWire.h>
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <Wire.h>
+#include <esp_partition.h>
 #include <esp_sleep.h>
 #include <esp_sntp.h>
 #include <esp_system.h>
@@ -30,12 +33,17 @@ constexpr uint32_t kWifiTimeoutMs = 15000;
 constexpr time_t kEarliestUtc = 1767225600;  // 2026-01-01 UTC
 constexpr int64_t kLatestUtc = 4102444800LL;  // Before the DS3231 century bit changes
 constexpr char kPendingKey[] = "pending";
+constexpr size_t kQueueCapacity = 24 * 60 * 60 / kIntervalSeconds;
+constexpr size_t kEnvelopesPerWake = 8;
+constexpr size_t kEnvelopeLimit = 12288;
+constexpr char kQueueTemp[] = "/queue.tmp";
 constexpr char kRtcSyncedKey[] = "rtc_verified";
 
 OneWire oneWire(kTemperaturePin);
 DallasTemperature soilProbe(&oneWire);
 Preferences outbox;
 RTC_DATA_ATTR time_t lastNetworkSync = 0;
+RTC_DATA_ATTR time_t lastClockUsed = 0;
 
 bool trustworthyEpoch(time_t value) {
   return value >= kEarliestUtc && static_cast<int64_t>(value) < kLatestUtc;
@@ -114,7 +122,11 @@ bool saveNetworkClock(time_t epoch) {
 }
 
 bool clockReady(bool wifiConnected) {
-  const time_t rtc = readTrustedClock();
+  time_t rtc = readTrustedClock();
+  if (rtc != 0 && rtc <= lastClockUsed) {
+    Serial.println("RTC did not advance since the last wake. Waiting for SNTP.");
+    rtc = 0;
+  }
   if (rtc != 0) {
     timeval now = {rtc, 0};
     if (settimeofday(&now, nullptr) != 0) return false;
@@ -174,6 +186,7 @@ SensorReading readPh(const SensorReading &moisture) {
   Serial.printf("pH ADC: %lu mV\n", static_cast<unsigned long>(mv));
   const int low = device::phLowMv;
   const int high = device::phHighMv;
+  // The probe needs moisture for a meaningful soil pH reading.
   if (low < 100 || low >= 3000 || high < 100 || high >= 3000 || abs(high - low) < 50 ||
       strcmp(moisture.status, "ok") != 0 || moisture.value <= 0) {
     return {"not_measured", 0, nullptr};
@@ -188,6 +201,7 @@ SensorReading readPh(const SensorReading &moisture) {
 SensorReading readTemperature() {
   soilProbe.begin();
   DeviceAddress probe;
+  // The RAB has one soil sensor. More addresses would make probe identity ambiguous.
   if (!soilProbe.getAddress(probe, 0) || (probe[0] != 0x28) || soilProbe.getDeviceCount() != 1) {
     return {"error", 0, "Expected one DS18B20 probe"};
   }
@@ -230,21 +244,87 @@ void newBootId(char (&uuid)[37]) {
            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]);
 }
 
-bool flushPending(const String &packet) {
+// The default board layout labels its filesystem "spiffs". Format only factory-erased flash.
+bool mountQueue() {
+  if (LittleFS.begin()) return true;
+  const esp_partition_t *partition = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "spiffs");
+  if (!partition) return false;
+  uint8_t block[256];
+  for (size_t start = 0; start < partition->size; start += sizeof(block)) {
+    const size_t length = std::min(sizeof(block), partition->size - start);
+    if (esp_partition_read(partition, start, block, length) != ESP_OK) return false;
+    for (size_t i = 0; i < length; ++i) if (block[i] != 0xFF) return false;
+  }
+  return LittleFS.begin(true);
+}
+
+void queuePath(uint32_t id, char (&path)[13]) {
+  snprintf(path, sizeof(path), "/q%010lu", static_cast<unsigned long>(id));
+}
+
+bool loadQueue(uint32_t (&ids)[kQueueCapacity], size_t &count) {
+  File root = LittleFS.open("/");
+  if (!root || !root.isDirectory()) return false;
+  for (File file = root.openNextFile(); file; file = root.openNextFile()) {
+    const char *name = file.name();
+    if (strlen(name) != 11 || name[0] != 'q' || strspn(name + 1, "0123456789") != 10) continue;
+    const unsigned long long id = strtoull(name + 1, nullptr, 10);
+    if (count == kQueueCapacity || id == 0 || id > UINT32_MAX) return false;
+    ids[count++] = static_cast<uint32_t>(id);
+  }
+  std::sort(ids, ids + count);
+  return true;
+}
+
+// Match the ingest window for permanently stale samples. Retry transport and provisioning failures while useful.
+bool usableEnvelope(const String &packet) {
+  JsonDocument envelope;
+  if (packet.isEmpty() || packet.length() > kEnvelopeLimit) return false;
+  const auto envelopeError = deserializeJson(envelope, packet);
+  if (envelopeError) return envelopeError == DeserializationError::NoMemory;
+  const char *payload = envelope["payload"] | "";
+  const char *encoded = envelope["signature"] | "";
+  const size_t payloadLength = strlen(payload);
+  uint8_t signature[64], publicKey[32];
+  size_t decodedLength = 0;
+  if (payloadLength == 0 || payloadLength > 4096 || strlen(encoded) != 88 ||
+      mbedtls_base64_decode(signature, sizeof(signature), &decodedLength,
+          reinterpret_cast<const unsigned char *>(encoded), 88) != 0 || decodedLength != sizeof(signature)) return false;
+  Ed25519::derivePublicKey(publicKey, device::signingSeed);
+  if (!Ed25519::verify(signature, publicKey, payload, payloadLength)) return false;
+  JsonDocument body;
+  const auto payloadError = deserializeJson(body, payload);
+  if (payloadError) return payloadError == DeserializationError::NoMemory;
+  if (strcmp(body["domain"] | "", "smart-agro.telemetry.v2") != 0) return false;
+
+  const char *stamp = body["measured_at"] | "";
+  tm date{};
+  const char *end = strptime(stamp, "%Y-%m-%dT%H:%M:%SZ", &date);
+  if (!end || *end != '\0') return false;
+  const time_t measured = mktime(&date); // setup configures UTC.
+  char canonical[25];
+  if (!trustworthyEpoch(measured) || !strftime(canonical, sizeof(canonical), "%Y-%m-%dT%H:%M:%SZ", &date) ||
+      strcmp(stamp, canonical) != 0) return false;
+  return difftime(time(nullptr), measured) <= 7 * 24 * 60 * 60;
+}
+
+enum class Delivery { Retry, Acknowledged, Rejected };
+
+Delivery deliver(const String &packet) {
   WiFiClientSecure tls;
   tls.setCACert(device::rootCa);
   tls.setHandshakeTimeout(10);
   HTTPClient http;
-  if (!http.begin(tls, device::endpoint)) return false;
+  if (!http.begin(tls, device::endpoint)) return Delivery::Retry;
   http.setConnectTimeout(10000);
   http.setTimeout(12000);
   http.addHeader("Content-Type", "application/json");
   // HTTP/1.0 avoids chunked bodies, which getStream() does not decode.
   http.useHTTP10(true);
   const int status = http.POST(packet);
-  bool acknowledged = false;
-  bool invalidTimestamp = false;
-  if ((status == HTTP_CODE_OK || status == HTTP_CODE_BAD_REQUEST) && http.getSize() <= 512) {
+  Delivery delivery = Delivery::Retry;
+  if ((status == 200 || status == 400 || status == 409) && http.getSize() <= 512) {
     char response[513];
     const int contentLength = http.getSize();
     Stream &stream = http.getStream();
@@ -254,36 +334,92 @@ bool flushPending(const String &packet) {
     if (received < sizeof(response) && (contentLength < 0 || received == requested)) {
       JsonDocument result;
       if (!deserializeJson(result, response, received)) {
-        const char *packetId = result["packet_id"] | "";
         const char *code = result["code"] | "";
-        acknowledged = status == HTTP_CODE_OK && (result["ok"] | false) && packetId[0] != '\0';
-        invalidTimestamp = status == HTTP_CODE_BAD_REQUEST && strcmp(code, "timestamp_out_of_range") == 0;
+        if (status == 200 && (result["ok"] | false) && validUuid(result["packet_id"] | "")) {
+          delivery = Delivery::Acknowledged;
+        } else if ((status == 400 && (strcmp(code, "timestamp_out_of_range") == 0 ||
+                                      strcmp(code, "invalid_packet") == 0 || strcmp(code, "invalid_payload") == 0)) ||
+                   (status == 409 && (strcmp(code, "sequence_conflict") == 0 ||
+                                      strcmp(code, "sequence_out_of_order") == 0))) {
+          Serial.printf("Server rejected an envelope permanently: %s.\n", code);
+          delivery = Delivery::Rejected;
+        }
       }
     }
   }
   http.end();
-  if (!acknowledged && !invalidTimestamp) {
-    Serial.printf("Pending packet retained (HTTP %d).\n", status);
-    return false;
-  }
-  if (!outbox.remove(kPendingKey)) {
-    Serial.println("Acknowledged packet could not be removed. It will be retried exactly.");
-    return false;
-  }
-  Serial.println(acknowledged ? "Telemetry acknowledged." : "Discarded packet rejected for invalid timestamp.");
-  return true;
+  if (delivery == Delivery::Retry) Serial.printf("Queued envelope retained (HTTP %d).\n", status);
+  return delivery;
 }
 
 void measureAndPublish(bool wifiConnected) {
+  uint32_t ids[kQueueCapacity];
+  size_t count = 0;
+  if (!loadQueue(ids, count)) {
+    Serial.println("Cannot read telemetry queue.");
+    return;
+  }
+  size_t sent = 0;
   if (outbox.isKey(kPendingKey)) {
-    const String pending = outbox.getString(kPendingKey);
-    if (pending.isEmpty()) {
-      Serial.println("Pending packet could not be read.");
-      return;
+    // Preserve an entry when NVS could not read it. An actual empty value is a malformed packet.
+    const String legacy = outbox.getString(kPendingKey, "\x01");
+    if (legacy == "\x01") {
+      Serial.println("Cannot read legacy envelope. Continuing with LittleFS queue.");
+    } else {
+      const bool invalid = !usableEnvelope(legacy);
+      if (invalid) Serial.println("Discarding invalid or expired legacy envelope.");
+      if (invalid || wifiConnected) {
+        const bool retired = (invalid || deliver(legacy) != Delivery::Retry) && outbox.remove(kPendingKey);
+        if (!invalid) ++sent;
+        if (!retired) {
+          Serial.println("Legacy envelope retained.");
+          wifiConnected = false;
+        }
+      }
     }
-    if (!wifiConnected || !flushPending(pending)) return;
   }
 
+  size_t drained = 0;
+  // ponytail: cap requests per wake until measured power and backlog justify adaptive draining.
+  for (; drained < count && sent < kEnvelopesPerWake; ++drained) {
+    char path[13];
+    queuePath(ids[drained], path);
+    File file = LittleFS.open(path, FILE_READ);
+    if (!file) {
+      Serial.printf("Cannot open queued envelope %s.\n", path);
+      wifiConnected = false;
+      break;
+    }
+    const size_t size = file.size();
+    file.setTimeout(0);
+    const String packet = size <= kEnvelopeLimit ? file.readString() : String();
+    file.close();
+    if (size <= kEnvelopeLimit && packet.length() != size) {
+      Serial.printf("Cannot read queued envelope %s.\n", path);
+      wifiConnected = false;
+      break;
+    }
+    if (!usableEnvelope(packet)) {
+      Serial.printf("Discarding invalid or expired envelope %s.\n", path);
+    } else {
+      if (!wifiConnected) break;
+      ++sent;
+      if (deliver(packet) == Delivery::Retry) {
+        wifiConnected = false;
+        break;
+      }
+    }
+    if (!LittleFS.remove(path)) {
+      Serial.printf("Retaining queue entry %s after delete failed.\n", path);
+      wifiConnected = false;
+      break;
+    }
+  }
+
+  if (count - drained >= kQueueCapacity) {
+    Serial.println("24-hour telemetry queue is full. New sample skipped.");
+    return;
+  }
   const SensorReading moisture = readMoisture();
   const SensorReading temperature = readTemperature();
   const SensorReading ph = readPh(moisture);
@@ -301,11 +437,23 @@ void measureAndPublish(bool wifiConnected) {
     Serial.println("Telemetry could not be encoded.");
     return;
   }
-  if (outbox.putString(kPendingKey, packet) != packet.length()) {
-    Serial.println("Telemetry could not be persisted.");
+  const uint32_t id = drained == count ? 1 : ids[count - 1] + 1;
+  char path[13];
+  queuePath(id, path);
+  File file = LittleFS.open(kQueueTemp, FILE_WRITE);
+  const bool written = file && file.write(reinterpret_cast<const uint8_t *>(packet.c_str()), packet.length()) == packet.length();
+  if (file) file.close();
+  File staged = LittleFS.open(kQueueTemp, FILE_READ);
+  const bool complete = staged && staged.size() == packet.length();
+  if (staged) staged.close();
+  if (!written || !complete || id == 0 || LittleFS.exists(path) || !LittleFS.rename(kQueueTemp, path)) {
+    Serial.println("Telemetry could not be committed to flash.");
     return;
   }
-  if (wifiConnected) flushPending(packet);
+  if (wifiConnected && drained == count && sent < kEnvelopesPerWake &&
+      deliver(packet) != Delivery::Retry && !LittleFS.remove(path)) {
+    Serial.println("Envelope will be retried after flash removal failed.");
+  }
 }
 }  // namespace
 
@@ -333,7 +481,13 @@ void setup() {
   } else if (outbox.begin("smart-agro", false)) {
     const bool wifiConnected = connectWifi();
     if (clockReady(wifiConnected)) {
-      measureAndPublish(wifiConnected);
+      lastClockUsed = time(nullptr);
+      if (mountQueue()) {
+        measureAndPublish(wifiConnected);
+        LittleFS.end();
+      } else {
+        Serial.println("Telemetry flash partition could not be mounted.");
+      }
     } else {
       Serial.println("UTC clock is unavailable. No timestamped sample stored.");
       readPh(readMoisture());

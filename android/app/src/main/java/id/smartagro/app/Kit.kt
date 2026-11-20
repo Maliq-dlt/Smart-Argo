@@ -229,22 +229,21 @@ data class TabItem(val label: String, val path: String, val selectedPath: String
 @Composable fun Group(modifier: Modifier = Modifier, footer: String? = null, inset: Dp = 16.dp, content: @Composable () -> Unit) {
     val p = palette
     // Filled during placement and read while drawing, which always follows layout; not state, so layout never recomposes.
-    val edges = remember { IntArray(64) }
-    val drawn = remember { IntArray(1) }
+    val edges = remember { arrayListOf<Int>() }
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Layout(content, Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.cell).drawBehind {
             val x = inset.toPx()
-            for (i in 0 until drawn[0]) drawLine(p.separator, Offset(x, edges[i].toFloat()), Offset(size.width, edges[i].toFloat()), 1f)
+            for (edge in edges) drawLine(p.separator, Offset(x, edge.toFloat()), Offset(size.width, edge.toFloat()), 1f)
         }) { measurables, constraints ->
             val placeables = measurables.map { it.measure(constraints.copy(minHeight = 0)) }
             val height = placeables.sumOf { it.height }
             layout(constraints.maxWidth, height) {
+                edges.clear()
                 var y = 0
                 placeables.forEachIndexed { i, placeable ->
-                    if (i > 0 && i - 1 < edges.size) edges[i - 1] = y
+                    if (i > 0) edges.add(y)
                     placeable.placeRelative(0, y); y += placeable.height
                 }
-                drawn[0] = (placeables.size - 1).coerceIn(0, edges.size)
             }
         }
         footer?.let { Text(it, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp), style = T.footnote, color = p.secondary) }

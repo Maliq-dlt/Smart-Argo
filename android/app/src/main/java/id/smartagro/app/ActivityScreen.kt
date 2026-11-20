@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -33,32 +34,31 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
     val context = LocalContext.current
     val unit = state.selectedUnit ?: state.units.firstOrNull()
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    val readingsScroll = rememberLazyListState()
+    val careScroll = rememberLazyListState()
+    val comparisonScroll = rememberLazyListState()
     var sensor by rememberSaveable { mutableStateOf(state.historySensor) }
     var range by rememberSaveable { mutableIntStateOf(0) }
     var selectedAt by remember(unit?.id, sensor, range) { mutableStateOf<Instant?>(null) }
     var journaling by rememberSaveable { mutableStateOf(false) }
-    var pendingCsv by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.historySensor) {
         sensor = state.historySensor
     }
 
     val saveCsvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri: Uri? ->
-        val csvText = pendingCsv
-        pendingCsv = null
-        if (uri != null && csvText != null) {
-            runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(csvText.toByteArray(Charsets.UTF_8)) } }
-        }
+        model.finishCsvDocument(uri)
     }
 
-    LaunchedEffect(unit?.id, tab, state.demo, state.email, state.busy) {
-        if (!state.demo && state.email.isNotBlank() && !state.busy && unit != null) {
-            if (tab == 1 && state.careUnitId != unit.id) model.loadCareJournal(unit.id)
+    LaunchedEffect(unit?.id, tab, state.demo, state.email) {
+        if (!state.demo && state.email.isNotBlank() && unit != null) {
+            if (tab in 0..1 && (!state.careLoaded || state.careUnitId != unit.id)) model.loadCareJournal(unit.id)
         }
     }
 
     TitledScreen(
         "Riwayat sensor",
+        state = when (tab) { 0 -> readingsScroll; 1 -> careScroll; else -> comparisonScroll },
         subtitle = unit?.let { "${it.name} · ${state.plantCode(it)}" } ?: "Pilih tanaman di tab Tanaman",
         actions = {
             if (unit != null) BarButton(PhosphorPaths.PlusBold, "Catat perawatan", { journaling = true }, enabled = !state.busy)
@@ -106,11 +106,12 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
                             val latest = state.history.maxOfOrNull { it.at }
                             val since = latest?.minus(if (range == 0) 24L else 24L * 7, ChronoUnit.HOURS)
                             TrendChart(
-                                state.history.filter { it.sensor == sensor && it.value != null && since != null && !it.at.isBefore(since) },
+                                state.history.filter { it.sensor == sensor && since != null && !it.at.isBefore(since) },
                                 sensor,
                                 color,
                                 selectedAt = selectedAt,
                                 onSelect = { picked -> selectedAt = picked?.at },
+                                waterings = state.careJournal.filter { it.unitId == unit.id && it.kind == "watering" },
                             )
                         }
                     }
@@ -127,7 +128,7 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
                                             val now = Instant.now()
                                             val win = HistoryWindow(now.minus(7, ChronoUnit.DAYS), now)
                                             model.exportMeasurementsCsv(unit.id, win) { csv ->
-                                                pendingCsv = csv.content
+                                                model.prepareCsvDocument(csv)
                                                 saveCsvLauncher.launch("smart-agro-${state.plantCode(unit)}.csv")
                                             }
                                         },
@@ -197,7 +198,13 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
                     val entries = state.careJournal.filter { it.unitId == unit.id }
                     item(key = "care-title") { SectionTitle("Riwayat jurnal (${entries.size})") }
                     if (entries.isEmpty()) {
-                        item { Footnote(if (state.careLoaded || state.demo) "Belum ada catatan perawatan untuk tanaman ini." else "Memuat catatan perawatan…") }
+                        item(key = "care-empty") {
+                            when {
+                                state.careLoaded || state.demo -> Footnote("Belum ada catatan perawatan untuk tanaman ini.")
+                                state.busy -> Footnote("Memuat catatan perawatan…")
+                                else -> PlainButton("Muat catatan perawatan", { model.loadCareJournal(unit.id) })
+                            }
+                        }
                     } else {
                         items(entries, key = { it.id }) { entry ->
                             val label = CARE_KINDS.find { it.first == entry.kind }?.second ?: entry.kind
@@ -209,6 +216,9 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
                                 if (entry.notes.isNotBlank()) Text(entry.notes, style = T.body, color = p.secondary, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
+                    }
+                    if (state.careNext != null) item(key = "older-care") {
+                        PlainButton("Muat catatan lebih lama", model::loadOlderCareJournal, enabled = !state.busy)
                     }
                 }
                 else -> {

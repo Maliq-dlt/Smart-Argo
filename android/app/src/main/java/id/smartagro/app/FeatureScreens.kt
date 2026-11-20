@@ -84,7 +84,7 @@ internal fun RewardsScreen(
     cancel: (String) -> Unit,
     recover: (String) -> Unit = {},
     onBack: (() -> Unit)? = null,
-    onAppeal: ((String, String?, String?) -> Unit)? = null,
+    onAppeal: ((String, String?, String?, () -> Unit) -> Unit)? = null,
 ) {
     val p = palette
     var section by rememberSaveable { mutableIntStateOf(0) }
@@ -236,10 +236,10 @@ internal fun RewardsScreen(
                 1 -> {
                     val ev = state.energyEvidence
                     if (ev == null) {
-                        item { Footnote("Memuat bukti energi dan meter perangkat…") }
+                        item(key = "energy-loading") { Footnote("Memuat bukti energi dan meter perangkat…") }
                     } else {
                         item(key = "meters-title") { SectionTitle("Meter terkalibrasi (${ev.meters.size})") }
-                        if (ev.meters.isEmpty()) item { Footnote("Belum ada meter energi yang terdaftar pada akun.") }
+                        if (ev.meters.isEmpty()) item(key = "meters-empty") { Footnote("Belum ada meter energi yang terdaftar pada akun.") }
                         else item(key = "meters") {
                             Group {
                                 ev.meters.forEach { m ->
@@ -253,7 +253,7 @@ internal fun RewardsScreen(
                             }
                         }
                         item(key = "windows-title") { SectionTitle("Jendela energi 15 menit (${ev.windows.size})") }
-                        if (ev.windows.isEmpty()) item { Footnote("Belum ada jendela energi terverifikasi.") }
+                        if (ev.windows.isEmpty()) item(key = "windows-empty") { Footnote("Belum ada jendela energi terverifikasi.") }
                         else items(ev.windows, key = { it.id }) { w ->
                             Panel(Modifier.padding(bottom = 8.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -291,8 +291,11 @@ internal fun RewardsScreen(
                             PrimaryButton(
                                 "Kirim permohonan banding",
                                 {
-                                    onAppeal(appealStatement, targetWin, targetRed)
-                                    appealStatement = ""
+                                    onAppeal(appealStatement, targetWin, targetRed) {
+                                        appealStatement = ""
+                                        appealWindowId = null
+                                        appealRedemptionId = null
+                                    }
                                 },
                                 Modifier.padding(16.dp).fillMaxWidth(),
                                 enabled = !state.busy && appealStatement.trim().length >= 5 && ((targetWin != null) xor (targetRed != null)),
@@ -301,7 +304,7 @@ internal fun RewardsScreen(
                         }
                     }
                     item(key = "cases-title") { SectionTitle("Kasus & anomali (${state.rewardCases.size})") }
-                    if (state.rewardCases.isEmpty()) item { Footnote("Belum ada kasus peninjauan reward.") }
+                    if (state.rewardCases.isEmpty()) item(key = "appeals-empty") { Footnote("Belum ada kasus peninjauan reward.") }
                     else items(state.rewardCases, key = { it.id }) { c ->
                         Panel(Modifier.padding(bottom = 8.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

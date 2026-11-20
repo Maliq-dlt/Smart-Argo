@@ -32,7 +32,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +57,12 @@ class MainActivity : ComponentActivity() {
     private val model: AgroViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val legacyCodes = java.io.File(cacheDir, "shared/smart-agro-recovery-codes.txt")
+        if (legacyCodes.exists()) {
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", legacyCodes)
+            revokeUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            legacyCodes.delete()
+        }
         enableEdgeToEdge()
         setContent { SmartAgroApp(model) }
     }
@@ -108,6 +116,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
     val google = if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) null else ({ model.googleLogin(context) })
     AgroTheme(dark) {
         val shellHaze = remember { HazeState() }
+        val screenState = key(state.email, state.demo) { rememberSaveableStateHolder() }
         val showTabs = state.screen !in listOf(Screen.Login, Screen.Mfa) && !state.introPlaying
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         CompositionLocalProvider(
@@ -137,28 +146,30 @@ private fun SmartAgroApp(model: AgroViewModel) {
                                     else -> fadeIn(tween(200)) togetherWith fadeOut(tween(1, delayMillis = 200))
                                 }
                             }, label = "Layar Smart Agro") { screen ->
-                                CompositionLocalProvider(LocalSharedScope provides this@SharedTransitionLayout, LocalNavScope provides this@AnimatedContent) {
-                                    when (screen) {
-                                        Screen.Login -> AuthFlow(state, model, google)
-                                        Screen.Mfa -> MfaPage(state, model)
-                                        Screen.Gallery -> ComponentGallery(model::back)
-                                        Screen.Products -> PlantsHome(state, model)
-                                        Screen.Dashboard -> PlantDetail(state, model)
-                                        Screen.Garden -> GardenPlantScreen(state, model)
-                                        Screen.History -> ActivityScreen(state, model)
-                                        Screen.Account -> AccountScreen(state, model)
-                                        Screen.Security -> SecurityScreen(state, model)
-                                        Screen.ManageProducts -> ProductsManageScreen(state, model)
-                                        Screen.Rewards -> RewardsScreen(
-                                            state,
-                                            model::loadRewards,
-                                            model::reserveReward,
-                                            model::cancelReward,
-                                            model::restartRewardRequest,
-                                            onBack = model::back,
-                                            onAppeal = { stmt, winId, redId -> model.submitRewardAppeal(stmt, winId, redId) },
-                                        )
-                                        Screen.Proofs -> ProofsScreen(state, model::loadProofs, onBack = model::back)
+                                screenState.SaveableStateProvider(screen.name) {
+                                    CompositionLocalProvider(LocalSharedScope provides this@SharedTransitionLayout, LocalNavScope provides this@AnimatedContent) {
+                                        when (screen) {
+                                            Screen.Login -> AuthFlow(state, model, google)
+                                            Screen.Mfa -> MfaPage(state, model)
+                                            Screen.Gallery -> ComponentGallery(model::back)
+                                            Screen.Products -> PlantsHome(state, model)
+                                            Screen.Dashboard -> PlantDetail(state, model)
+                                            Screen.Garden -> GardenPlantScreen(state, model)
+                                            Screen.History -> ActivityScreen(state, model)
+                                            Screen.Account -> AccountScreen(state, model)
+                                            Screen.Security -> SecurityScreen(state, model)
+                                            Screen.ManageProducts -> ProductsManageScreen(state, model)
+                                            Screen.Rewards -> RewardsScreen(
+                                                state,
+                                                model::loadRewards,
+                                                model::reserveReward,
+                                                model::cancelReward,
+                                                model::restartRewardRequest,
+                                                onBack = model::back,
+                                                onAppeal = { stmt, winId, redId, done -> model.submitRewardAppeal(stmt, winId, redId, done) },
+                                            )
+                                            Screen.Proofs -> ProofsScreen(state, model::loadProofs, onBack = model::back)
+                                        }
                                     }
                                 }
                             }
@@ -170,7 +181,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
                         when (state.screen) {
                             Screen.History -> 1
                             Screen.Account, Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery -> 2
-                            else -> 0
+                            Screen.Products, Screen.Dashboard, Screen.Garden, Screen.Login, Screen.Mfa -> 0
                         },
                         { model.navigate(tabScreens[it]) },
                         Modifier.align(Alignment.BottomCenter),
@@ -186,7 +197,8 @@ private fun SmartAgroApp(model: AgroViewModel) {
                 if (state.screen in listOf(Screen.Dashboard, Screen.Garden) && (state.demo || state.email.isNotBlank())) model.loadWeather()
             }
             LaunchedEffect(state.selectedUnit?.id, state.screen) {
-                if (state.screen == Screen.Dashboard && !state.demo && state.email.isNotBlank()) model.loadExplanation()
+                if (state.screen == Screen.Dashboard && !state.demo && state.email.isNotBlank() &&
+                    (state.explanation == null || state.explanationUnitId != state.selectedUnit?.id)) model.loadExplanation()
             }
             LaunchedEffect(state.selectedUnit?.id, state.screen, state.historyLoaded) {
                 if (state.screen in listOf(Screen.Dashboard, Screen.History) && state.selectedUnit != null && !state.historyLoaded && !state.demo && state.email.isNotBlank()) model.loadHistory()

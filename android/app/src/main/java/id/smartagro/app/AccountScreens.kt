@@ -2,6 +2,10 @@ package id.smartagro.app
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
@@ -31,6 +35,9 @@ internal fun copySensitiveText(context: Context, label: String, text: String) {
         clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
     }
     cm.setPrimaryClip(clip)
+    if (Build.VERSION.SDK_INT < 33) {
+        Toast.makeText(context, "Gunakan clipboard di aplikasi tepercaya, lalu kosongkan.", Toast.LENGTH_SHORT).show()
+    }
 }
 
 @Composable
@@ -39,12 +46,6 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
     val uri = rememberSafeUriHandler()
     var editingName by rememberSaveable { mutableStateOf(false) }
     var confirmingLogout by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(state.demo, state.email, state.rewardLoaded, state.busy) {
-        if (!state.demo && state.email.isNotBlank() && !state.rewardLoaded && !state.busy) {
-            model.loadRewards()
-        }
-    }
 
     TitledScreen("Akun", actions = { RefreshAction(state, model) }) {
         notices(state)
@@ -191,12 +192,16 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
     val context = LocalContext.current
     val sec = state.security
     val rec = state.recoveryStatus
-    var otpCode by remember { mutableStateOf("") }
     var disablingMfa by rememberSaveable { mutableStateOf(false) }
     var generatingCodes by rememberSaveable { mutableStateOf(false) }
     var settingPassword by rememberSaveable { mutableStateOf(false) }
-    var newPassword by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
+    val saveCodes = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
+        if (uri != null) {
+            val codes = model.state.generatedRecoveryCodes
+            if (codes == null) model.reportDocumentError("Buka kembali kode pemulihan sebelum menyimpan.")
+            else model.writeDocument(uri, codes.joinToString("\n"))
+        }
+    }
 
     LaunchedEffect(state.demo, state.email, state.securityLoaded, state.busy) {
         if (!state.demo && state.email.isNotBlank() && !state.securityLoaded && !state.busy) {
@@ -250,6 +255,7 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
     }
 
     state.totpEnrollment?.let { enrollment ->
+        var otpCode by remember(enrollment.id) { mutableStateOf("") }
         AgroSheet("Aktifkan autentikator", model::dismissTotpSetup) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Pindai QR ini di aplikasi autentikator (Google Authenticator / 1Password / Apple Passwords).", style = T.subhead, color = p.secondary, textAlign = TextAlign.Center)
@@ -312,7 +318,7 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
 
     state.generatedRecoveryCodes?.let { codes ->
         AgroSheet("Simpan kode pemulihan", model::clearGeneratedRecoveryCodes) {
-            Banner("Setiap kode hanya berlaku satu kali dan tidak ditampilkan ulang setelah ditutup.", Modifier.padding(horizontal = 16.dp))
+            Banner("Setiap kode hanya berlaku satu kali. File .txt berisi kode tanpa enkripsi. Pilih lokasi pribadi dan jauhkan dari folder bersama.", Modifier.padding(horizontal = 16.dp))
             Spacer(Modifier.height(10.dp))
             Panel {
                 codes.chunked(2).forEach { pair ->
@@ -325,7 +331,7 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
                 TintedButton("Salin semua", { copySensitiveText(context, "Kode pemulihan Smart Agro", codes.joinToString("\n")) }, Modifier.weight(1f), path = PhosphorPaths.Copy)
                 PrimaryButton(
                     "Simpan .txt",
-                    { shareTextFile(context, "smart-agro-recovery-codes.txt", "text/plain", "Kode pemulihan Smart Agro", codes.joinToString("\n")) },
+                    { saveCodes.launch("smart-agro-recovery-codes.txt") },
                     Modifier.weight(1f),
                     path = PhosphorPaths.DownloadSimple,
                 )
@@ -334,6 +340,8 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
     }
 
     if (settingPassword) {
+        var newPassword by remember { mutableStateOf("") }
+        var confirmPassword by remember { mutableStateOf("") }
         val ok = newPassword.length >= 10 && newPassword == confirmPassword && !state.busy
         AgroSheet("Atur kata sandi", { settingPassword = false }) {
             Group(footer = "Minimal 10 karakter.") {

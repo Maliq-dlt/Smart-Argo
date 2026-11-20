@@ -41,7 +41,7 @@ Alur ini mengikuti endpoint Auth/RPC/Edge yang sudah ada. Tidak menambah depende
 
 Reset sandi Android menggunakan kode 6 digit dari template `recovery.html`. `AccountWorkflows` mengirim permintaan reset, memverifikasi kode, lalu memakai sesi pemulihan sementara di memori untuk menyimpan sandi baru. Jika proses mati, minta kode baru. Setelah sandi berubah, `PasswordChangedLogoutUnconfirmed` berarti sandi sudah tersimpan dan logout sesi pemulihan belum terkonfirmasi. Pengguna masuk ulang melalui login dan MFA biasa. Layar reset juga menyediakan tautan ke alur web.
 
-CSV dibuat di memori dari RPC terautentikasi, dengan snapshot/cursor tetap, 14 kolom, BOM/CRLF dan pelindung formula. Batasnya 5.000 baris/4 MiB/10 halaman dan timeout coroutine 15 detik; pembacaan HTTP yang blocking dapat baru berhenti setelah timeout koneksi/bacanya. Tidak mengembalikan CSV parsial atau hasil setelah akun berubah. Detail pemanggilan dan pekerjaan layar yang tersisa ada di [HANDOFF.md](HANDOFF.md).
+CSV dibuat di memori dari RPC terautentikasi, dengan snapshot/cursor tetap, 14 kolom, BOM/CRLF dan pelindung formula. Batasnya 5.000 baris/4 MiB/10 halaman dan timeout coroutine 60 detik; pembacaan HTTP yang blocking dapat baru berhenti setelah timeout koneksi/bacanya. Tidak mengembalikan CSV parsial atau hasil setelah akun berubah. Detail pemanggilan dan pekerjaan layar yang tersisa ada di [HANDOFF.md](HANDOFF.md).
 
 Verifikasi non-UI terakhir: `./android/build.ps1 -Tasks @('testDebugUnitTest','lintDebug','assembleDebug','assembleRelease','lintRelease')` **berhasil**; XML mencatat **80 tes, 0 gagal/error**, lint debug **0 error/12 warning** dan release **0 error/13 warning**. APK debug dan release berhasil dibuat. Release 2.029.333 byte memakai tanda tangan v2 RSA 3072-bit yang valid; SHA-256 `51433b1aa68d8e8ff24df239bed72300785804f29897b43ccc5a0144b4326364`. Log: `.tmp/non-ui-verified-build.log`; rincian: `.tmp/non-ui-verification.json`. Tes kontrak memakai HTTP loopback/fixture; tidak membuktikan SMTP, Google login, cloud terautentikasi, akun pemilik atau sensor fisik. Lint masih memberi saran versi, penanganan khusus `NoCredentialException` (saat ini lewat exception umum), resource dan KTX.
 
@@ -57,10 +57,11 @@ Tombol **Coba mode latihan** memakai 10 skenario sintetis dari `src/lib/scenario
 
 ## Yang sudah diadaptasi
 
-- Palet Sage dan lumut, font General Sans / Fraunces dari aset web, mode terang/gelap mengikuti sistem pada awal penggunaan; pilihan manual disimpan di HP.
+- Palet Sage dan lumut, font General Sans / Fraunces dari aset web, mode terang/gelap mengikuti tema sistem.
 - Maskot Canvas native mengikuti panjang email, menutup mata dengan tangan daun saat kata sandi/kode diisi, dan menunduk saat gagal.
 - Ilustrasi pot, akar, daun cabai/bawang menggunakan koordinat dan kurva dari `PlantIllustration.tsx`; sakelar zona akar memakai tween tanpa pantulan. Ripple lingkaran tombol dinonaktifkan; fokus dan semantik aksesibilitas tetap ada.
-- Login email/kata sandi atau Google melalui Credential Manager, lalu autentikator TOTP melalui Supabase Auth yang sama dengan web.
+- Login email/kata sandi atau Google melalui Credential Manager, lalu autentikator TOTP melalui Supabase Auth yang sama dengan web. Pendaftaran Android dikonfirmasi dengan kode email enam digit. Pengambilan foto QR mendelegasikan kamera ke aplikasi kamera sistem melalui intent.
+- Build release hanya menerima HTTPS dengan validasi CA Android. Trust store sistem dipakai agar rotasi sertifikat Supabase tidak mengunci pengguna. CI membuat kunci uji tersendiri dan tidak memublikasikan APK debug.
 - Sesi dienkripsi AES-GCM memakai kunci Android Keystore, tidak ikut backup; token diperbarui saat diperlukan. Password dan OTP tidak disimpan.
 - Produk milik akun dan daftar persona ringkas memakai LazyColumn; pencarian nama, jenis, kode atau serial, serta filter produk. Kelembapan/suhu/pH mempertahankan status galat/kosong/usang dan waktu pengukuran.
 - Grafik dengan rentang nilai adaptif, inspeksi sentuh, filter 24 jam/7 hari, dan pemuatan 120 bacaan sebelumnya per halaman. Data hilang, galat, jam tak sinkron dan jeda lebih dari satu jam memutus garis. Filter hanya memakai halaman yang sudah dimuat.
@@ -74,7 +75,7 @@ Tombol **Coba mode latihan** memakai 10 skenario sintetis dari `src/lib/scenario
 - Pot dan kebun akun dibaca dari `my_garden`: lokasi, zona, tanggal tanam, kode integer serta label CB/BM/AB/PN sama dengan web. Siklus tanaman dibedakan dari unit sensor; bacaan hanya tersedia bila zona benar-benar terhubung ke unit milik akun. Pengelolaan kebun tetap melalui website.
 - Transisi layar singkat, tarik-untuk-segarkan, kontrol Segarkan di header, dan umpan balik tekan pada kartu. Navigasi tetap tersedia saat memuat; operasi jaringan diserialkan dan perubahan nama terikat pada tanaman asal.
 - Tombol kembali Android dan keluar dari sesi aplikasi saja.
-- Preview Compose untuk login normal dan teks besar; layout scroll untuk layar kecil/keyboard.
+- Layar masuk dapat digulir pada layar kecil atau saat keyboard terbuka. Ukuran teks besar diperiksa melalui tes UI.
 
 Pendaftaran, pemulihan akun, aktivasi/QR, transfer, pengaturan unit, fitur operator, jurnal manual, bukti energi, dan pencatatan berkas lewat wallet tetap menggunakan website pada versi awal ini. Saldo poin sudah dapat dibaca di aplikasi; poin program tidak diasumsikan sebagai token atau koin kripto. Cuaca memakai fungsi `weather-forecast` melalui sesi akun yang sama dengan website, berdasarkan koordinat lokasi kebun tanaman terpilih. Koordinat dibulatkan oleh server sebelum dikirim ke Open-Meteo; aplikasi tidak meminta GPS atau memilih kota tersendiri. Lokasi indoor tidak meminta prakiraan luar; koordinat yang belum diatur diarahkan ke website. Kartu menampilkan waktu lokal lokasi, suhu/kelembapan udara, angin m/s, awan, curah hujan dan prakiraan hingga enam jam. Kondisi awan dapat mengubah ilustrasi. Kontrak server tidak menyediakan radiasi matahari, lux, atau siang/malam; aplikasi tidak membuat nilai pengganti. Kontrak backend perangkat hanya memiliki kelembapan, suhu tanah, dan pH; aplikasi tidak mengarang bacaan sensor cahaya. Tautan terkait membuka browser; sesi browser dan aplikasi terpisah. Menutup aplikasi pertama kali tidak meminta izin kamera, lokasi, notifikasi, atau Bluetooth.
 
@@ -178,7 +179,7 @@ Verifikasi penyelesaian fitur native (15 November 2026): `android/build.ps1` ber
 
 ## Keamanan aplikasi dan build release
 
-`FLAG_SECURE` (dan thumbnail Recents pada API 33+) hanya aktif di layar yang meminta atau menampilkan kode: langkah autentikator dan Reward. Layar lain boleh ditangkap layar agar pemilik bisa membagikannya untuk review (sejak 2026-11-16; sebelumnya seluruh window). Sesuai pilihan pengguna pada 16 November 2026, aplikasi tidak meminta kunci aplikasi tambahan atau konfirmasi PIN/pola/sandi HP. Berpindah ke browser lalu kembali tidak mengunci akun lagi. Login dan MFA server tetap berlaku; sesi dienkripsi melalui Android Keystore di no-backup storage. Perlindungan window dan enkripsi tidak menjamin keamanan sistem yang sudah disusupi.
+`FLAG_SECURE` (dan thumbnail Recents pada API 33+) hanya aktif di layar yang meminta atau menampilkan kode: langkah autentikator dan Reward. Layar lain boleh ditangkap layar agar pemilik bisa membagikannya untuk review (sejak 2026-11-16; sebelumnya seluruh window). Sesuai pilihan pengguna pada 16 November 2026, aplikasi tidak meminta kunci aplikasi tambahan atau konfirmasi PIN/pola/sandi HP. Berpindah ke browser lalu kembali tidak mengunci akun lagi. Login dan MFA server tetap berlaku; sesi dienkripsi melalui Android Keystore di no-backup storage. Kunci sesi dapat dipakai aplikasi tanpa autentikasi perangkat tambahan agar pengguna tanpa PIN atau biometrik tetap bisa masuk. Perlindungan window dan enkripsi tidak menjamin keamanan sistem yang sudah disusupi.
 
 Dari root repository:
 
