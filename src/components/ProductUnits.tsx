@@ -3,7 +3,7 @@ import { parseOverview, parseUnits, type OwnedDevice, type OwnedUnit, type UnitO
 import type { ProductAccountClient } from '../lib/productAccountClient'
 import { SelectField } from './ui/select'
 
-const ALERT_TEXT = { no_data: 'Belum ada data', stale: 'Data usang', sensor_error: 'Sensor galat', device_revoked: 'Perangkat dicabut', energy_deficit: 'Beban melebihi panen (24 jam)', battery_low: 'Baterai di bawah 20%' }
+const ALERT_TEXT = { no_data: 'Belum ada data', stale: 'Data usang', sensor_error: 'Sensor galat', device_revoked: 'Perangkat dicabut', energy_deficit: 'Beban melebihi panen (24 jam)', battery_low: 'Baterai lemah' }
 const SENSOR = { moisture: ['Kelembapan', '/100'], soil_temperature: ['Suhu tanah', ' °C'], soil_ph: ['pH', ''] } as const
 const MOOD: Record<string, string> = { bingung_menunggu: 'Menunggu data', tenang_senang: 'Rutin', sedih_perhatian: 'Perlu perhatian', waspada_marah: 'Prioritas periksa' }
 const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'baru saja' : m < 60 ? `${m} menit lalu` : m < 2880 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu` }
@@ -64,6 +64,7 @@ export default function ProductUnits({ client, onSessionExpired, version = 0, on
           <p className="unit-meta">{u.last_packet_at ? `Paket terakhir ${ago(u.last_packet_at)}` : 'Belum ada paket'}
             {u.energy.windows > 0 && ` · Energi 24 jam: panen ${u.energy.solar_wh?.toFixed(1)} Wh, beban ${u.energy.load_wh?.toFixed(1)} Wh`}
             {u.energy.battery_soc_pct !== null && ` · Baterai ${Math.round(u.energy.battery_soc_pct)}%`}
+            {u.battery && ` · Baterai ${u.battery.voltage.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} V`}
             {u.assessment && ` · Penilaian: ${MOOD[u.assessment.state] ?? u.assessment.state}`}</p>
           <details><summary>Kelola unit</summary>
             <form onSubmit={e => { e.preventDefault(); void act('rename_my_unit', { p_unit_id: u.unit_id, p_label: labels[u.unit_id] ?? u.location_label }, 'Nama unit disimpan.') }}>

@@ -14,7 +14,10 @@ const run=randomUUID().slice(0,8),password=randomBytes(20).toString('base64url')
 async function account(label){const r=await api('/auth/v1/signup',null,{email:`units-${run}-${label}@example.test`,password});assert.equal(r.status,200);const a=await rpc('ensure_my_account',r.data.access_token);assert.equal(a.data.ok,true);return{token:r.data.access_token,id:a.data.account.id}}
 function device(product){const id=randomUUID(),keys=generateKeyPairSync('ed25519'),publicKey=Buffer.from(keys.publicKey.export({format:'jwk'}).x,'base64url').toString('base64');sql(`INSERT INTO device(id,product_id,public_key) VALUES(${q(id)},${q(product)},${q(publicKey)})`);return{id,keys,publicKey}}
 function product(owner,variant,devices){const id=randomUUID();sql(`INSERT INTO product(id,serial_public,variant,issuer_signature) VALUES(${q(id)},${q('UNIT-'+id.slice(0,8).toUpperCase())},${q(variant)},'synthetic DB test'); INSERT INTO ownership(product_id,account_id,start_at) VALUES(${q(id)},${q(owner.id)},clock_timestamp()-interval '1 day')`);return{id,devices:Array.from({length:devices},()=>device(id))}}
-function ingest(d,unit,payloadText){const payload=payloadText??JSON.stringify({domain:'smart-agro.telemetry.v2',schema_version:2,source:'device',device_id:d.id,unit_id:unit,boot_id:randomUUID(),sequence:1,measured_at:new Date().toISOString(),clock_status:'synced',sensors:{moisture:{status:'ok',value:50},soil_temperature:{status:'ok',value:26},soil_ph:{status:'not_measured',value:null}}});return rpc('ingest_verified_telemetry',config.service,{p_payload:payload,p_public_key:d.publicKey,p_signature:sign(null,Buffer.from(payload),d.keys.privateKey).toString('base64')}).then(r=>({...r.data,payload}))}
+function ingest(d,unit,payloadText,at){const payload=payloadText??JSON.stringify({domain:'smart-agro.telemetry.v2',schema_version:2,source:'device',device_id:d.id,unit_id:unit,boot_id:randomUUID(),sequence:1,measured_at:at??new Date().toISOString(),clock_status:'synced',sensors:{moisture:{status:'ok',value:50},soil_temperature:{status:'ok',value:26},soil_ph:{status:'not_measured',value:null}}});return rpc('ingest_verified_telemetry',config.service,{p_payload:payload,p_public_key:d.publicKey,p_signature:sign(null,Buffer.from(payload),d.keys.privateKey).toString('base64')}).then(r=>({...r.data,payload}))}
+// Database time a moment ahead, so a packet lands after a placement change whatever the host/Docker clock skew.
+const soon=()=>sql(`SELECT to_char((clock_timestamp()+interval '1 second') AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`)
+const packetUnit=r=>sql(`SELECT unit_id FROM telemetry_packet WHERE id=${q(r.packet_id)}`)
 const units=async owner=>(await rpc('my_units',owner.token)).data
 const pairs=async owner=>(await rpc('my_device_units',owner.token)).data.units.map(u=>`${u.device_id}:${u.unit_id}`)
 
@@ -35,14 +38,14 @@ await test('APP-02: unit lifecycle and device placement',async t=>{
   assert.deepEqual(history[0].detail,{from:'Zona A',to:'Bedeng cabai'})
   assert.equal((await rpc('my_unit_history',bob.token,{p_unit_id:a})).data.code,'unit_unavailable')
  })
- await t.test('a placed device reports only to its unit; unplaced devices keep the old behaviour',async()=>{
+ await t.test('a placed device reports to its placement whatever unit it was flashed with; unplaced devices keep the old behaviour',async()=>{
   assert.equal((await rpc('place_my_device',alice.token,{p_device_id:d1.id,p_unit_id:a})).data.changed,true)
   assert.equal((await rpc('place_my_device',alice.token,{p_device_id:d1.id,p_unit_id:a})).data.changed,false)
   const listed=await pairs(alice)
   assert.ok(listed.includes(`${d1.id}:${a}`));assert.ok(!listed.includes(`${d1.id}:${b}`))
   assert.ok(listed.includes(`${d2.id}:${a}`)&&listed.includes(`${d2.id}:${b}`),'unplaced device still pairs with every unit')
   assert.equal((await units(alice)).devices.find(d=>d.device_id===d1.id).unit_id,a)
-  assert.equal((await ingest(d1,b)).code,'unit_mismatch')
+  const stale=await ingest(d1,b,undefined,soon());assert.equal(stale.ok,true);assert.equal(packetUnit(stale),a,'placement wins over the flashed unit')
   const accepted=await ingest(d1,a);assert.equal(accepted.ok,true)
   assert.equal((await ingest(d2,b)).ok,true)
   assert.equal((await rpc('place_my_device',alice.token,{p_device_id:d1.id,p_unit_id:bobUnit})).data.code,'unit_unavailable')
@@ -51,7 +54,7 @@ await test('APP-02: unit lifecycle and device placement',async t=>{
   // Moving keeps history and an exact retry of a packet accepted before the move still succeeds.
   assert.equal((await rpc('place_my_device',alice.token,{p_device_id:d1.id,p_unit_id:b})).data.changed,true)
   const retry=await ingest(d1,a,accepted.payload);assert.equal(retry.ok,true);assert.equal(retry.duplicate,true)
-  assert.equal((await ingest(d1,a)).code,'unit_mismatch')
+  const moved=await ingest(d1,a,undefined,soon());assert.equal(moved.ok,true);assert.equal(packetUnit(moved),b,'no reflash after a move')
   assert.equal((await rpc('my_unit_history',alice.token,{p_unit_id:a})).data.events[0].action,'device_removed')
   assert.equal((await rpc('my_unit_history',alice.token,{p_unit_id:b})).data.events[0].action,'device_placed')
   assert.equal(sql(`SELECT count(*) FROM device_placement WHERE device_id=${q(d1.id)}`),'2')
@@ -62,7 +65,8 @@ await test('APP-02: unit lifecycle and device placement',async t=>{
   assert.equal((await rpc('archive_my_unit',alice.token,{p_unit_id:b})).data.changed,false)
   assert.equal(sql(`SELECT count(*) FROM measurement WHERE unit_id=${q(b)}`),before)
   assert.equal((await units(alice)).devices.find(d=>d.device_id===d1.id).unit_id,null,'placement ended with the archive')
-  assert.equal((await ingest(d2,b)).code,'unit_unavailable')
+  assert.equal((await ingest(d2,b)).code,'unit_archived','permanent, so firmware drops it instead of retrying')
+  assert.equal(packetUnit(await ingest(d1,a,undefined,soon())),a,'an unplaced device falls back to its flashed unit')
   assert.ok(!(await pairs(alice)).some(p=>p.endsWith(':'+b)))
   assert.ok((await units(alice)).units.find(u=>u.unit_id===b).archived_at)
   assert.equal((await rpc('rename_my_unit',alice.token,{p_unit_id:b,p_label:'X'})).data.code,'unit_unavailable')

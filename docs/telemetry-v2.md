@@ -33,9 +33,11 @@ IDs are UUIDs. `boot_id` is unique per device reboot; `sequence` is an integer 0
 
 Exactly three sensor keys are required. Status `ok` needs a finite number: moisture 0–100 (capacitive index, not volumetric water), soil temperature −20–60 °C, pH 0–14. `error` and `not_measured` require `value: null`; `error` also requires a nonblank description of 1–240 characters. An OK report does not prove calibration. `drip` and `actuator` are rejected; this endpoint cannot command hardware.
 
+An optional top-level `battery` object (firmware since 2026-11-21) uses the same shape as a sensor, `{"status": "ok", "value": 3.92}` in volts or `not_measured`/`error` with `value: null`. It is kept in the signed payload and is not a measurement row; `my_unit_overview` reports the latest packet's voltage (2.5–4.5 V) as `battery` and raises `battery_low` below 3.4 V. Other unknown top-level keys are stored but ignored.
+
 ## Storage, order and retries
 
-The endpoint verifies the exact signature and then rechecks the current key, active device/product, same-product unit and active ownership under transaction locks. Private raw payload/signature and its SHA256 digest are stored alongside three sensor rows in one transaction. `received_at` comes from the database clock; `measured_at` remains the device's signed observation time.
+The endpoint verifies the exact signature and then rechecks the current key, active device/product, same-product unit and active ownership under transaction locks. Since migration `20261121000000` the owner's placement decides the unit: a packet whose `measured_at` falls inside a placement is filed under that unit whatever `unit_id` the device was flashed with, so moving a device needs no reflash. The signed `unit_id` applies only while the device is unplaced. Private raw payload/signature and its SHA256 digest are stored alongside three sensor rows in one transaction. `received_at` comes from the database clock; `measured_at` remains the device's signed observation time.
 
 An exact same device/boot/sequence/payload retry returns HTTP 200 with `duplicate: true`, `inserted: 0` and the original `packet_id`. A new packet returns `duplicate: false`, `inserted: 3`. Changed signed bytes or target unit with the same identity return 409. Signature/key/revocation checks still apply to duplicates. The server rejects lower/equal new sequences and measurement time reversal within a boot. A new boot allows sequence reset; prior observations remain intact.
 
@@ -45,8 +47,8 @@ New packets may be at most seven days old or five minutes ahead of the database 
 | --- | --- |
 | 200 | Stored or exact retry acknowledged. |
 | 400 / 413 / 415 | Invalid packet/body size/content type. |
-| 403 | Invalid signature, unavailable/revoked device/product, wrong unit or origin. |
-| 409 | Conflicting sequence or sequence/time reversal. |
+| 403 | Invalid signature, unavailable/revoked device/product, unit without active ownership, or origin. |
+| 409 | Conflicting sequence, sequence/time reversal, or `unit_archived` (the packet's unit is archived; firmware drops it). |
 | 429 | New-packet rate limit; retry later. |
 | 503 | Service/database temporarily unavailable; retry identical envelope. |
 
