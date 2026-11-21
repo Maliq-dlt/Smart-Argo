@@ -82,6 +82,61 @@ class AgroApiTest {
         reply("/auth/v1/logout?scope=local",status=204)
         api.logout();assertNull(api.session);assertNull(store.read())
     }
+    @Test fun placementWarnsWithoutFreshEvidenceAndMovesOrArchivesWithoutOperator() = runBlocking {
+        reply("/auth/v1/token?grant_type=password", token())
+        reply("/auth/v1/user", user(), "GET")
+        assertTrue(api.login("grower@example.test", "test-password"))
+        val deviceId = "00000000-0000-4000-8000-000000000004"
+        val productId = "00000000-0000-4000-8000-000000000005"
+        val otherUnit = "00000000-0000-4000-8000-000000000006"
+        val sampleAt = Instant.now().minusSeconds(30).truncatedTo(java.time.temporal.ChronoUnit.MICROS).toString()
+
+        fun history(unit: String = unitId, reportedDevice: String = deviceId, clock: String = "synced") {
+            val row = JSONObject().put("id", factor).put("unit_id", unit).put("device_id", reportedDevice)
+                .put("packet_id", challenge).put("boot_id", challenge).put("sequence", 1)
+                .put("source", "device").put("sensor_id", "moisture").put("quality_status", "ok")
+                .put("value_nullable", 42).put("error_message", JSONObject.NULL)
+                .put("measured_at", sampleAt).put("received_at", sampleAt).put("clock_status", clock)
+            val page = JSONObject().put("ok", true).put("unit_id", unit).put("snapshot_as_of", sampleAt)
+                .put("readings", JSONArray().put(row)).put("next_cursor", JSONObject.NULL)
+            reply("/rest/v1/rpc/read_my_measurement_history", page) { body ->
+                assertEquals(unit, body.getString("p_unit_id"))
+                page.put("from", body.getString("p_from")).put("to", body.getString("p_to"))
+            }
+        }
+        fun workspace(assigned: String?) {
+            fun unit(id: String, label: String) = JSONObject().put("unit_id", id).put("product_id", productId)
+                .put("location_label", label).put("species_variety", "Cabai").put("archived_at", JSONObject.NULL)
+            val device = JSONObject().put("device_id", deviceId).put("product_id", productId)
+                .put("status", "active").put("unit_id", assigned ?: JSONObject.NULL)
+            reply("/rest/v1/rpc/my_units", JSONObject().put("ok", true)
+                .put("units", JSONArray().put(unit(unitId, "Teras")).put(unit(otherUnit, "Kebun"))).put("devices", JSONArray().put(device)))
+        }
+        fun expectPlacement() = reply("/rest/v1/rpc/place_my_device", JSONObject().put("ok", true)) {
+            assertEquals(deviceId, it.getString("p_device_id"))
+            assertEquals(unitId, it.getString("p_unit_id"))
+        }
+
+        // Unplaced: every unit of the product is searched. Another device or an unsynced clock is no evidence, which is a
+        // warning (false), not a refusal: the placement is still saved.
+        workspace(assigned = null); history(reportedDevice = factor); history(unit = otherUnit, reportedDevice = factor); expectPlacement()
+        assertFalse(api.placeDevice(deviceId, unitId))
+        workspace(assigned = null); history(clock = "unsynced"); history(unit = otherUnit, clock = "unsynced"); expectPlacement()
+        assertFalse(api.placeDevice(deviceId, unitId))
+        // Already there: nothing to read or write.
+        workspace(assigned = unitId)
+        assertTrue(api.placeDevice(deviceId, unitId))
+        // Moving: the evidence is in the current unit, searched first, and no reflash or operator is needed.
+        workspace(assigned = otherUnit); history(unit = otherUnit); expectPlacement()
+        assertTrue(api.placeDevice(deviceId, unitId))
+        // First placement with the packets still under the flashed unit.
+        workspace(assigned = null); history(reportedDevice = factor); history(unit = otherUnit); expectPlacement()
+        assertTrue(api.placeDevice(deviceId, unitId))
+        // Archiving releases the device on the server.
+        reply("/rest/v1/rpc/archive_my_unit", JSONObject().put("ok", true).put("changed", true)) { assertEquals(unitId, it.getString("p_unit_id")) }
+        api.archiveUnit(unitId)
+        assertTrue(replies.isEmpty())
+    }
     @Test fun serverWeatherUsesAuthenticatedEdgeAndPreservesSessionOnOutage() = runBlocking {
         reply("/auth/v1/token?grant_type=password",token());reply("/auth/v1/user",user(),"GET")
         assertTrue(api.login("grower@example.test","test-password"))

@@ -98,10 +98,21 @@ suspend fun AgroApi.plantGardenSlot(requestId: String,slotId: String,speciesId: 
 suspend fun AgroApi.switchGardenPlant(requestId: String,slotId: String,speciesId: Int,on: LocalDate,outcome: String,nickname: String? = null): CycleChange =
     parseCycleChange(rpc("switch_my_plant",gardenPlantBody(requestId,slotId,speciesId,on,nickname,outcome)),slotId,speciesId,on)
 
+enum class HistoryRange(val label: String, private val days: Long) {
+    Day("24 jam", 1), Week("7 hari", 7);
+
+    fun window(to: Instant) = HistoryWindow(to.minus(days, ChronoUnit.DAYS), to)
+}
+
 class HistoryWindow(from: Instant,to: Instant) {
     val from: Instant=from.truncatedTo(ChronoUnit.MICROS)
     val to: Instant=to.truncatedTo(ChronoUnit.MICROS)
     init { require(this.from<this.to && Duration.between(this.from,this.to)<=Duration.ofDays(31)) { "Rentang harus berurutan, maksimal 31 hari." } }
+}
+internal fun historyWindowEndingAt(end: Instant, ownershipStart: Instant?): HistoryWindow? {
+    val to = end.truncatedTo(ChronoUnit.MICROS)
+    val from = maxOf(to.minus(31, ChronoUnit.DAYS), ownershipStart ?: Instant.EPOCH).truncatedTo(ChronoUnit.MICROS)
+    return if (from < to) HistoryWindow(from, to) else null
 }
 data class HistoryCursor(val at: Instant,val id: String) { init { checkedId(id) } }
 data class CareEntry(val id: String,val unitId: String,val kind: String,val observedAt: Instant,val createdAt: Instant,val amountMl: Double?,val notes: String)
@@ -173,10 +184,11 @@ internal fun parseMeasurementHistoryPage(json: JSONObject,unitId: String,window:
         val clock=row.text("clock_status",20);require(clock in listOf("synced","unsynced"))
         val error=nullableText(row,"error_message",240)
         require(quality!="error" || !error.isNullOrBlank())
-        val reading=Reading.parse(row)
+        val id=row.id("id")
+        val reading=Reading.parse(row).copy(id=id)
         val received=row.instant("received_at")
         require(reading.at>=window.from && reading.at<window.to && received<=snapshot)
-        HistoryMeasurement(row.id("id"),unitId,row.id("device_id"),row.id("packet_id"),reading,error,received,clock,row.whole("sequence",0,Int.MAX_VALUE.toLong()),row.id("boot_id"))
+        HistoryMeasurement(id,unitId,row.id("device_id"),row.id("packet_id"),reading,error,received,clock,row.whole("sequence",0,Int.MAX_VALUE.toLong()),row.id("boot_id"))
     }
     require(readings.map { it.id }.distinct().size==readings.size)
     require(readings.zipWithNext().all { (a,b) -> older(HistoryCursor(b.reading.at,b.id),HistoryCursor(a.reading.at,a.id)) })
@@ -189,6 +201,22 @@ suspend fun AgroApi.readMeasurementHistory(unitId: String,window: HistoryWindow,
     require((snapshot==null || snapshot.truncatedTo(ChronoUnit.MICROS)==page.snapshot) && page.readings.size<=limit && (page.next==null || page.next!=cursor))
     cursor?.let { require(page.readings.all { row -> older(HistoryCursor(row.reading.at,row.id),it) }) }
     return page
+}
+
+internal suspend fun collectHistoryReadings(
+    loadPage: suspend (Instant?, HistoryCursor?) -> MeasurementHistoryPage,
+): Pair<List<Reading>, Instant> {
+    var snapshot: Instant? = null
+    var cursor: HistoryCursor? = null
+    val readings = buildList {
+        do {
+            val page = loadPage(snapshot, cursor)
+            addAll(page.readings.map { it.reading })
+            snapshot = page.snapshot
+            cursor = page.next
+        } while (cursor != null)
+    }
+    return readings to checkNotNull(snapshot)
 }
 
 data class MeasurementStats(val total: Long,val ok: Long,val error: Long,val notMeasured: Long,val unsynced: Long,val eligible: Long,val min: Double?,val max: Double?,val avg: Double?)

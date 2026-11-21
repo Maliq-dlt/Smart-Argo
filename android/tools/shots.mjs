@@ -52,7 +52,7 @@ async function tour(tag) {
     await sleep(2800);
   }
   await shot(`${tag}-01-tanaman`);
-  await tap('Buka detail', { scrolls: 3 });
+  await tap('Buka detail', { scrolls: 6 }); // at 200 % text the deck sits below two screens of metrics
   await sleep(800);
   await shot(`${tag}-02-detail`);
   await scroll(); await shot(`${tag}-03-detail-bawah`);

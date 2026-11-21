@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -38,8 +39,7 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
     val careScroll = rememberLazyListState()
     val comparisonScroll = rememberLazyListState()
     var sensor by rememberSaveable { mutableStateOf(state.historySensor) }
-    var range by rememberSaveable { mutableIntStateOf(0) }
-    var selectedAt by remember(unit?.id, sensor, range) { mutableStateOf<Instant?>(null) }
+    var selectedAt by remember(unit?.id, sensor, state.historyRange) { mutableStateOf<Instant?>(null) }
     var journaling by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.historySensor) {
@@ -99,21 +99,8 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
                         }
                     }
                     item(key = "chart") {
-                        val color = when (sensor) { Sensor.Moisture -> p.water; Sensor.Temperature -> p.sun; Sensor.Ph -> p.tint }
-                        Column(Modifier.padding(horizontal = 16.dp)) {
-                            Segmented(listOf("24 jam", "7 hari"), range, { range = it })
-                            Spacer(Modifier.height(12.dp))
-                            val latest = state.history.maxOfOrNull { it.at }
-                            val since = latest?.minus(if (range == 0) 24L else 24L * 7, ChronoUnit.HOURS)
-                            TrendChart(
-                                state.history.filter { it.sensor == sensor && since != null && !it.at.isBefore(since) },
-                                sensor,
-                                color,
-                                selectedAt = selectedAt,
-                                onSelect = { picked -> selectedAt = picked?.at },
-                                waterings = state.careJournal.filter { it.unitId == unit.id && it.kind == "watering" },
-                            )
-                        }
+                        HistoryTrend(state, model, unit.id, sensor, selectedAt = selectedAt,
+                            onSelect = { selectedAt = it?.at })
                     }
                     if (!state.demo) {
                         item(key = "export") {
@@ -154,35 +141,27 @@ internal fun ActivityScreen(state: AppState, model: AgroViewModel) {
                     }
                     val shown = state.history.filter { it.sensor == sensor }
                     item(key = "readings-list-title") { SectionTitle("Bacaan ${sensor.label.lowercase(Locale.ROOT)} (${shown.size})") }
-                    if (!state.historyLoaded && !state.demo) {
-                        item(key = "load-history") {
-                            Panel {
-                                PrimaryButton("Muat riwayat sensor", model::loadHistory, Modifier.fillMaxWidth(), enabled = !state.busy, busy = state.busy)
-                            }
-                        }
-                    } else if (shown.isEmpty()) {
+                    if (state.historyLoaded && shown.isEmpty()) {
                         item { Footnote("Belum ada bacaan untuk sensor ini pada jendela waktu yang dimuat.") }
                     } else {
-                        item(key = "readings-group") {
+                        itemsIndexed(shown, key = { index, row -> "reading-${row.id ?: index}" }) { _, r ->
                             Group {
-                                shown.take(40).forEach { r ->
-                                    val picked = selectedAt == r.at
-                                    Cell(
-                                        reading(r.sensor, r.value),
-                                        subtitle = if (picked) "Disorot di grafik · ${if (r.synced) "Terverifikasi" else "Jam belum sinkron"}"
-                                            else if (r.quality == "ok") (if (r.synced) "Terverifikasi" else "Jam perangkat belum sinkron") else "Galat sensor",
-                                        value = time(r.at),
-                                        chevron = false,
-                                        onClick = if (r.value != null && r.quality == "ok") ({ selectedAt = if (picked) null else r.at }) else null,
-                                    )
-                                }
+                                val picked = selectedAt == r.at
+                                Cell(
+                                    reading(r.sensor, r.value),
+                                    subtitle = if (picked) "Disorot di grafik · ${if (r.synced) "Terverifikasi" else "Jam belum sinkron"}"
+                                        else if (r.quality == "ok") (if (r.synced) "Terverifikasi" else "Jam perangkat belum sinkron") else "Galat sensor",
+                                    value = time(r.at),
+                                    chevron = false,
+                                    onClick = if (r.value != null && r.quality == "ok") ({ selectedAt = if (picked) null else r.at }) else null,
+                                )
                             }
                         }
-                        if (state.historyHasMore) {
-                            item {
-                                Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                                    PlainButton("Muat bacaan lebih lama", model::loadOlderHistory, enabled = !state.busy)
-                                }
+                    }
+                    if (state.historyHasMore) {
+                        item(key = "older-readings") {
+                            Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                PlainButton("Muat bacaan lebih lama", model::loadOlderHistory, enabled = !state.busy)
                             }
                         }
                     }
@@ -311,5 +290,43 @@ private fun CareJournalSheet(unit: PlantUnit, state: AppState, model: AgroViewMo
             enabled = valid,
             busy = state.busy,
         )
+    }
+}
+
+@Composable
+internal fun HistoryTrend(
+    state: AppState,
+    model: AgroViewModel,
+    unitId: String,
+    sensor: Sensor,
+    selectedAt: Instant? = null,
+    onSelect: ((Reading?) -> Unit)? = null,
+) {
+    val p = palette
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        Segmented(HistoryRange.entries.map { it.label }, state.historyRange.ordinal,
+            { model.selectHistoryRange(HistoryRange.entries[it]) })
+        Spacer(Modifier.height(12.dp))
+        if (!state.historyLoaded) {
+            if (state.busy || state.message == null) {
+                Footnote("Memuat bacaan ${state.historyRange.label}…")
+            }
+            PlainButton("Muat riwayat sensor", model::loadHistory, enabled = !state.busy)
+        } else {
+            val window = state.historyChartWindow ?: if (state.demo) {
+                state.history.maxOfOrNull { it.at }?.let { state.historyRange.window(it.plusNanos(1_000)) }
+            } else null
+            val readings = remember(state.history, sensor, window) {
+                state.history.filter { it.sensor == sensor && window != null && it.at >= window.from && it.at < window.to }
+            }
+            TrendChart(
+                readings, sensor,
+                when (sensor) { Sensor.Moisture -> p.water; Sensor.Temperature -> p.sun; Sensor.Ph -> p.tint },
+                // Practice scenarios hold 2.5 hours of samples; on a 24-hour axis they were a sliver at the right edge.
+                // The axis spans the data there, and the full window only for a real device.
+                selectedAt = selectedAt, onSelect = onSelect, window = window.takeUnless { state.demo },
+                waterings = state.careJournal.filter { it.unitId == unitId && it.kind == "watering" },
+            )
+        }
     }
 }

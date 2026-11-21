@@ -177,8 +177,8 @@ internal fun ShareCycleSheet(cycle: GardenPlant, state: AppState, model: AgroVie
     AgroSheet("Bagikan siklus ${cycle.tag}", dismiss) {
         Group(footer = "Data diringkas secara anonim ke zona iklim Anda.") {
             FieldRow("Jeda siram (hari)", intervalRaw, { intervalRaw = it.take(8) }, "2.0", keyboard = KeyboardType.Decimal)
-            FieldRow("Kelembapan bawah", lowRaw, { lowRaw = it.take(6) }, "45", keyboard = KeyboardType.Number)
-            FieldRow("Kelembapan atas", highRaw, { highRaw = it.take(6) }, "75", keyboard = KeyboardType.Number, ime = ImeAction.Done)
+            FieldRow("Indeks lembap bawah", lowRaw, { lowRaw = it.take(6) }, "45", keyboard = KeyboardType.Number)
+            FieldRow("Indeks lembap atas", highRaw, { highRaw = it.take(6) }, "75", keyboard = KeyboardType.Number, ime = ImeAction.Done)
         }
         PrimaryButton(
             if (state.busy) "Mengirim…" else "Bagikan ke komunitas",
@@ -214,7 +214,7 @@ internal fun CommunityKnowledgeSheet(speciesId: Int, state: AppState, model: Agr
                     Cell(
                         z.zone.replace('_', ' ').replaceFirstChar { it.uppercase() },
                         subtitle = "${z.owners} pemilik · ${z.cycles} siklus",
-                        value = "Siram ${z.wateringMedianDays}h\n${z.moistureLow}–${z.moistureHigh}%",
+                        value = "Siram ${z.wateringMedianDays}h\n${z.moistureLow}–${z.moistureHigh}/100",
                         chevron = false,
                     )
                 }

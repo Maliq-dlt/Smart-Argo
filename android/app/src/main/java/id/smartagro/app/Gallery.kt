@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
         item { SectionTitle("Daftar") }
         item {
             Group(inset = 60.dp, footer = "Baris dengan simbol berwarna, nilai di kanan, dan chevron untuk membuka detail.") {
-                Cell("Kelembapan tanah", glyph = PhosphorPaths.DropFill, glyphColor = p.water, value = "62%", onClick = {})
+                Cell(Sensor.Moisture.label, glyph = PhosphorPaths.DropFill, glyphColor = p.water, value = reading(Sensor.Moisture, 62.0), onClick = {})
                 Cell("Suhu tanah", glyph = PhosphorPaths.Thermometer, glyphColor = p.sun, value = "27,4 °C", onClick = {})
                 Cell("pH tanah", glyph = PhosphorPaths.Flask, glyphColor = p.tint, value = "6,4")
                 ToggleCell("Bagikan ke komunitas", share, { share = it }, glyph = PhosphorPaths.UsersThree, glyphColor = Moss,

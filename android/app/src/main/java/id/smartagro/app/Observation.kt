@@ -153,7 +153,7 @@ internal object ObservationEngine {
             "Smart Agro belum punya acuan untuk $speciesName, jadi belum memberi saran siram. Ia merekam bacaan, siraman, dan pengecekan Anda: ${ev.days} hari, ${ev.readings} bacaan, ${ev.waterings} siraman terukur, ${ev.inspections} pengecekan.$tail"
         } else {
             val parts = listOfNotNull(
-                healthy?.let { "Pada saat Anda menilai tanaman sehat, kelembapan media berkisar ${it.first} sampai ${it.second}." },
+                healthy?.let { "Pada saat Anda menilai tanaman sehat, indeks lembap media berkisar ${it.first}–${it.second}/100." },
                 drying?.let { "Media mengering sekitar ${ID_FORMAT.format(it)} poin per jam pada siang hari." },
                 rise?.let { "Satu siraman menaikkannya sekitar ${ID_FORMAT.format(it)} poin." },
             )

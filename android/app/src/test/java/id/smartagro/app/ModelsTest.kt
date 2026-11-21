@@ -25,6 +25,18 @@ class ModelsTest {
         rejects { Reading.parse(JSONObject(absent.toString()).put("quality_status","ok").put("value_nullable",15)) }
         rejects { Reading.parse(JSONObject(absent.toString()).put("value_nullable",0)) }
     }
+    @Test fun firmwareProbeErrorsBecomeActionableHints() {
+        val row = JSONObject("""{"sensor_id":"soil_temperature","quality_status":"error","value_nullable":null,"error_message":"Expected one DS18B20 probe","measured_at":"2026-11-15T00:00:00Z"}""")
+        val reading = Reading.parse(row)
+        assertEquals("Expected one DS18B20 probe", reading.error)
+        assertTrue(probeErrorHint(reading.error)!!.contains("DS18B20"))
+        assertTrue(probeErrorHint("Moisture ADC outside usable range")!!.contains("HW-390"))
+        assertTrue(probeErrorHint("pH ADC or calibrated result outside usable range")!!.contains("DMS"))
+        assertEquals("Pesan perangkat: kabel longgar", probeErrorHint("kabel longgar"))
+        // A good reading carries no error text, even if a row has one.
+        assertNull(Reading.parse(JSONObject(row.toString()).put("quality_status","ok").put("value_nullable",24.5)).error)
+        assertNull(probeErrorHint(null))
+    }
     @Test fun postgresTimestampsWithOffsetsAreRead() {
         // Postgres writes timestamptz inside jsonb as +00:00, never Z, and Instant.parse rejects an offset
         // before Java 12 (Android 8-11). This JVM accepts both, so only an API 30 device shows the old failure.
@@ -40,8 +52,10 @@ class ModelsTest {
         assertFalse(Overview("id",now.minusSeconds(31*60),emptyList(),emptyList(),null).stale(now))
         assertTrue(Overview("id",now.minusSeconds(75*60+1),emptyList(),emptyList(),null).stale(now))
         // Each sensor reading uses the same window as the unit.
-        assertTrue(fresh(now.minusSeconds(31*60),now));assertFalse(fresh(now.minusSeconds(75*60+1),now));assertFalse(fresh(now.plusSeconds(61),now))
-        assertTrue(Overview("id",now.plusSeconds(61),emptyList(),emptyList(),null).stale(now))
+        assertTrue(fresh(now.minusSeconds(31*60),now));assertFalse(fresh(now.minusSeconds(75*60+1),now));assertFalse(fresh(now.plusSeconds(301),now))
+        // A phone clock a little behind the server must not turn a just-received packet into "old data" (ingest allows +5 min).
+        assertTrue(fresh(now.plusSeconds(120),now))
+        assertTrue(Overview("id",now.plusSeconds(301),emptyList(),emptyList(),null).stale(now))
         assertTrue(Overview("id",null,emptyList(),emptyList(),null).stale(now))
         assertTrue(Overview("id",now,listOf("stale"),emptyList(),null).stale(now))
     }

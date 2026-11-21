@@ -200,7 +200,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
                 if (state.screen == Screen.Dashboard && !state.demo && state.email.isNotBlank() &&
                     (state.explanation == null || state.explanationUnitId != state.selectedUnit?.id)) model.loadExplanation()
             }
-            LaunchedEffect(state.selectedUnit?.id, state.screen, state.historyLoaded) {
+            LaunchedEffect(state.selectedUnit?.id, state.screen, state.historyRange, state.historyLoaded) {
                 if (state.screen in listOf(Screen.Dashboard, Screen.History) && state.selectedUnit != null && !state.historyLoaded && !state.demo && state.email.isNotBlank()) model.loadHistory()
                 if (state.screen in listOf(Screen.Account, Screen.Rewards) && !state.demo && state.email.isNotBlank() && !state.rewardLoaded) model.loadRewards()
                 if (state.screen == Screen.Proofs && !state.demo && state.email.isNotBlank() && !state.proofsLoaded) model.loadProofs()

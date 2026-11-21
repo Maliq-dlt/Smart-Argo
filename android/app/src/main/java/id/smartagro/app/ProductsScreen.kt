@@ -33,6 +33,7 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
     var recoveryEvidenceRef by rememberSaveable { mutableStateOf("") }
     var renamingUnit by remember { mutableStateOf<PlantUnit?>(null) }
     var archivingUnit by remember { mutableStateOf<PlantUnit?>(null) }
+    var placing by remember { mutableStateOf<Pair<OwnedDevice, PlantUnit>?>(null) }
     var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     fun handleQrString(raw: String) {
@@ -87,7 +88,7 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                 item(key = "active-units-title") {
                     SectionTitle("Unit aktif (${state.units.size})")
                     if (!state.demo && state.units.isNotEmpty()) {
-                        Footnote("Pilih pot, tetapkan perangkat, lalu periksa bacaan dari probe.")
+                        Footnote("Pasang perangkat setelah bacaan pertamanya masuk. Untuk pindah pot, pasang di unit baru; perangkat tidak perlu di-flash ulang.")
                     }
                 }
                 if (state.units.isEmpty()) {
@@ -105,15 +106,25 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                                     Cell("Ubah nama", glyph = PhosphorPaths.PencilSimple, glyphColor = p.tint, enabled = !state.busy, onClick = { renamingUnit = u })
                                     devs.forEach { d ->
                                         val placedHere = d.unitId == u.id
-                                        ToggleCell(
+                                        Cell(
                                             "Perangkat ${d.id.take(8)}",
-                                            placedHere,
-                                            { put -> model.placeDevice(d.id, if (put) u.id else null) },
-                                            subtitle = if (placedHere) "Terpasang pada unit ini" else if (d.unitId == null) "Dipasangkan fleksibel" else "Terpasang di unit lain",
+                                            subtitle = when {
+                                                placedHere -> "Terpasang pada unit ini"
+                                                d.unitId != null -> "Terpasang di unit lain"
+                                                else -> "Belum terpasang"
+                                            },
                                             glyph = PhosphorPaths.Package,
                                             glyphColor = p.secondary,
-                                            enabled = !state.busy && d.status == "active",
+                                            chevron = false,
                                         )
+                                        if (!placedHere && d.status == "active" && !state.demo) {
+                                            Cell(
+                                                if (d.unitId == null) "Verifikasi & pasang" else "Pindahkan ke sini",
+                                                subtitle = "Bacaan berikutnya tercatat di ${u.name}",
+                                                enabled = !state.busy,
+                                                onClick = { placing = d to u },
+                                            )
+                                        }
                                         if (placedHere && d.status == "active" && !state.demo) {
                                             val expanded = setupDeviceId == d.id
                                             Cell(
@@ -148,7 +159,13 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                                         }
                                     }
                                     Cell("Riwayat aktivitas unit", glyph = PhosphorPaths.ClockCounterClockwise, glyphColor = p.secondary, enabled = !state.busy, onClick = { model.loadUnitLifecycleEvents(u.id) })
-                                    Cell("Arsipkan unit", glyph = PhosphorPaths.Archive, glyphColor = p.warn, destructive = true, enabled = !state.busy, onClick = { archivingUnit = u })
+                                    val hasPlacement = devs.any { it.unitId == u.id }
+                                    Cell(
+                                        "Arsipkan unit",
+                                        subtitle = if (hasPlacement) "Perangkat di unit ini ikut dilepas." else null,
+                                        glyph = PhosphorPaths.Archive, glyphColor = p.warn, destructive = true,
+                                        enabled = !state.busy, onClick = { archivingUnit = u },
+                                    )
                                 }
                                 evs?.let { events ->
                                     Spacer(Modifier.height(8.dp))
@@ -364,9 +381,24 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
         }
     }
 
+    // A confirmation that says where the next readings go, not a gate: the device may be off while it is moved.
+    placing?.let { (device, target) ->
+        val from = device.unitId?.let { id -> state.units.find { it.id == id }?.name ?: "unit lain" }
+        AgroSheet(if (from == null) "Pasang di ${target.name}?" else "Pindahkan ke ${target.name}?", { placing = null }) {
+            Footnote(if (from == null) "Bacaan berikutnya dari perangkat ${device.id.take(8)} tercatat di ${target.name}. Pastikan probe sudah ditanam di pot ini."
+                else "Bacaan berikutnya tercatat di ${target.name}. Riwayat di $from tetap tersimpan. Pindahkan juga probe ke pot ini agar bacaannya sesuai.")
+            PrimaryButton(
+                if (from == null) "Pasang perangkat" else "Pindahkan perangkat",
+                { model.placeDevice(device.id, target.id); placing = null },
+                Modifier.padding(16.dp).fillMaxWidth(),
+                enabled = !state.busy,
+            )
+        }
+    }
+
     archivingUnit?.let { target ->
         AgroSheet("Arsipkan ${target.name}?", { archivingUnit = null }) {
-            Footnote("Data historis tetap tersimpan, namun paket data baru untuk unit ini akan ditolak sampai dipulihkan.")
+            Footnote("Data historis tetap tersimpan. Perangkat di unit ini dilepas, dan paket baru untuk unit ini ditolak sampai dipulihkan.")
             PrimaryButton(
                 "Ya, arsipkan unit",
                 { model.archiveUnit(target.id); archivingUnit = null },

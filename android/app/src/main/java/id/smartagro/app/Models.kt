@@ -58,17 +58,18 @@ data class Session(val accessToken: String, val refreshToken: String, val expire
         }
     }
 }
-data class Product(val id: String, val serial: String, val variant: String) {
+data class Product(val id: String, val serial: String, val variant: String, val ownershipStart: Instant? = null) {
     val label get() = when(variant) { "garden" -> "Kebun"; "single_pot" -> "Pot tunggal"; else -> "Produk lainnya" }
 }
 data class PlantUnit(val id: String, val productId: String, val name: String, val crop: String)
 enum class Sensor(val key: String, val label: String, val unit: String, val min: Double, val max: Double) {
-    Moisture("moisture", "Kelembapan", "poin", 0.0, 100.0),
+    Moisture("moisture", "Indeks lembap", "poin", 0.0, 100.0),
     Temperature("soil_temperature", "Suhu tanah", "\u00b0C", -20.0, 60.0),
     Ph("soil_ph", "pH tanah", "pH", 0.0, 14.0);
     companion object { fun parse(key: String) = entries.find { it.key == key } ?: invalid() }
 }
-data class Reading(val sensor: Sensor, val quality: String, val value: Double?, val at: Instant, val synced: Boolean = true, val id: String? = null, val receivedAt: Instant? = null) {
+data class Reading(val sensor: Sensor, val quality: String, val value: Double?, val at: Instant, val synced: Boolean = true, val id: String? = null, val receivedAt: Instant? = null,
+                   val error: String? = null) {
     companion object {
         fun parse(json: JSONObject): Reading {
             val sensor = Sensor.parse(json.text("sensor_id"))
@@ -80,18 +81,35 @@ data class Reading(val sensor: Sensor, val quality: String, val value: Double?, 
             if (quality == "ok") { if (value == null || value !in sensor.min..sensor.max) invalid() }
             else if (quality in listOf("error", "not_measured") && value != null) invalid()
             val receivedAt = if (json.isNull("received_at")) null else json.instant("received_at")
+            val error = if (quality == "error" && !json.isNull("error_message")) (json.opt("error_message") as? String)?.take(240) else null
             return Reading(sensor, quality, if (quality == "ok") value else null, json.instant("measured_at"),
-                synced = clock == "synced", receivedAt = receivedAt)
+                synced = clock == "synced", receivedAt = receivedAt, error = error)
         }
     }
 }
-/** The 75 minutes after which my_unit_overview raises "stale" (devices report every 30). A time from the future is not trusted. */
-internal fun fresh(at: Instant, now: Instant) = !at.isBefore(now.minusSeconds(75 * 60)) && !at.isAfter(now.plusSeconds(60))
-data class Overview(val id: String, val at: Instant?, val alerts: List<String>, val readings: List<Reading>, val state: String?) {
+
+/** The ESP32 firmware's probe errors (firmware/smart_agro) as steps the owner can take; other text is shown as the device sent it. */
+internal fun probeErrorHint(error: String?): String? = when {
+    error == null -> null
+    error.startsWith("Expected one DS18B20") -> "Probe suhu tidak terdeteksi atau lebih dari satu. Periksa kabel DS18B20 dan resistor 4,7 kΩ."
+    "DS18B20" in error -> "Probe suhu terputus atau di luar −20 sampai 60 °C. Periksa sambungan probe."
+    error.startsWith("Moisture ADC") -> "Sinyal sensor lembap di luar rentang. Periksa kabel HW-390 dan kalibrasi kering/basah."
+    error.startsWith("pH ADC") -> "Sinyal pH di luar rentang. Periksa keluaran modul DMS dan kalibrasi buffer 4,01/6,86."
+    else -> "Pesan perangkat: $error"
+}
+// my_unit_overview allows 75 minutes for a device that reports every 30.
+internal const val READING_FRESH_SECONDS = 75L * 60
+// The future margin matches telemetry ingest (measured_at up to +5 minutes), so a phone clock slightly behind the server
+// does not mark a packet that just arrived as old.
+internal fun fresh(at: Instant, now: Instant) = !at.isBefore(now.minusSeconds(READING_FRESH_SECONDS)) && !at.isAfter(now.plusSeconds(300))
+/** Cell voltage from the latest packet (firmware battery object, my_unit_overview since 20261121010000). */
+data class Battery(val volts: Double, val at: Instant)
+data class Overview(val id: String, val at: Instant?, val alerts: List<String>, val readings: List<Reading>, val state: String?,
+    val battery: Battery? = null) {
     fun stale(now: Instant) = at == null || !fresh(at, now) || "stale" in alerts
 }
 val alertLabels = mapOf("no_data" to "Belum ada data", "stale" to "Data usang", "sensor_error" to "Sensor galat",
-    "device_revoked" to "Perangkat dicabut", "energy_deficit" to "Beban melebihi panen energi", "battery_low" to "Baterai di bawah 20%")
+    "device_revoked" to "Perangkat dicabut", "energy_deficit" to "Beban melebihi panen energi", "battery_low" to "Baterai lemah")
 val stateLabels = mapOf("bingung_menunggu" to "Menunggu data", "tenang_senang" to "Rutin",
     "sedih_perhatian" to "Perlu perhatian", "waspada_marah" to "Prioritas periksa")
 
@@ -100,7 +118,7 @@ fun parseProducts(json: JSONObject): List<Product> = json.array("products").obje
     // Unknown variants remain readable; server ownership and identifiers are still validated.
     val serial = it.text("serial_public", 120)
     if (!Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,119}").matches(serial)) invalid()
-    Product(it.id("product_id"), serial, variant)
+    Product(it.id("product_id"), serial, variant, if (it.isNull("start_at")) null else it.instant("start_at"))
 }
 fun parseUnits(json: JSONObject): List<PlantUnit> = json.array("units").objects().filter { it.isNull("archived_at") }.map {
     PlantUnit(it.id("unit_id"), it.id("product_id"), it.text("location_label", 120), it.text("species_variety"))
@@ -110,7 +128,9 @@ fun parseOverviews(json: JSONObject): List<Overview> = json.array("units").objec
     if (alerts.length() > 32) invalid()
     val labels = (0 until alerts.length()).map { i -> (alerts.opt(i) as? String)?.takeIf { it.isNotBlank() && it.length<=80 && it.none(Char::isISOControl) } ?: invalid() }
     Overview(it.id("unit_id"), if (it.isNull("last_packet_at")) null else it.instant("last_packet_at"),
-        labels, it.array("sensors").objects(32).filter { row -> Sensor.entries.any { sensor -> sensor.key==row.text("sensor_id") } }.map(Reading::parse), it.optJSONObject("assessment")?.optString("state"))
+        labels, it.array("sensors").objects(32).filter { row -> Sensor.entries.any { sensor -> sensor.key==row.text("sensor_id") } }.map(Reading::parse), it.optJSONObject("assessment")?.optString("state"),
+        // A malformed battery object never hides the soil readings.
+        it.optJSONObject("battery")?.let { b -> runCatching { Battery(b.getDouble("voltage").takeIf { v -> v in 2.5..4.5 }!!, b.instant("measured_at")) }.getOrNull() })
 }
 /** Break lines at invalid readings, untrusted clocks and gaps; missing pH is never zero. */
 fun chartSegments(readings: List<Reading>, sensor: Sensor): List<List<Reading>> {

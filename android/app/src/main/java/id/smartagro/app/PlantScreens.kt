@@ -63,20 +63,20 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.unit.sp
+import kotlin.math.min
 import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.Instant
 import java.util.Locale
 
 private val ID = Locale.forLanguageTag("id-ID")
-internal fun percent(value: Double?) = value?.let { String.format(ID, "%.0f%%", it) } ?: "—"
+private fun moistureIndex(value: Double?) = value?.let { String.format(ID, "%.0f/100", it) } ?: "—"
 internal fun reading(sensor: Sensor, value: Double?) = when {
     value == null -> "—"
-    sensor == Sensor.Moisture -> percent(value)
+    sensor == Sensor.Moisture -> moistureIndex(value)
     sensor == Sensor.Temperature -> String.format(ID, "%.1f °C", value)
     else -> String.format(ID, "%.1f", value)
 }
@@ -120,6 +120,7 @@ internal data class Health(
     val attention: Boolean,
     val waiting: Boolean,
     val at: Instant?,
+    val battery: Battery? = null,
 ) {
     fun value(sensor: Sensor) = samples[sensor]?.value?.takeIf { sensorStatuses.getValue(sensor) == SensorStatus.Ready }
     val moisture = value(Sensor.Moisture)
@@ -145,7 +146,7 @@ internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
     }
     val attention = !stale && (overview?.state in listOf("sedih_perhatian", "waspada_marah") ||
         overview?.alerts.orEmpty().any { it in listOf("sensor_error", "battery_low", "energy_deficit") }) || revoked
-    return Health(samples, statuses, status, attention, stale && !revoked, overview?.at)
+    return Health(samples, statuses, status, attention, stale && !revoked, overview?.at, overview?.battery)
 }
 
 internal fun mascotMoodFor(h: Health): MascotMood = when {
@@ -198,10 +199,9 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     var productId by rememberSaveable { mutableStateOf<String?>(null) }
     var addingSite by rememberSaveable { mutableStateOf(false) }
     var plantingSlotId by rememberSaveable { mutableStateOf<String?>(null) }
-    var autoRotate by rememberSaveable { mutableStateOf(false) }
     var adviceSheetUnitId by rememberSaveable { mutableStateOf<String?>(null) }
+    var diagnosticsUnitId by rememberSaveable { mutableStateOf<String?>(null) }
     val uri = rememberSafeUriHandler()
-    val reduced = remember(context) { reducedMotionEnabled(context) }
     val columns = if (LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale < 300) 1 else 2
 
     val visible = state.units.filter { unit ->
@@ -215,23 +215,9 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     val activeIndex = visible.indexOfFirst { it.id == state.selectedUnit?.id }.let { if (it >= 0) it else 0 }
     val activeUnit = visible.getOrNull(activeIndex)
 
-    // Optional calm 8-second auto-cycle between registered plants (never runs under reduced motion; stops on manual touch).
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var resumed by remember(lifecycle) { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
-    DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, _ -> resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
-        lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
-    }
-    LaunchedEffect(autoRotate, visible, activeIndex, reduced, resumed) {
-        if (!autoRotate || visible.size <= 1 || reduced || !resumed) return@LaunchedEffect
-        delay(8_000)
-        val next = visible[(activeIndex + 1) % visible.size]
-        model.selectUnit(next)
-    }
-
+    // No auto-cycle: cards move only when the person moves them (motion comfort), and every change of
+    // plant reloads its history, journal and advice, which an 8-second timer turned into constant traffic.
     val promoteUnit: (PlantUnit) -> Unit = { u ->
-        autoRotate = false
         if (activeUnit?.id != u.id) haptics.tick()
         model.selectUnit(u)
     }
@@ -259,12 +245,10 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                         units = visible,
                         activeIndex = activeIndex,
                         healths = healths,
-                        autoRotate = autoRotate && !reduced,
-                        onToggleAuto = if (reduced) null else ({ haptics.tick(); autoRotate = !autoRotate }),
-                        onPauseAuto = { autoRotate = false },
                         onPromote = promoteUnit,
-                        onOpen = { autoRotate = false; model.openUnit(it) },
-                        onOpenHistory = { autoRotate = false; model.openHistoryFor(it, Sensor.Moisture) },
+                        onOpen = { model.openUnit(it) },
+                        onOpenHistory = { model.openHistoryFor(it, Sensor.Moisture) },
+                        onOpenDiagnostics = { diagnosticsUnitId = it.id },
                         onOpenWeb = { uri.openUri(WEB + "#simulasi") },
                     )
                 }
@@ -273,21 +257,21 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                         state = state,
                         unit = activeUnit,
                         health = activeHealth,
-                        onOpenAdvice = { autoRotate = false; adviceSheetUnitId = activeUnit.id },
+                        onOpenAdvice = { adviceSheetUnitId = activeUnit.id },
                     )
                 }
             }
             item(key = "search-filter") {
                 Column(Modifier.padding(top = 4.dp, bottom = 6.dp)) {
-                    SearchField(query, { query = it.take(120); autoRotate = false }, "Cari nama, kode, atau produk", Modifier.padding(horizontal = 16.dp))
+                    SearchField(query, { query = it.take(120) }, "Cari nama, kode, atau produk", Modifier.padding(horizontal = 16.dp))
                     if (state.products.size > 1) {
                         Row(
                             Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Pill("Semua", productId == null) { productId = null; autoRotate = false }
+                            Pill("Semua", productId == null) { productId = null }
                             state.products.forEach { product ->
-                                Pill("${product.label} · ${product.serial}", productId == product.id) { productId = product.id; autoRotate = false }
+                                Pill("${product.label} · ${product.serial}", productId == product.id) { productId = product.id }
                             }
                         }
                     } else {
@@ -366,6 +350,9 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
 
     if (addingSite) AddSiteSheet(state, model) { addingSite = false }
     state.garden?.slots?.find { it.id == plantingSlotId }?.let { slot -> PlantSlotSheet(slot, state, model) { plantingSlotId = null } }
+    state.units.find { it.id == diagnosticsUnitId }?.let { unit ->
+        SensorDiagnosticsSheet(unit, healths.getValue(unit.id), state.demo) { diagnosticsUnitId = null }
+    }
     adviceSheetUnitId?.let { id ->
         val unit = state.units.find { it.id == id }
         if (unit != null) {
@@ -422,17 +409,16 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                             contentDescription = "${sensor.label} $value. Ketuk untuk membuka grafik."
                         },
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(
-                            Modifier.size(22.dp).clip(CircleShape).background(accent.copy(alpha = if (p.dark) .22f else .14f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(icon(glyph), null, Modifier.size(13.dp), tint = accent)
-                        }
-                        Text(value, style = T.headline, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // Glyph, then value, then label on their own lines, as Health's summary tiles do: a reading is
+                    // never cut ("55/1…" read like 55/1 at 360 dp when it shared a line with the glyph).
+                    Box(
+                        Modifier.size(22.dp).clip(CircleShape).background(accent.copy(alpha = if (p.dark) .22f else .14f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(icon(glyph), null, Modifier.size(13.dp), tint = accent)
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(sensor.label, style = T.caption, color = p.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(value, style = T.headline, color = p.ink, maxLines = 1, softWrap = false, modifier = Modifier.padding(top = 6.dp))
+                    Text(sensor.label, style = T.caption, color = p.secondary, maxLines = 2, modifier = Modifier.padding(top = 2.dp))
                 }
             }
         }
@@ -449,12 +435,10 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     units: List<PlantUnit>,
     activeIndex: Int,
     healths: Map<String, Health>,
-    autoRotate: Boolean,
-    onToggleAuto: (() -> Unit)?,
-    onPauseAuto: () -> Unit,
     onPromote: (PlantUnit) -> Unit,
     onOpen: (PlantUnit) -> Unit,
     onOpenHistory: (PlantUnit) -> Unit,
+    onOpenDiagnostics: (PlantUnit) -> Unit,
     onOpenWeb: () -> Unit,
 ) {
     val p = palette
@@ -467,7 +451,6 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     var cardBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var dragAccum by remember { mutableFloatStateOf(0f) }
-    val pauseAuto by rememberUpdatedState(onPauseAuto)
     val promote by rememberUpdatedState(onPromote)
 
     val linkedCycle = state.garden?.plants?.firstOrNull { it.unitId == active.id && it.endedOn == null }
@@ -480,7 +463,6 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        // Deck header + auto-cycle switch
         Row(
             Modifier.fillMaxWidth().padding(start = 4.dp, end = 2.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -489,25 +471,6 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
             Text("Kartu tanaman", style = T.title3, color = p.ink, modifier = Modifier.weight(1f))
             if (units.size > 1) {
                 Text("${activeIndex + 1}/${units.size}", style = T.footnote.copy(fontWeight = FontWeight.Medium), color = p.secondary)
-                Row(
-                    Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(if (autoRotate) p.tint else p.fill)
-                        .clickable(enabled = onToggleAuto != null, role = Role.Switch) { onToggleAuto?.invoke() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                        .semantics(mergeDescendants = true) {
-                            stateDescription = when {
-                                 onToggleAuto == null -> "Gerakan dikurangi"
-                                 autoRotate -> "Aktif"
-                                 else -> "Nonaktif"
-                             }
-                        },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    Icon(icon(PhosphorPaths.ArrowsClockwise), null, Modifier.size(13.dp), tint = if (autoRotate) p.onTint else p.secondary)
-                    Text(if (onToggleAuto == null) "Gerakan dikurangi" else "Putar otomatis", style = T.caption, color = if (autoRotate) p.onTint else p.ink, maxLines = 1)
-                }
             }
         }
 
@@ -519,10 +482,16 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
             nextUnit != null -> 40.dp
             else -> 0.dp
         }
-        val sageBackBg = if (p.dark) Color(0xFF234A34) else Color(0xFF7BE089)
-        val sageBackInk = if (p.dark) Color(0xFFE6F6E9) else Color(0xFF0E2918)
-        val darkBackBg = if (p.dark) Color(0xFF0C1510) else Color(0xFF15241B)
-        val darkBackInk = Color(0xFFF0F6F1)
+        // Back cards use the Sage palette, like the website: no colors outside the tokens.
+        val sageBackBg = p.soft
+        val sageBackInk = p.onSoft
+        val darkBackBg = p.tint
+        val darkBackInk = p.onTint
+        // The peeking strips have a fixed height; text inside them grows only to 1.35×, as the bars do.
+        val stripStyle = with(LocalDensity.current) {
+            T.subhead.copy(fontWeight = FontWeight.SemiBold, fontSize = (15 * min(fontScale, 1.35f) / fontScale).sp,
+                lineHeight = (20 * min(fontScale, 1.35f) / fontScale).sp)
+        }
 
         // Front active card content shared between main deck and long-press context menu preview.
         val frontFace: @Composable (Modifier) -> Unit = { m ->
@@ -624,6 +593,7 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                                 TintedButton("Ganti", { onPromote(nextUnit) }, path = PhosphorPaths.ArrowsLeftRight)
                             }
                         }
+                        PlainButton("Diagnostik sensor", { onOpenDiagnostics(u) }, Modifier.fillMaxWidth(), path = PhosphorPaths.Info)
                     }
                 }
             }
@@ -643,13 +613,13 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                         .clickable(role = Role.Button) { onPromote(thirdUnit) }
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                         .semantics(mergeDescendants = true) {
-                            contentDescription = "Pilih kartu ${thirdUnit.name}, kelembapan ${percent(h3.moisture)}"
+                            contentDescription = "Pilih kartu ${thirdUnit.name}, indeks lembap ${moistureIndex(h3.moisture)}"
                         },
                     verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(thirdUnit.name, style = T.subhead.copy(fontWeight = FontWeight.SemiBold), color = sageBackInk, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(percent(h3.moisture), style = T.subhead.copy(fontWeight = FontWeight.SemiBold), color = sageBackInk, modifier = Modifier.padding(start = 10.dp))
+                    Text(thirdUnit.name, style = stripStyle, color = sageBackInk, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(moistureIndex(h3.moisture), style = stripStyle, color = sageBackInk, modifier = Modifier.padding(start = 10.dp))
                 }
             }
             // Layer 1 (middle deep-forest card)
@@ -662,17 +632,16 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                         .height(64.dp)
                         .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                         .background(darkBackBg)
-                        .border(.75.dp, Color.White.copy(alpha = .1f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                         .clickable(role = Role.Button) { onPromote(nextUnit) }
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                         .semantics(mergeDescendants = true) {
-                            contentDescription = "Pilih kartu ${nextUnit.name}, kelembapan ${percent(h2.moisture)}"
+                            contentDescription = "Pilih kartu ${nextUnit.name}, indeks lembap ${moistureIndex(h2.moisture)}"
                         },
                     verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(nextUnit.name, style = T.subhead.copy(fontWeight = FontWeight.SemiBold), color = darkBackInk, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(percent(h2.moisture), style = T.subhead.copy(fontWeight = FontWeight.SemiBold), color = Color(0xFFA6E39D), modifier = Modifier.padding(start = 10.dp))
+                    Text(nextUnit.name, style = stripStyle, color = darkBackInk, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(moistureIndex(h2.moisture), style = stripStyle, color = darkBackInk, modifier = Modifier.padding(start = 10.dp))
                 }
             }
 
@@ -683,13 +652,7 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                     .onGloballyPositioned { cardBounds = it.boundsInWindow() }
                     .shadow(16.dp, RoundedCornerShape(28.dp), ambientColor = p.shadow, spotColor = p.shadow)
                     .zoom("unit-${active.id}")
-                    .pointerInput(Unit) {
-                         awaitEachGesture {
-                             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                             pauseAuto()
-                         }
-                     }
-                     .pointerInput(units, activeIndex) {
+                    .pointerInput(units, activeIndex) {
                         if (units.size <= 1) return@pointerInput
                         detectHorizontalDragGestures(
                             onDragStart = { dragAccum = 0f },
@@ -758,6 +721,50 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
     }
 }
 
+@Composable private fun SensorDiagnosticsSheet(unit: PlantUnit, health: Health, demo: Boolean, onDismiss: () -> Unit) {
+    val p = palette
+    AgroSheet("Diagnostik sensor", onDismiss) {
+        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(unit.name, style = T.title3, color = p.ink)
+            if (demo) Text("Data skenario latihan", style = T.footnote, color = p.secondary)
+            Sensor.entries.forEach { sensor ->
+                val sample = health.samples[sensor]
+                val status = health.sensorStatuses.getValue(sensor)
+                Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
+                    Text(sensor.label, style = T.headline, color = p.ink)
+                    Text(status.label, style = T.subhead, color = p.ink)
+                    Text("Waktu ukur: ${sample?.at?.let { time(it) } ?: "Tidak tersedia"}", style = T.footnote, color = p.secondary)
+                    Text("Waktu terima: ${sample?.receivedAt?.let { time(it) } ?: "Tidak tersedia"}", style = T.footnote, color = p.secondary)
+                    val hint = when (status) {
+                        SensorStatus.Ready -> null
+                        SensorStatus.Waiting -> "Periksa perangkat terpasang di pot ini dan tersambung ke Wi-Fi. Untuk mengatur Wi-Fi, tekan EN lalu tahan BOOT 2 detik dan sambungkan HP ke jaringan SmartAgro di label."
+                        SensorStatus.Stale -> "Periksa daya dan koneksi perangkat, lalu muat ulang."
+                        SensorStatus.Unmeasured -> "Periksa apakah sensor ini tersedia pada perangkat."
+                        SensorStatus.Error -> probeErrorHint(sample?.error) ?: "Periksa pemasangan sensor, lalu tunggu bacaan berikutnya."
+                        SensorStatus.UntrustedClock -> "Periksa koneksi perangkat dan tunggu sinkronisasi jam."
+                        SensorStatus.Revoked -> "Periksa status perangkat di Kelola produk & QR."
+                        SensorStatus.Unknown -> "Muat ulang. Jika status tetap muncul, hubungi dukungan."
+                    }
+                    if (!demo && hint != null) {
+                        Text(hint, Modifier.padding(top = 4.dp), style = T.footnote, color = p.secondary)
+                    }
+                }
+            }
+            health.battery?.let { cell ->
+                Panel(Modifier.fillMaxWidth(), padding = 12.dp) {
+                    Text("Baterai", style = T.headline, color = p.ink)
+                    Text("%.2f V".format(java.util.Locale.forLanguageTag("id-ID"), cell.volts), style = T.subhead, color = p.ink)
+                    Text("Waktu ukur: ${time(cell.at)}", style = T.footnote, color = p.secondary)
+                    if (cell.volts < 3.4) {
+                        Text("Baterai lemah. Periksa panel surya, charger CN3791 dan sambungan baterai.", Modifier.padding(top = 4.dp),
+                            style = T.footnote, color = p.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** Advice modal sheet featuring the interactive 6-state Mascot Stage, real advice text, and Peak Chart preview. */
 @Composable private fun HomeAdviceSheet(
     state: AppState,
@@ -797,7 +804,7 @@ internal fun mascotMoodFor(h: Health): MascotMood = when {
                 }
                 else -> {
                     Text("Kondisi ${unit.name}", style = T.title3, color = p.ink)
-                    Text("Kelembapan ${percent(health.moisture)} · Suhu ${reading(Sensor.Temperature, health.temperature)} · pH ${reading(Sensor.Ph, health.ph)}.", style = T.body, color = p.secondary, modifier = Modifier.padding(top = 4.dp))
+                    Text("${Sensor.Moisture.label} ${moistureIndex(health.moisture)} · Suhu ${reading(Sensor.Temperature, health.temperature)} · pH ${reading(Sensor.Ph, health.ph)}.", style = T.body, color = p.secondary, modifier = Modifier.padding(top = 4.dp))
                     if (!state.demo) {
                         TintedButton("Muat saran berbasis bukti", model::loadExplanation, Modifier.padding(top = 12.dp).fillMaxWidth(), busy = state.explanationBusy, path = PhosphorPaths.Sparkle)
                     }
@@ -848,7 +855,7 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
         .then(if (zoomKey != null) Modifier.zoom(zoomKey) else Modifier).clip(RoundedCornerShape(22.dp))
         .combinedClickable(source, null, role = Role.Button, onLongClickLabel = if (menu.isEmpty()) null else "Pilihan lainnya",
             onLongClick = if (menu.isEmpty()) null else ({ haptics.success(); menuOpen = true })) { haptics.press(); onClick() }
-        .semantics(mergeDescendants = true) { stateDescription = "Kelembapan ${percent(moisture)}, $status" }) { face(Modifier) }
+        .semantics(mergeDescendants = true) { stateDescription = "${Sensor.Moisture.label} ${moistureIndex(moisture)}, $status" }) { face(Modifier) }
     val anchor = bounds
     if (menuOpen && anchor != null) ContextMenu(anchor, { menuOpen = false }, menu) { face(Modifier.fillMaxSize()) }
 }
@@ -861,7 +868,7 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
                 Icon(icon(PhosphorPaths.PlantFill), null, Modifier.size(22.dp), tint = if (attention) p.warn else p.tint)
             }
             Spacer(Modifier.weight(1f))
-            RollingText(percent(moisture), T.headline, p.ink)
+            RollingText(moistureIndex(moisture), T.headline, p.ink)
         }
         Spacer(Modifier.height(14.dp))
         Text(name, style = T.headline, color = p.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -925,7 +932,6 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
     var why by rememberSaveable(unit.id) { mutableStateOf(false) }
     var cutaway by rememberSaveable(unit.id) { mutableStateOf(false) }
     var sensor by rememberSaveable(unit.id) { mutableStateOf(Sensor.Moisture) }
-    var range by rememberSaveable(unit.id) { mutableIntStateOf(0) }
     val uri = rememberSafeUriHandler()
     val linkedCycle = state.garden?.plants?.firstOrNull { it.unitId == unit.id && it.endedOn == null }
     val species = remember(linkedCycle?.species, unit.crop) {
@@ -952,9 +958,14 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
                 SkyBackdrop(sky, weather?.condition, Modifier.matchParentSize())
                 Column(Modifier.padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     MoistureRing(h.moisture, size = 188.dp, stroke = 15.dp, color = Color.White) {
+                        // The ring is a fixed graphic: its 44 sp figure stays at 1× so it is not cut by the stroke at 200 %.
+                        // The same value scales with the system in the Readings list below.
+                        val density = LocalDensity.current
+                        CompositionLocalProvider(LocalDensity provides Density(density.density, 1f)) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            RollingText(percent(h.moisture), T.figure, Color.White)
-                            Text("kelembapan tanah", style = T.subhead.copy(fontWeight = FontWeight.Medium), color = Color.White, textAlign = TextAlign.Center)
+                            RollingText(moistureIndex(h.moisture), T.figure, Color.White)
+                            Text(Sensor.Moisture.label, style = T.subhead.copy(fontWeight = FontWeight.Medium), color = Color.White, textAlign = TextAlign.Center)
+                        }
                         }
                     }
                     Text(h.status, Modifier.padding(top = 16.dp, start = 20.dp, end = 20.dp), style = T.title3, color = Color.White, textAlign = TextAlign.Center)
@@ -1019,7 +1030,7 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
             Group(inset = 60.dp, footer = product?.let { "Perangkat ${it.serial} · bacaan tiap 30 menit" }) {
                 Sensor.entries.forEach { s ->
                     val (path, color) = when (s) { Sensor.Moisture -> PhosphorPaths.DropFill to p.water; Sensor.Temperature -> PhosphorPaths.Thermometer to p.sun; Sensor.Ph -> PhosphorPaths.Flask to p.tint }
-                    Cell(s.label.let { if (s == Sensor.Moisture) "Kelembapan" else it }, glyph = path, glyphColor = color, value = reading(s, h.value(s)),
+                    Cell(s.label, glyph = path, glyphColor = color, value = reading(s, h.value(s)),
                         subtitle = h.sensorStatuses.getValue(s).takeUnless { state.demo || it == SensorStatus.Ready }?.label, chevron = false,
                         trailing = { if (sensor == s) Icon(icon(PhosphorPaths.ChartLine), "Ditampilkan di tren", Modifier.size(18.dp), tint = p.tint) },
                         onClick = { sensor = s })
@@ -1028,19 +1039,8 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.notices(state: AppSt
         }
         item(key = "trend-title") { SectionTitle("Tren") }
         item(key = "trend") {
-            Column(Modifier.padding(horizontal = 16.dp)) {
-                Segmented(listOf("24 jam", "7 hari"), range, { range = it })
-                Spacer(Modifier.height(12.dp))
-                val latest = state.history.maxOfOrNull { it.at }
-                val since = latest?.minus(if (range == 0) Duration.ofHours(24) else Duration.ofDays(7))
-                TrendChart(
-                    state.history.filter { it.sensor == sensor && since != null && !it.at.isBefore(since) },
-                    sensor,
-                    when (sensor) { Sensor.Moisture -> p.water; Sensor.Temperature -> p.sun; Sensor.Ph -> p.tint },
-                    waterings = state.careJournal.filter { it.unitId == unit.id && it.kind == "watering" },
-                )
-                if (state.historyHasMore) PlainButton("Muat bacaan lebih lama", model::loadOlderHistory, Modifier.padding(top = 6.dp), enabled = !state.busy)
-            }
+            HistoryTrend(state, model, unit.id, sensor)
+            if (state.historyHasMore) PlainButton("Muat bacaan lebih lama", model::loadOlderHistory, Modifier.padding(start = 16.dp, top = 6.dp), enabled = !state.busy)
         }
         state.weatherSite?.takeIf { !state.demo }?.let { site ->
             item(key = "weather-title") { SectionTitle("Cuaca di ${site.name}") }
@@ -1118,6 +1118,7 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, positions: L
     selectedAt: Instant? = null,
     onSelect: ((Reading?) -> Unit)? = null,
     waterings: List<CareEntry> = emptyList(),
+    window: HistoryWindow? = null,
 ) {
     val p = palette
     val haptics = rememberHaptics()
@@ -1143,9 +1144,9 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, positions: L
         return
     }
 
-    val first = points.first().at
-    val last = points.last().at
-    val positions = remember(points) { points.map { chartTimeFraction(it.at, first, last) } }
+    val first = window?.from ?: points.first().at
+    val last = window?.to ?: points.last().at
+    val positions = remember(points, first, last) { points.map { chartTimeFraction(it.at, first, last) } }
     val visibleWaterings = remember(waterings, sensor, first, last) {
         if (sensor == Sensor.Moisture) waterings.filter { it.observedAt in first..last }.sortedBy { it.observedAt }
         else emptyList()
@@ -1191,12 +1192,16 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, positions: L
             .border(.75.dp, p.separator, RoundedCornerShape(22.dp))
             .padding(16.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f)) {
+        // Side by side normally; stacked at large text so the sensor label is never squeezed to a letter per line.
+        val stacked = LocalDensity.current.fontScale > 1.3f
+        val value: @Composable () -> Unit = {
+            Column {
                 Text(sensor.label, style = T.caption, color = p.secondary)
                 Text(reading(sensor, shown.value), style = T.title1, color = p.ink, modifier = Modifier.padding(top = 2.dp))
             }
-            Column(horizontalAlignment = Alignment.End) {
+        }
+        val meta: @Composable () -> Unit = {
+            Column(horizontalAlignment = if (stacked) Alignment.Start else Alignment.End) {
                 Box(
                     Modifier
                         .clip(RoundedCornerShape(50))
@@ -1218,6 +1223,8 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, positions: L
                 )
             }
         }
+        if (stacked) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { value(); meta() }
+        else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.SpaceBetween) { value(); meta() }
 
         if (isPinned) {
             shown.receivedAt?.let {
@@ -1230,7 +1237,7 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, positions: L
                 .fillMaxWidth()
                 .height(182.dp)
                 .padding(top = 12.dp)
-                .pointerInput(points) {
+                .pointerInput(points, first, last) {
                     detectTapGestures(onTap = { pos ->
                         val i = chartSampleIndex(pos.x, size.width.toFloat(), chartInset.toPx(), positions)
                         val listener = selectReading
@@ -1243,7 +1250,7 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, positions: L
                         }
                     })
                 }
-                .pointerInput(points) {
+                .pointerInput(points, first, last) {
                     detectHorizontalDragGestures(
                         onDragEnd = { if (selectReading != null) scrubIdx = null },
                         onDragCancel = { scrubIdx = null },
@@ -1335,7 +1342,7 @@ internal fun chartSampleIndex(x: Float, width: Float, inset: Float, positions: L
         }
 
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(time(points.first().at), style = T.footnote, color = p.secondary)
+            Text(time(first), style = T.footnote, color = p.secondary)
             Text("Rendah ${reading(sensor, minVal)} · Tinggi ${reading(sensor, peakVal)}", style = T.footnote, color = p.secondary)
         }
         visibleWaterings.lastOrNull()?.let { event ->

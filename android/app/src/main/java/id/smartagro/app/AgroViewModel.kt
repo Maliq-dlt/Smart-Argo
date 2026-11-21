@@ -22,9 +22,10 @@ data class AppState(
     val auth: AuthStep = AuthStep.Welcome, val authEmail: String = "", val welcome: Boolean = false, val introPlaying: Boolean = false,
     val resetCodeRequested: Boolean = false,
     val historySensor: Sensor = Sensor.Moisture,
+    val historyRange: HistoryRange = HistoryRange.Day, val historyChartWindow: HistoryWindow? = null,
     val products: List<Product> = emptyList(), val units: List<PlantUnit> = emptyList(),
     val overviews: List<Overview> = emptyList(), val selectedProduct: Product? = null,
-    val selectedUnit: PlantUnit? = null, val history: List<Reading> = emptyList(), val historyLoaded: Boolean = false, val historyBefore: java.time.Instant? = null, val historyHasMore: Boolean = false,
+    val selectedUnit: PlantUnit? = null, val history: List<Reading> = emptyList(), val historyLoaded: Boolean = false, val historyWindow: HistoryWindow? = null, val historySnapshot: Instant? = null, val historyCursor: HistoryCursor? = null,
     val displayName: String = "", val rewardBalance: RewardBalance? = null, val rewardLoaded: Boolean = false,
     val rewards: RewardWorkspace? = null, val proofs: List<ChainProof> = emptyList(), val proofsLoaded: Boolean = false,
     val weather: WeatherSnapshot? = null, val weatherSiteId: String? = null, val weatherBusy: Boolean = false, val weatherMessage: String? = null,
@@ -45,6 +46,7 @@ data class AppState(
     val ownershipRecoveries: List<OwnershipRecovery> = emptyList(), val recoveriesLoaded: Boolean = false,
     val rewardCases: List<RewardCase> = emptyList(), val energyEvidence: EnergyEvidence? = null,
 ) {
+    val historyHasMore: Boolean get() = historyWindow != null
     fun plantCode(unit: PlantUnit): String = garden?.plants?.firstOrNull { it.unitId==unit.id && it.endedOn==null }?.tag ?: unitCode(unit,units)
     val weatherSite: GardenSite? get() {
         val plant=if(screen==Screen.Garden) gardenPlant else garden?.plants?.firstOrNull { it.unitId==selectedUnit?.id && it.endedOn==null && it.unitId!=null }
@@ -61,6 +63,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     private val operations = kotlinx.coroutines.sync.Mutex()
     private var weatherJob: kotlinx.coroutines.Job? = null
     private var weatherGeneration = 0
+    private var historyGeneration = 0
     init { if (config.valid) run { if (api.restore()) { state = state.copy(screen = Screen.Products, email = api.session!!.email, displayName = api.session!!.displayName); load() } } }
 
     private fun run(action: suspend () -> Unit) {
@@ -95,6 +98,12 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     fun replayIntro() { state = state.copy(introPlaying = true) }
     fun finishIntro() { if (state.introPlaying) state = state.copy(introPlaying = false) }
     fun selectHistorySensor(sensor: Sensor) { state = state.copy(historySensor = sensor) }
+    fun selectHistoryRange(range: HistoryRange) {
+        if (range == state.historyRange) return
+        historyGeneration++
+        state = state.copy(historyRange = range, historyLoaded = state.demo, historyChartWindow = null, message = null,
+            history = if (state.demo) state.history else emptyList(), historySnapshot = null, historyCursor = null, historyWindow = null)
+    }
     fun login(email: String, password: String) = run { signedIn(api.login(email.trim(), password)) }
     fun googleLogin(context: android.content.Context) = run {
         val credential = googleCredential(context, BuildConfig.GOOGLE_WEB_CLIENT_ID)
@@ -162,10 +171,12 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         val nextScreen = if ((state.screen == Screen.Dashboard && selected == null) || (state.screen == Screen.Garden && garden?.plants?.none { it.id==state.gardenPlant?.id } != false)) Screen.Products else state.screen
         val activeUnit = unit ?: units.firstOrNull()
         val activeProduct = selected ?: activeUnit?.let { u -> products.find { it.id == u.productId } }
+        historyGeneration++
         state = state.copy(catalogLoaded = true, garden = garden, gardenPlant = garden?.plants?.find { it.id==state.gardenPlant?.id }, products = products, units = units,
             archivedUnits = owned.archived, devices = owned.devices, overviews = overviews,
             deviceSetupReadings = state.deviceSetupReadings?.takeIf { it.device in owned.devices },
             selectedProduct = activeProduct, selectedUnit = activeUnit, history = emptyList(), historyLoaded = false,
+            historyWindow = null, historySnapshot = null, historyCursor = null, historyChartWindow = null,
             careJournal = if (activeUnit?.id == state.careUnitId) state.careJournal else emptyList(), careLoaded = activeUnit?.id == state.careUnitId && state.careLoaded,
             careSnapshot = state.careSnapshot.takeIf { activeUnit?.id == state.careUnitId },
             careNext = state.careNext.takeIf { activeUnit?.id == state.careUnitId },
@@ -208,44 +219,64 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     } }
     fun select(product: Product) {
         val unit = state.units.firstOrNull { it.productId == product.id }
+        historyGeneration++
         state = state.copy(screen = Screen.Dashboard, dashboardFromGarden = state.screen == Screen.Garden, selectedProduct = product, selectedUnit = unit,
             history = if (state.demo && unit != null) demoHistory(getApplication(), unit.id) else emptyList(),
-            historyLoaded = state.demo, historyBefore = null, historyHasMore = false,
+            historyLoaded = state.demo, historyWindow = null, historySnapshot = null, historyCursor = null, historyChartWindow = null,
             careJournal = emptyList(), careUnitId = unit?.id, careLoaded = state.demo, careSnapshot = null, careNext = null,
             historyComparison = null, comparisonUnitId = null, message = null)
     }
     fun selectUnit(unit: PlantUnit) {
         val product = state.products.find { it.id == unit.productId } ?: return
+        historyGeneration++
         state = state.copy(selectedProduct = product, selectedUnit = unit, history = if (state.demo) demoHistory(getApplication(), unit.id) else emptyList(),
-            historyLoaded = state.demo, historyBefore = null, historyHasMore = false,
+            historyLoaded = state.demo, historyWindow = null, historySnapshot = null, historyCursor = null, historyChartWindow = null,
             careJournal = emptyList(), careUnitId = unit.id, careLoaded = state.demo, careSnapshot = null, careNext = null,
             historyComparison = null, comparisonUnitId = null, message = null)
     }
     fun openHistoryFor(unit: PlantUnit, sensor: Sensor) {
         if (state.units.none { it.id == unit.id }) return
-        selectUnit(unit)
+        if (state.selectedUnit?.id != unit.id) selectUnit(unit)
         state = state.copy(screen = Screen.History, historySensor = sensor, message = null)
     }
     fun loadHistory() = loadHistoryPage(false)
     fun loadOlderHistory() = loadHistoryPage(true)
     private fun loadHistoryPage(older: Boolean) {
-      val selectedId=state.selectedUnit?.id ?: return
-      run {
-        val unit = state.selectedUnit?.takeIf { it.id==selectedId } ?: return@run
-        if (state.demo) { state = state.copy(historyLoaded = true); return@run }
-        if(older && !state.historyHasMore) return@run
-        val before=if(older) state.historyBefore else null
-        val body=JSONObject().put("p_unit_id",unit.id)
-        if(before!=null) body.put("p_before",before.toString())
-        val json = api.rpc("unit_measurements",body)
-        val rows=json.array("readings").objects(120)
-        val readings=parseHistory(json)
-        val cursor=rows.minOfOrNull { it.instant("measured_at") }
-        if(state.selectedUnit?.id!=unit.id) return@run
-        val combined=if(older) state.history+readings else readings
-        state=state.copy(history=combined.distinctBy { it.id ?: "${it.sensor}:${it.at}" }.sortedByDescending { it.at },historyLoaded=true,
-            historyBefore=cursor,historyHasMore=rows.size==120 && cursor!=before)
-      }
+        val unit = state.selectedUnit ?: return
+        if (state.demo) return
+        val generation = if (older) historyGeneration else ++historyGeneration
+        val pendingWindow = state.historyWindow
+        val pendingCursor = state.historyCursor
+        fun current() = generation == historyGeneration && state.selectedUnit?.id == unit.id &&
+            (!older || pendingWindow == state.historyWindow && pendingCursor == state.historyCursor)
+        run {
+            if (!current()) return@run
+            val ownershipStart = state.products.find { it.id == unit.productId }?.ownershipStart
+            try {
+                if (!older) {
+                    val window = state.historyRange.window(Instant.now())
+                    val (readings, snapshot) = collectHistoryReadings { snapshot, cursor ->
+                        if (!current()) throw CancellationException()
+                        api.readMeasurementHistory(unit.id, window, snapshot, cursor, limit = 500)
+                    }
+                    if (!current()) return@run
+                    state = state.copy(history = readings, historyLoaded = true, historyChartWindow = window,
+                        historySnapshot = snapshot, historyCursor = null,
+                        historyWindow = historyWindowEndingAt(window.from, ownershipStart))
+                } else {
+                    val window = pendingWindow ?: return@run
+                    val page = api.readMeasurementHistory(unit.id, window, state.historySnapshot, pendingCursor, limit = 120)
+                    if (!current()) return@run
+                    state = state.copy(history = state.history + page.readings.map { it.reading },
+                        historySnapshot = page.snapshot, historyCursor = page.next,
+                        historyWindow = if (page.next != null) window else historyWindowEndingAt(window.from, ownershipStart))
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (current() || error is ApiFailure && error.expired) throw error
+            }
+        }
     }
     fun openGarden(plant: GardenPlant) {
         if(state.garden?.plants?.none { it.id==plant.id }!=false) return
@@ -656,10 +687,11 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         load("Unit dipulihkan ke daftar aktif.")
     }
 
-    fun placeDevice(deviceId: String, unitId: String?) = run {
+    fun placeDevice(deviceId: String, unitId: String) = run {
         require(!state.demo)
-        api.placeDevice(deviceId, unitId)
-        load("Penempatan perangkat diperbarui.")
+        require(state.devices.any { it.id == deviceId && it.status == "active" }) { "Pemasangan hanya tersedia untuk perangkat aktif." }
+        load(if (api.placeDevice(deviceId, unitId)) "Perangkat terpasang. Bacaan berikutnya tercatat di unit ini."
+            else "Perangkat terpasang, tetapi belum ada bacaan terbaru darinya. Nyalakan perangkat dan pastikan tersambung ke Wi-Fi; data masuk pada kiriman berikutnya.")
     }
 
     fun checkDeviceSetup(device: OwnedDevice) = run {

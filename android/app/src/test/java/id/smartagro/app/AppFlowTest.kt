@@ -41,6 +41,12 @@ class AppFlowTest {
         val view = compose.activity.window.decorView
         Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888).also { view.draw(Canvas(it)) }
     }
+    @Test fun moistureUsesAnIndexOutOf100() {
+        assertEquals("68/100", reading(Sensor.Moisture, 68.0))
+        assertEquals("100/100", reading(Sensor.Moisture, 100.0))
+        assertEquals("—", reading(Sensor.Moisture, null))
+    }
+
     @Test fun chartTouchUsesMeasurementTimeAndExcludesInvalidSamples() {
         val first = java.time.Instant.parse("2026-11-20T00:00:00Z")
         val last = first.plusSeconds(7200)
@@ -184,6 +190,11 @@ class AppFlowTest {
         compose.onNodeWithText("Tanaman saya").assertIsDisplayed()
         compose.onNodeWithText("Kartu tanaman").assertIsDisplayed()
         screenshot("02-products")
+        compose.onNodeWithText("Diagnostik sensor").performClick()
+        compose.onNodeWithText("Data skenario latihan").assertIsDisplayed()
+        compose.onAllNodesWithText("Waktu ukur:", substring = true).onFirst().assertIsDisplayed()
+        compose.onAllNodesWithText("Waktu terima: Tidak tersedia").onFirst().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Tutup").performClick()
         // Verify Apple Wallet deck rotation works cleanly across registered plants.
         compose.onNodeWithText("Ganti").performClick()
         compose.onNodeWithText("2/", substring = true).assertExists()
@@ -192,7 +203,7 @@ class AppFlowTest {
         compose.onNodeWithText("Cari nama, kode, atau produk").performTextInput("T-CASE0")
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Cabai · T-CASE0"))
         compose.onNodeWithText("Cabai · T-CASE0").performClick()
-        compose.onNodeWithText("kelembapan tanah").assertIsDisplayed()
+        compose.onAllNodesWithText("Indeks lembap").onFirst().assertIsDisplayed()
         screenshot("03-dashboard")
         // Choosing a reading row puts that sensor in the Peak Chart trend.
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("pH tanah"))
