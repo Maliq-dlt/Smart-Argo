@@ -43,7 +43,9 @@ test('confirmation is the code and nothing to click: large, with its lifetime, n
   assert.doesNotMatch(html, /href=/i, 'a verification link to another domain is the strongest phishing signal; the code works on any device')
   assert.doesNotMatch(html, /\{\{ \.ConfirmationURL \}\}/)
 })
-test('reset email is a link only: no code to type', () => {
+test('reset email has the link for the website and a large code for the Android app', () => {
   assert.match(templates.recovery, /href="\{\{ \.ConfirmationURL \}\}"/)
-  assert.doesNotMatch(templates.recovery, /\{\{ \.Token \}\}/)
+  assert.match(templates.recovery, /font-size:\s*(3\d|4\d)px;[^>]*>\{\{ \.Token \}\}</, 'the app code is set large')
+  assert.match(templates.recovery, /aplikasi/)
+  assert.match(templates.recovery, /Berlaku 10 menit/)
 })
