@@ -124,6 +124,21 @@ await test('Account deletion: re-verified, signs out everywhere, can be cancelle
   })
 })
 
+await test('Account deletion waits out the 24-hour hold after a password or second-factor change, like a transfer', async () => {
+  const c = await account('hold'), held = randomUUID()
+  sql(`INSERT INTO product(id,serial_public,variant,issuer_signature) VALUES(${q(held)},${q(`HOLD-${run}`.toUpperCase())},'single_pot','software-test');
+       INSERT INTO ownership(product_id,account_id) VALUES(${q(held)},${q(c.id)});
+       INSERT INTO security_event(user_id,kind) VALUES(${q(c.user)},'password_changed');`)
+  c.token = await c.login()
+  const r = await rpc('request_account_deletion', c.token)
+  assert.equal(r.code, 'security_hold', 'someone who just took the account over cannot free its products at once')
+  assert.ok(Date.parse(r.until) > Date.now() + 23 * 3600000)
+  assert.equal(sql(`SELECT count(*) FROM ownership WHERE product_id = ${q(held)} AND end_at IS NULL`), '1')
+  assert.equal((await rpc('my_garden', c.token)).ok, true, 'the session was not ended')
+  sql(`UPDATE security_event SET created_at = now() - interval '25 hours' WHERE user_id = ${q(c.user)} AND kind = 'password_changed'`)
+  assert.equal((await rpc('request_account_deletion', c.token)).ok, true, 'after the hold it goes through')
+})
+
 await test('Profile photo: one small image of the type it claims, readable by its owner only', async t => {
   const [a, b] = await Promise.all(['photo-a', 'photo-b'].map(account))
   await t.test('stored and read back unchanged', async () => {

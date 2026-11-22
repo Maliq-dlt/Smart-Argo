@@ -272,7 +272,7 @@ internal fun friendlyError(status: Int, json: JSONObject?): String {
         "invalid_session" to "Sesi berakhir. Silakan masuk kembali.",
         "mfa_required" to "Aktifkan 2FA di Keamanan akun pada website sebelum menukar poin.",
         "step_up_required" to "Masukkan kode autentikator terbaru, lalu konfirmasi kembali.",
-        "security_hold" to "Penukaran ditahan 24 jam setelah perubahan keamanan akun.",
+        "security_hold" to "Ditahan 24 jam setelah kata sandi atau 2FA diubah, untuk melindungi akun dan produk Anda.",
         "limit_reached" to "Batas 10 reservasi dalam 24 jam sudah tercapai.",
         "insufficient_points" to "Poin tersedia belum cukup. Muat ulang saldo.",
         "item_unavailable" to "Stok reward tidak tersedia. Muat ulang katalog.",

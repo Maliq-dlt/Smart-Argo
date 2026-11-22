@@ -81,6 +81,7 @@ const GATE_TEXT: Record<string, string> = {
   key_in_use: 'Salah satu kunci perangkat sudah terdaftar.',
   invalid_code: 'Kode tidak cocok.',
   email_exists: 'Email ini sudah terdaftar.',
+  security_hold: 'Ditahan 24 jam setelah kata sandi atau 2FA diubah, untuk melindungi akun dan produk Anda.',
   reauth_required: 'Verifikasi ulang dulu: masukkan kata sandi, atau masuk ulang dengan Google.',
   no_pending_deletion: 'Tidak ada penghapusan akun yang menunggu.',
   invalid_image: 'Foto harus berupa gambar WebP, JPEG, atau PNG.',
