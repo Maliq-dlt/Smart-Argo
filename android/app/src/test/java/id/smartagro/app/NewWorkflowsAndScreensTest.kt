@@ -41,6 +41,53 @@ class NewWorkflowsAndScreensTest {
 
     private val secureFlag get() = compose.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
 
+    @Test fun accountDeletionAndPhotoAreReadStrictly() {
+        val pending = JSONObject("""{"ok":true,"deletion":{"pending":true,"requested_at":"2026-11-22T04:00:00+00:00","purge_after":"2026-12-06T04:00:00+00:00","released":["SA-POT-0001"],"restorable":[]},"products":[]}""")
+        val d = parseDeletion(pending)!!
+        assertEquals(Instant.parse("2026-12-06T04:00:00Z"), d.purgeAfter)
+        assertEquals(listOf("SA-POT-0001"), d.released)
+        assertNull(parseDeletion(JSONObject("""{"ok":true,"deletion":{"pending":false}}""")))
+        assertThrows(IllegalArgumentException::class.java) {
+            parseDeletion(JSONObject("""{"deletion":{"pending":true,"requested_at":"2026-11-22T04:00:00+00:00","purge_after":"2026-12-06T04:00:00+00:00","released":["<b>"],"restorable":[]}}"""))
+        }
+        assertArrayEquals(byteArrayOf(1, 2, 3), parseAvatar(JSONObject("""{"ok":true,"avatar":{"mime":"image/webp","data":"AQID"}}""")))
+        assertNull(parseAvatar(JSONObject("""{"ok":true,"avatar":null}""")))
+        assertThrows(IllegalArgumentException::class.java) { parseAvatar(JSONObject("""{"avatar":{"mime":"image/svg+xml","data":"AQID"}}""")) }
+        assertEquals(Triple(500, 0, 3000), centerSquare(4000, 3000))
+        assertEquals(Triple(0, 420, 1080), centerSquare(1080, 1920))
+        assertEquals("MA", initialsOf("Maliq Athaya Rinaldi"))
+    }
+
+    @Test fun anAccountInItsGracePeriodSeesOnlyTheWayBack() {
+        setState { it.copy(screen = Screen.DeletionPending, catalogLoaded = true, email = "grower@example.test",
+            deletion = AccountDeletion(Instant.parse("2026-11-22T04:00:00Z"), Instant.parse("2026-12-06T04:00:00Z"), listOf("SA-POT-0001"), listOf("SA-POT-0001"))) }
+        compose.onNodeWithText("Akun ini dijadwalkan dihapus").assertIsDisplayed()
+        compose.onNodeWithText("Produk SA-POT-0001 kembali ke akun ini bila dibatalkan.").assertIsDisplayed()
+        compose.onNodeWithText("Batalkan penghapusan").assertIsDisplayed()
+        compose.onNodeWithText("Tetap hapus dan keluar").assertIsDisplayed()
+        compose.onNodeWithText("Akun").assertDoesNotExist() // no tab bar
+    }
+
+    @Test fun deletingTheAccountExplainsThenVerifiesThenConfirms() {
+        val prod = Product(UUID.randomUUID().toString(), "SA-POT-0001", "single_pot")
+        // busy: there is no session in the test, so any load would end it (the buttons this test presses ignore busy).
+        setState { it.copy(screen = Screen.DeleteAccount, busy = true, email = "grower@example.test", displayName = "Maliq", products = listOf(prod), catalogLoaded = true,
+            securityLoaded = true, security = AccountSecurity(false, null, emptyList())) }
+        compose.onNodeWithText("Sebelum menghapus akun").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Langkah 1 dari 3").assertExists()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("SA-POT-0001"))
+        // To the end of the list, as a person would: the last button then sits above the floating tab bar, not under it.
+        repeat(4) { compose.onNode(hasScrollToNodeAction()).performTouchInput { swipeUp() } }
+        compose.onNodeWithText("Lanjutkan").performClick()
+        compose.onNodeWithText("Pastikan ini Anda").assertIsDisplayed()
+        compose.onNodeWithText("Kata sandi").assertExists()
+        compose.onNodeWithText("Kode autentikator").assertDoesNotExist()
+        setState { it.copy(deletionScheduled = AccountDeletion(Instant.now(), Instant.parse("2026-12-06T04:00:00Z"), listOf("SA-POT-0001"), emptyList())) }
+        compose.onNodeWithText("Akun dijadwalkan dihapus").assertIsDisplayed()
+        compose.onNodeWithText("Keluar").performClick()
+        compose.onNodeWithText("Smart Agro").assertIsDisplayed()
+    }
+
     @Test fun speciesCatalogSearchAndPhasesMatchContract() {
         assertEquals(4, SpeciesCatalog.all.size)
         assertEquals(3, SpeciesCatalog.plantable.size)

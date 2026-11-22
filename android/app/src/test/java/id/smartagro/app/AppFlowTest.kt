@@ -257,6 +257,39 @@ class AppFlowTest {
         screenshot("10-logout-return")
         compose.onNodeWithText("Smart Agro").assertIsDisplayed()
     }
+    /** Account screens of a signed-in owner, for design review (the emulator tour can only show practice mode). */
+    @Test fun accountScreensForReview() {
+        fun set(transform: (AppState) -> AppState) = compose.runOnIdle {
+            val model=androidx.lifecycle.ViewModelProvider(compose.activity)[AgroViewModel::class.java]
+            val field=AgroViewModel::class.java.getDeclaredField("state\$delegate").apply { isAccessible=true }
+            @Suppress("UNCHECKED_CAST")
+            val state=field.get(model) as androidx.compose.runtime.MutableState<AppState>
+            state.value=transform(state.value)
+        }
+        // First, from the signed-out start: the grace-period screen (a screen leaving mid-test may still run its effects).
+        set { AppState(screen=Screen.DeletionPending,catalogLoaded=true,email="maliq@example.test",deletion=AccountDeletion(java.time.Instant.now(),java.time.Instant.parse("2026-12-06T04:00:00Z"),listOf("SA-POT-0001","SA-POT-0002"),listOf("SA-POT-0002"))) }
+        compose.onNodeWithText("Batalkan penghapusan").assertIsDisplayed()
+        screenshot("17-tenggang")
+        val products=listOf(Product("00000000-0000-4000-8000-000000000001","SA-POT-0001","single_pot"),Product("00000000-0000-4000-8000-000000000002","SA-POT-0002","single_pot"))
+        // busy: no session exists in the test, so a load would sign the state out (as the garden test does).
+        set { AppState(screen=Screen.Account,busy=true,email="maliq@example.test",displayName="Maliq Athaya",products=products,catalogLoaded=true,
+            securityLoaded=true,security=AccountSecurity(true,null,emptyList()),rewardLoaded=true) }
+        compose.onNodeWithText("Maliq Athaya").assertIsDisplayed()
+        screenshot("12-akun")
+        set { it.copy(screen=Screen.Profile) }
+        compose.onNodeWithText("Tambah foto").assertIsDisplayed()
+        screenshot("13-profil")
+        set { it.copy(screen=Screen.DeleteAccount) }
+        compose.onNodeWithText("Sebelum menghapus akun").assertIsDisplayed()
+        screenshot("14-hapus-1")
+        // To the end of the list, as a person would: the last button then sits above the floating tab bar, not under it.
+        repeat(4) { compose.onNode(hasScrollToNodeAction()).performTouchInput { swipeUp() } }
+        compose.onNodeWithText("Lanjutkan").performClick()
+        compose.onNodeWithText("Kode autentikator").assertExists()
+        screenshot("15-hapus-2")
+        set { it.copy(deletionScheduled=AccountDeletion(java.time.Instant.now(),java.time.Instant.parse("2026-12-06T04:00:00Z"),listOf("SA-POT-0001"),emptyList())) }
+        screenshot("16-hapus-selesai")
+    }
     @Test fun serverGardenUsesSpeciesCodeAndDoesNotInventDeviceMeasurements() {
         compose.runOnIdle {
             val model=androidx.lifecycle.ViewModelProvider(compose.activity)[AgroViewModel::class.java]

@@ -13,13 +13,17 @@ import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 
-enum class Screen { Login, Mfa, Products, Dashboard, History, Account, Rewards, Proofs, Garden, Security, ManageProducts, Gallery }
+enum class Screen { Login, Mfa, Products, Dashboard, History, Account, Rewards, Proofs, Garden, Security, ManageProducts, Gallery, Profile, DeleteAccount, DeletionPending }
 /** Where the signed-out owner is: the welcome cover, Masuk/Daftar form, the emailed signup code, or the two reset steps. */
 enum class AuthStep { Welcome, SignIn, SignUp, SignupCode, ResetEmail, ResetCode }
 data class DeviceSetupReadings(val device: OwnedDevice, val readings: List<Reading>)
 /** A care note waiting out its undo window before it is sent. */
 data class PendingCare(val unitId: String, val kind: String, val at: Instant, val amountMl: Double?)
 data class AppState(
+    /** An account inside its 14-day deletion grace period (it may only cancel), and the result of asking to delete. */
+    val deletion: AccountDeletion? = null, val deletionScheduled: AccountDeletion? = null,
+    /** The profile photo's bytes (WebP, JPEG or PNG as stored); null shows initials. */
+    val avatar: ByteArray? = null,
     val screen: Screen = Screen.Login, val busy: Boolean = false, val message: String? = null, val messageIsError: Boolean = false,
     val auth: AuthStep = AuthStep.Welcome, val authEmail: String = "", val welcome: Boolean = false, val introPlaying: Boolean = false,
     val resetCodeRequested: Boolean = false,
@@ -157,7 +161,15 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
             else "Kata sandi diganti. Sesi reset di server akan berakhir sendiri. Masuk dengan sandi baru.")
     }
     private suspend fun load(successMessage: String? = null) {
+        // Asked first: an account waiting to be deleted is refused everywhere else, which would read as an expired session.
+        // A backend without the deletion migration (404) has nothing pending; only an expired session stops loading.
+        val pendingDeletion = try { parseDeletion(api.rpc("my_account_deletion")) } catch (error: ApiFailure) { if (error.expired) throw error; null }
+        pendingDeletion?.let { waiting ->
+            state = state.copy(deletion = waiting, screen = Screen.DeletionPending, catalogLoaded = true, message = null)
+            return
+        }
         api.rpc("ensure_my_account")
+        val avatar = try { parseAvatar(api.rpc("my_avatar")) } catch (error: ApiFailure) { if (error.expired) throw error; state.avatar }
         val products = parseProducts(api.rpc("my_products"))
         // Core product data is committed together.
         val owned = parseOwnedUnitsWorkspace(api.rpc("my_units"))
@@ -175,7 +187,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         val activeUnit = unit ?: units.firstOrNull()
         val activeProduct = selected ?: activeUnit?.let { u -> products.find { it.id == u.productId } }
         historyGeneration++
-        state = state.copy(catalogLoaded = true, garden = garden, gardenPlant = garden?.plants?.find { it.id==state.gardenPlant?.id }, products = products, units = units,
+        state = state.copy(catalogLoaded = true, deletion = null, avatar = avatar, garden = garden, gardenPlant = garden?.plants?.find { it.id==state.gardenPlant?.id }, products = products, units = units,
             archivedUnits = owned.archived, devices = owned.devices, overviews = overviews,
             deviceSetupReadings = state.deviceSetupReadings?.takeIf { it.device in owned.devices },
             selectedProduct = activeProduct, selectedUnit = activeUnit, history = emptyList(), historyLoaded = false,
@@ -287,7 +299,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     }
     /** Detail and auth routes require the typed open/sign-in methods that initialize their data. */
     fun navigate(screen: Screen) {
-        require(screen in listOf(Screen.Products,Screen.History,Screen.Account,Screen.Rewards,Screen.Proofs,Screen.Security,Screen.ManageProducts) || screen==Screen.Gallery && BuildConfig.DEBUG)
+        require(screen in listOf(Screen.Products,Screen.History,Screen.Account,Screen.Rewards,Screen.Proofs,Screen.Security,Screen.ManageProducts,Screen.Profile,Screen.DeleteAccount) || screen==Screen.Gallery && BuildConfig.DEBUG)
         state=state.copy(screen=screen,message=null)
     }
     fun openUnit(unit: PlantUnit) {
@@ -311,6 +323,42 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         val cases = api.rewardCases()
         val energy = api.energyEvidence()
         state = state.copy(rewardBalance = rewards.balance, rewards = rewards, rewardCases = cases, energyEvidence = energy, rewardLoaded = true)
+    }
+    /** The photo is already cropped and encoded on the phone ([avatarBytes]); the server checks type and size again. */
+    fun setAvatar(bytes: ByteArray, mime: String) = run {
+        require(!state.demo) { "Masuk ke akun untuk mengubah profil." }
+        api.rpc("set_my_avatar", JSONObject().put("p_mime", mime).put("p_data", java.util.Base64.getEncoder().encodeToString(bytes)))
+        state = state.copy(avatar = bytes, message = "Foto profil disimpan.")
+    }
+    fun clearAvatar() = run {
+        api.rpc("clear_my_avatar")
+        state = state.copy(avatar = null, message = "Foto dihapus. Inisial dipakai lagi.")
+    }
+    /** Re-verification for deleting the account: a fresh authenticator code with 2FA, otherwise signing in again. */
+    fun reverifyForDeletion(password: String?, code: String?, onDone: () -> Unit) = run {
+        when {
+            code != null -> api.verifyMfa(code)
+            password != null -> require(api.login(state.email, password)) { "Akun ini memakai autentikator: masukkan kodenya." }
+            else -> error("Verifikasi belum diisi.")
+        }
+        onDone()
+    }
+    fun reverifyGoogleForDeletion(context: android.content.Context, onDone: () -> Unit) = run {
+        val credential = googleCredential(context, BuildConfig.GOOGLE_WEB_CLIENT_ID)
+        require(api.loginIdToken(credential.first, credential.second)) { "Akun ini memakai autentikator: masukkan kodenya." }
+        onDone()
+    }
+    /** Every session ends on the server when it accepts; this phone forgets its copy and shows when the purge is due. */
+    fun requestDeletion() = run {
+        val scheduled = parseDeletion(api.rpc("request_account_deletion").optJSONObject("deletion")) ?: throw IllegalArgumentException("Status penghapusan akun tidak valid.")
+        api.clear()
+        state = state.copy(deletionScheduled = scheduled)
+    }
+    fun finishDeletion() { state = AppState() }
+    fun cancelDeletion() = run {
+        val back = api.rpc("cancel_account_deletion").optJSONArray("restored")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+        state = state.copy(deletion = null, screen = Screen.Products)
+        load(if (back.isEmpty()) "Penghapusan dibatalkan." else "Penghapusan dibatalkan. ${back.joinToString()} kembali ke akun Anda.")
     }
     fun updateName(raw: String) = run {
         require(!state.demo) { "Masuk ke akun untuk mengubah profil." }
@@ -425,7 +473,8 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
                 AuthStep.Welcome -> Unit
             }
             Screen.Mfa -> { api.cancelMfa(); state = AppState() }
-            Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery -> state = state.copy(screen = Screen.Account,
+            Screen.DeletionPending -> Unit
+            Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery, Screen.Profile, Screen.DeleteAccount -> state = state.copy(screen = Screen.Account,
                 totpEnrollment = null, generatedRecoveryCodes = null, activeTransfer = null, activationChallenge = null, message = null)
             Screen.Dashboard -> state = state.copy(
                 screen = if (state.dashboardFromGarden && state.gardenPlant != null) Screen.Garden else Screen.Products,

@@ -166,7 +166,7 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
         }
     }
     suspend fun rpc(name: String, body: JSONObject = JSONObject()): JSONObject {
-        require(name in setOf("ensure_my_account", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "archive_my_unit", "restore_my_unit", "place_my_device", "my_unit_history", "product_public_status", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden", "my_device_units", "unit_explanations", "add_my_site", "plant_in_my_slot", "switch_my_plant", "append_my_care_journal", "read_my_care_journal", "read_my_measurement_history", "compare_my_measurement_history", "security_workspace", "create_my_recovery_codes", "my_recovery_codes_status", "issue_activation_nonce", "create_transfer_offer", "cancel_transfer_offer", "accept_transfer", "open_ownership_recovery", "withdraw_ownership_recovery", "my_ownership_recoveries", "open_reward_appeal", "my_reward_cases", "energy_workspace", "set_slot_sharing", "share_my_cycle", "unshare_my_cycle", "community_knowledge"))
+        require(name in setOf("ensure_my_account", "my_account_deletion", "request_account_deletion", "cancel_account_deletion", "my_avatar", "set_my_avatar", "clear_my_avatar", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "archive_my_unit", "restore_my_unit", "place_my_device", "my_unit_history", "product_public_status", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden", "my_device_units", "unit_explanations", "add_my_site", "plant_in_my_slot", "switch_my_plant", "append_my_care_journal", "read_my_care_journal", "read_my_measurement_history", "compare_my_measurement_history", "security_workspace", "create_my_recovery_codes", "my_recovery_codes_status", "issue_activation_nonce", "create_transfer_offer", "cancel_transfer_offer", "accept_transfer", "open_ownership_recovery", "withdraw_ownership_recovery", "my_ownership_recoveries", "open_reward_appeal", "my_reward_cases", "energy_workspace", "set_slot_sharing", "share_my_cycle", "unshare_my_cycle", "community_knowledge"))
         refresh()
         return request("/rest/v1/rpc/$name", body, session!!.accessToken)
     }
@@ -265,6 +265,10 @@ internal fun friendlyError(status: Int, json: JSONObject?): String {
     val detail = listOf("msg", "message", "error_description", "error", "code", "error_code").joinToString(" ") { json?.optString(it).orEmpty() }.lowercase()
     val codes = mapOf(
         "unauthorized" to "Sesi berakhir. Silakan masuk kembali.",
+        "reauth_required" to "Verifikasi ulang dulu: masukkan kata sandi atau kode autentikator.",
+        "no_pending_deletion" to "Tidak ada penghapusan akun yang menunggu.",
+        "invalid_image" to "Foto harus berupa gambar WebP, JPEG, atau PNG.",
+        "avatar_too_large" to "Foto terlalu besar. Pilih foto lain.",
         "invalid_session" to "Sesi berakhir. Silakan masuk kembali.",
         "mfa_required" to "Aktifkan 2FA di Keamanan akun pada website sebelum menukar poin.",
         "step_up_required" to "Masukkan kode autentikator terbaru, lalu konfirmasi kembali.",

@@ -10,6 +10,8 @@ import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
 import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -44,7 +46,6 @@ internal fun copySensitiveText(context: Context, label: String, text: String) {
 internal fun AccountScreen(state: AppState, model: AgroViewModel) {
     val p = palette
     val uri = rememberSafeUriHandler()
-    var editingName by rememberSaveable { mutableStateOf(false) }
     var confirmingLogout by rememberSaveable { mutableStateOf(false) }
 
     TitledScreen("Akun", actions = { RefreshAction(state, model) }) {
@@ -81,17 +82,15 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
         } else {
             item(key = "profile") {
                 val shownName = state.displayName.ifBlank { state.email.substringBefore('@') }.ifBlank { "Pemilik Smart Agro" }
-                val initials = shownName.trim().split(Regex("\\s+")).take(2).mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").ifEmpty { "SA" }
                 Group {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Box(Modifier.size(56.dp).clip(CircleShape).background(p.soft), contentAlignment = Alignment.Center) {
-                            Text(initials, style = T.title2, color = p.onSoft)
-                        }
+                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Buka profil") { model.navigate(Screen.Profile) }.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        AvatarImage(state.avatar, shownName, 56.dp)
                         Column(Modifier.weight(1f)) {
                             Text(shownName, style = T.title3, color = p.ink)
                             Text(state.email, style = T.subhead, color = p.secondary)
                         }
-                        PlainButton("Ubah", { editingName = true }, enabled = !state.busy)
+                        Icon(icon(PhosphorPaths.CaretRightBold), null, Modifier.size(14.dp), tint = p.tertiary)
                     }
                 }
             }
@@ -151,28 +150,18 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                     }
                 }
             }
+            item(key = "privacy") {
+                SectionTitle("Data & privasi")
+                Group(footer = "Penghapusan juga bisa diminta lewat web: live.smart-agro-demo.pages.dev/#hapus-akun") {
+                    Cell("Hapus akun", destructive = true, enabled = !state.busy, onClick = { model.navigate(Screen.DeleteAccount) })
+                }
+            }
             item(key = "signout") {
                 Spacer(Modifier.height(16.dp))
                 Group {
                     Cell("Keluar dari akun", glyph = PhosphorPaths.SignOut, glyphColor = p.warn, destructive = true, onClick = { confirmingLogout = true })
                 }
             }
-        }
-    }
-
-    if (editingName) {
-        var name by rememberSaveable(state.displayName) { mutableStateOf(state.displayName) }
-        AgroSheet("Nama profil", { editingName = false }) {
-            Group {
-                FieldRow("Nama", name, { name = it.take(40) }, "Nama panggilan Anda", ime = ImeAction.Done, enabled = !state.busy)
-            }
-            PrimaryButton(
-                if (state.busy) "Menyimpan…" else "Simpan nama",
-                { model.updateName(name); editingName = false },
-                Modifier.padding(16.dp).fillMaxWidth(),
-                enabled = !state.busy && name.trim().isNotEmpty(),
-                busy = state.busy,
-            )
         }
     }
 

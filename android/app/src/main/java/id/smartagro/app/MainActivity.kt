@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
 
 /** How deep a screen sits, so a push slides in from the trailing edge and a pop slides back (iOS navigation stack). */
 private fun depth(screen: Screen) = when (screen) {
-    Screen.Login -> 0
+    Screen.Login, Screen.DeletionPending -> 0
     Screen.Mfa, Screen.Products, Screen.History, Screen.Account -> 1
     else -> 2
 }
@@ -122,7 +122,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
     AgroTheme(dark) {
         val shellHaze = remember { HazeState() }
         val screenState = key(state.email, state.demo) { rememberSaveableStateHolder() }
-        val showTabs = state.screen !in listOf(Screen.Login, Screen.Mfa) && !state.introPlaying
+        val showTabs = state.screen !in listOf(Screen.Login, Screen.Mfa, Screen.DeletionPending) && state.deletionScheduled == null && !state.introPlaying
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         CompositionLocalProvider(
             LocalRippleConfiguration provides null,
@@ -133,8 +133,8 @@ private fun SmartAgroApp(model: AgroViewModel) {
             BackHandler(
                 state.screen in listOf(
                     Screen.Dashboard, Screen.Mfa, Screen.History, Screen.Account, Screen.Rewards,
-                    Screen.Proofs, Screen.Garden, Screen.Security, Screen.ManageProducts, Screen.Gallery,
-                ) || state.screen == Screen.Login && state.auth != AuthStep.Welcome,
+                    Screen.Proofs, Screen.Garden, Screen.Security, Screen.ManageProducts, Screen.Gallery, Screen.Profile,
+                ) || state.screen == Screen.DeleteAccount && state.deletionScheduled == null || state.screen == Screen.Login && state.auth != AuthStep.Welcome,
             ) { model.back() }
             Surface(Modifier.fillMaxSize(), color = palette.canvas, contentColor = palette.ink) {
                 Box(Modifier.fillMaxSize()) {
@@ -142,7 +142,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
                         SharedTransitionLayout {
                             AnimatedContent(targetState = state.screen, transitionSpec = {
                                 val zooming = setOf(initialState, targetState) == setOf(Screen.Products, Screen.Dashboard)
-                                val signedOut = setOf(Screen.Login, Screen.Mfa)
+                                val signedOut = setOf(Screen.Login, Screen.Mfa, Screen.DeletionPending)
                                 when {
                                     zooming -> (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished).apply {
                                         if (targetState == Screen.Products) targetContentZIndex = -1f
@@ -175,6 +175,9 @@ private fun SmartAgroApp(model: AgroViewModel) {
                                                 onAppeal = { stmt, winId, redId, done -> model.submitRewardAppeal(stmt, winId, redId, done) },
                                             )
                                             Screen.Proofs -> ProofsScreen(state, model::loadProofs, onBack = model::back)
+                                            Screen.Profile -> ProfileScreen(state, model)
+                                            Screen.DeleteAccount -> DeleteAccountScreen(state, model, google != null)
+                                            Screen.DeletionPending -> DeletionPendingScreen(state, model)
                                         }
                                     }
                                 }
@@ -189,8 +192,8 @@ private fun SmartAgroApp(model: AgroViewModel) {
                         tabs,
                         when (state.screen) {
                             Screen.History -> 1
-                            Screen.Account, Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery -> 2
-                            Screen.Products, Screen.Dashboard, Screen.Garden, Screen.Login, Screen.Mfa -> 0
+                            Screen.Account, Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery, Screen.Profile, Screen.DeleteAccount -> 2
+                            Screen.Products, Screen.Dashboard, Screen.Garden, Screen.Login, Screen.Mfa, Screen.DeletionPending -> 0
                         },
                         { model.navigate(tabScreens[it]) },
                         Modifier.align(Alignment.BottomCenter),
