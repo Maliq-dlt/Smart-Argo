@@ -212,6 +212,8 @@ class NewWorkflowsAndScreensTest {
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(ORIGIN_LABEL))
         compose.onNodeWithText(ORIGIN_LABEL).assertIsDisplayed()
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Sehat"))
+        // Scrolling to the next section lifts the buttons clear of the floating tab bar, which would take the tap.
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Kondisi"))
         compose.onNodeWithText("Sehat").performClick()
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Pengecekan terakhir: sehat."))
         compose.onNodeWithText("Pengecekan terakhir: sehat.").assertIsDisplayed()

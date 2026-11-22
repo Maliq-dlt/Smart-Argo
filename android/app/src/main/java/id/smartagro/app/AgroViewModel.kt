@@ -17,6 +17,8 @@ enum class Screen { Login, Mfa, Products, Dashboard, History, Account, Rewards, 
 /** Where the signed-out owner is: the welcome cover, Masuk/Daftar form, the emailed signup code, or the two reset steps. */
 enum class AuthStep { Welcome, SignIn, SignUp, SignupCode, ResetEmail, ResetCode }
 data class DeviceSetupReadings(val device: OwnedDevice, val readings: List<Reading>)
+/** A care note waiting out its undo window before it is sent. */
+data class PendingCare(val unitId: String, val kind: String, val at: Instant, val amountMl: Double?)
 data class AppState(
     val screen: Screen = Screen.Login, val busy: Boolean = false, val message: String? = null, val messageIsError: Boolean = false,
     val auth: AuthStep = AuthStep.Welcome, val authEmail: String = "", val welcome: Boolean = false, val introPlaying: Boolean = false,
@@ -45,6 +47,7 @@ data class AppState(
     val activationChallenge: ActivationChallenge? = null, val activeTransfer: TransferOffer? = null, val activeTransferProductId: String? = null,
     val ownershipRecoveries: List<OwnershipRecovery> = emptyList(), val recoveriesLoaded: Boolean = false,
     val rewardCases: List<RewardCase> = emptyList(), val energyEvidence: EnergyEvidence? = null,
+    val pendingCare: PendingCare? = null,
 ) {
     val historyHasMore: Boolean get() = historyWindow != null
     fun plantCode(unit: PlantUnit): String = garden?.plants?.firstOrNull { it.unitId==unit.id && it.endedOn==null }?.tag ?: unitCode(unit,units)
@@ -563,6 +566,33 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
             }
             onDone()
         }
+    }
+
+    // ponytail: the pending note lives in memory only; if the process dies inside the 5-second undo window it is not sent.
+    private var pendingJob: kotlinx.coroutines.Job? = null
+    /** Care recorded with one tap, sent after five seconds in which [undoCare] can take it back (the journal has no delete). */
+    fun recordCareWithUndo(unitId: String, kind: String, amountMl: Double?) {
+        commitPendingCare()
+        state = state.copy(pendingCare = PendingCare(unitId, kind, Instant.now(), amountMl))
+        pendingJob = viewModelScope.launch { kotlinx.coroutines.delay(5_000); pendingJob = null; commitPendingCare() }
+    }
+    fun undoCare() { pendingJob?.cancel(); pendingJob = null; state = state.copy(pendingCare = null) }
+    private fun commitPendingCare() {
+        pendingJob?.cancel(); pendingJob = null
+        val pending = state.pendingCare ?: return
+        state = state.copy(pendingCare = null)
+        recordCare(pending.unitId, pending.kind, pending.at, pending.amountMl, "")
+    }
+
+    /** Practice only: the next synthetic reading after a watering, so the stage can show the water arriving. */
+    fun simulateDemoReading(unitId: String) {
+        if (!state.demo) return
+        val now = Instant.now()
+        state = state.copy(overviews = state.overviews.map { o ->
+            if (o.id != unitId) o else o.copy(at = now, readings = o.readings.map { r ->
+                if (r.sensor == Sensor.Moisture && r.value != null) r.copy(value = minOf(92.0, r.value + 24.0), at = now) else r.copy(at = now)
+            })
+        })
     }
 
     fun compareMeasurements(unitId: String, first: HistoryWindow, second: HistoryWindow) = run {

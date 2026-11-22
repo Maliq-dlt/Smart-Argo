@@ -22,6 +22,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -103,7 +106,9 @@ private fun SmartAgroApp(model: AgroViewModel) {
         onDispose { }
     }
     val view = LocalView.current
-    val darkHeroTop = state.introPlaying || (state.screen == Screen.Login && state.auth == AuthStep.Welcome)
+    val overMedia = remember { androidx.compose.runtime.mutableStateOf(false) }
+    val darkHeroTop = state.introPlaying || (state.screen == Screen.Login && state.auth == AuthStep.Welcome) ||
+        (state.screen == Screen.Dashboard && overMedia.value)
     SideEffect {
         (view.context as? android.app.Activity)?.window?.let { window ->
             WindowCompat.getInsetsController(window, view).apply {
@@ -122,6 +127,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
         CompositionLocalProvider(
             LocalRippleConfiguration provides null,
             LocalShellHaze provides shellHaze,
+            LocalStatusOverMedia provides overMedia,
             LocalBottomClearance provides if (showTabs) navInset + 84.dp else navInset,
         ) {
             BackHandler(
@@ -176,6 +182,9 @@ private fun SmartAgroApp(model: AgroViewModel) {
                         }
                     }
                     if (state.welcome && state.screen == Screen.Products && !state.demo && !state.introPlaying) WelcomeSheet(model::dismissWelcome)
+                    // Scroll edge effect (HIG Liquid Glass): content fades under the floating tab bar instead of running into it.
+                    if (showTabs) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(navInset + 96.dp).background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, palette.canvas.copy(alpha = .94f)))))
                     if (showTabs) GlassTabBar(
                         tabs,
                         when (state.screen) {

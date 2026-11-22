@@ -47,13 +47,26 @@ class AppFlowTest {
         assertEquals("—", reading(Sensor.Moisture, null))
     }
 
-    @Test fun chartTouchUsesMeasurementTimeAndExcludesInvalidSamples() {
+    @Test fun barsAverageTrustedReadingsByMeasurementTime() {
         val first = java.time.Instant.parse("2026-11-20T00:00:00Z")
-        val last = first.plusSeconds(7200)
-        val positions = listOf(first, first.plusSeconds(1800), last).map { chartTimeFraction(it, first, last) }
-        assertEquals(listOf(0f, .25f, 1f), positions)
-        assertEquals(1, chartSampleIndex(31f, 112f, 6f, positions))
-        assertEquals(1, chartSampleIndex(62f, 112f, 6f, positions))
+        val m = Reading(Sensor.Moisture, "ok", 40.0, first)
+        val readings = listOf(m, m.copy(value = 60.0, at = first.plusSeconds(1200)), m.copy(value = 99.0, quality = "error", at = first.plusSeconds(1300)),
+            m.copy(value = 70.0, at = first.plusSeconds(5400)), m.copy(value = 10.0, at = first.plusSeconds(7200)), Reading(Sensor.Ph, "ok", 6.1, first))
+        // Four 30-minute slices of two hours: the error and the reading at the end of the window are left out.
+        assertEquals(listOf(50.0, null, null, 70.0), buckets(readings, Sensor.Moisture, first, first.plusSeconds(7200), 4))
+
+        val zone = java.time.ZoneOffset.UTC
+        val day = java.time.LocalDate.of(2026, 11, 20)
+        fun entry(kind: String, d: Long) = day.plusDays(d).atStartOfDay(zone).plusHours(9).toInstant().let { CareEntry("e$d$kind", "unit", kind, it, it, null, "") }
+        assertEquals(listOf(CareMark.Water, CareMark.None, CareMark.Check),
+            careMarks(listOf(entry("watering", 0), entry("inspection", 0), entry("note", 2)), day, day.plusDays(2), zone))
+
+        val chili = referenceFor(1)
+        assertEquals(Tone.Dry, moistureWord(38.0, chili)?.tone)
+        assertEquals("Mulai kering", moistureWord(45.0, chili)?.text)
+        assertEquals("Cukup", moistureWord(60.0, chili)?.text)
+        assertEquals(Tone.Wet, moistureWord(88.0, chili)?.tone)
+        assertEquals(Tone.Learn, moistureWord(60.0, null)?.tone)
 
         val at = first
         val ph = Reading(Sensor.Ph, "not_measured", null, at)
@@ -188,36 +201,51 @@ class AppFlowTest {
         screenshot("01-login-password")
         compose.onNodeWithText("Coba mode latihan").performScrollTo().performClick()
         compose.onNodeWithText("Tanaman saya").assertIsDisplayed()
-        compose.onNodeWithText("Kartu tanaman").assertIsDisplayed()
+        // Ten practice plants on two practice products; the one practice marker explains itself.
+        compose.onNodeWithText("10 tanaman · 2 produk").assertIsDisplayed()
+        compose.onNodeWithText("Latihan").performClick()
+        compose.onNodeWithText("Mode latihan").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Tutup").performClick()
         screenshot("02-products")
+        // The search narrows the grid; a tile opens the plant.
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Cari nama, kode, atau produk"))
+        compose.onNodeWithText("Cari nama, kode, atau produk").performTextInput("T-CASE8")
+        compose.onNodeWithText("Cabai 55 cepat mengering").assertDoesNotExist()
+        compose.onNodeWithText("Kering terkonfirmasi").performClick()
+        compose.onNodeWithText("Konfirmasi media kering, lalu siram bertahap dan catat volume").assertExists()
+        screenshot("03-dashboard")
+        // A dry pot offers one action: picking the amount records it, and Urungkan takes it back before it is sent.
+        compose.onNode(hasText("Catat siram") and hasClickAction()).performScrollTo().performClick()
+        compose.onNodeWithText("Simpan").performClick()
+        compose.onNodeWithText("Siram dicatat", substring = true).assertExists()
+        compose.onNodeWithText("Urungkan").performClick()
+        compose.onNodeWithText("Siram dicatat", substring = true).assertDoesNotExist()
+        compose.onNode(hasText("Catat siram") and hasClickAction()).assertExists()
+        // Kondisi rows open that sensor's chart in place.
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Diagnostik sensor"))
         compose.onNodeWithText("Diagnostik sensor").performClick()
         compose.onNodeWithText("Data skenario latihan").assertIsDisplayed()
         compose.onAllNodesWithText("Waktu ukur:", substring = true).onFirst().assertIsDisplayed()
         compose.onAllNodesWithText("Waktu terima: Tidak tersedia").onFirst().assertIsDisplayed()
         compose.onNodeWithContentDescription("Tutup").performClick()
-        // Verify Apple Wallet deck rotation works cleanly across registered plants.
-        compose.onNodeWithText("Ganti").performClick()
-        compose.onNodeWithText("2/", substring = true).assertExists()
-        // Filter narrows deck to matching unit and opens PlantDetail.
-        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Cari nama, kode, atau produk"))
-        compose.onNodeWithText("Cari nama, kode, atau produk").performTextInput("T-CASE0")
-        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Cabai · T-CASE0"))
-        compose.onNodeWithText("Cabai · T-CASE0").performClick()
-        compose.onAllNodesWithText("Indeks lembap").onFirst().assertIsDisplayed()
-        screenshot("03-dashboard")
-        // Choosing a reading row puts that sensor in the Peak Chart trend.
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("pH tanah"))
         compose.onNodeWithText("pH tanah").performClick()
-        compose.onNodeWithContentDescription("Ditampilkan di tren").assertExists()
+        compose.onNodeWithContentDescription("Telusuri bacaan pH tanah").assertExists()
         screenshot("03-trend-ph")
+        compose.onNodeWithContentDescription("Tutup").performClick()
         compose.onNodeWithContentDescription("Ubah nama tanaman").performClick()
         compose.onNodeWithContentDescription("Nama tanaman").performTextReplacement("Cabai teras")
         compose.onNodeWithText("Simpan nama tanaman").performScrollTo().performClick()
         compose.onAllNodesWithText("Cabai teras").onFirst().assertExists()
+        // Aktivitas keeps the plant that was open; its charts open the same chart sheet.
         compose.onNodeWithText("Aktivitas").performClick()
-        compose.onNodeWithText("Riwayat sensor").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Cabai teras · T-CASE8").assertIsDisplayed()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Jurnal"))
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("pH tanah"))
         compose.onNodeWithText("pH tanah").performClick()
+        compose.onNodeWithContentDescription("Telusuri bacaan pH tanah").assertExists()
         screenshot("04-history")
+        compose.onNodeWithContentDescription("Tutup").performClick()
         compose.onNode(hasText("Akun") and hasClickAction()).performClick()
         compose.onNodeWithText("Mode latihan tanpa akun").assertIsDisplayed()
         compose.onNodeWithText("Putar animasi masuk").performScrollTo().assertIsDisplayed()

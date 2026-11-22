@@ -59,7 +59,6 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                         color = p.secondary,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    PrimaryButton("Akhiri latihan", model::logout, Modifier.padding(top = 14.dp).fillMaxWidth(), destructive = true, path = PhosphorPaths.SignOut)
                 }
             }
             item(key = "demo-intro") {
@@ -73,6 +72,11 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                         onClick = model::replayIntro,
                     )
                 }
+            }
+            // Ending practice is a destructive row at the end, like Sign Out in Settings, not a full-width red button.
+            item(key = "demo-end") {
+                Spacer(Modifier.height(20.dp))
+                Group { Cell("Akhiri latihan", destructive = true, onClick = model::logout) }
             }
         } else {
             item(key = "profile") {
