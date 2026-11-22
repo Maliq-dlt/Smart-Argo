@@ -83,9 +83,9 @@ internal fun decodeQrFromUri(context: Context, uri: Uri): String? = runCatching 
     }
 }.getOrNull()
 
-internal fun tempCameraQrUri(context: Context): Uri {
+internal fun tempCameraQrUri(context: Context, prefix: String = "qr-scan"): Uri {
     val dir = File(context.cacheDir, "shared").apply { mkdirs() }
-    val target = File(dir, "qr-scan-${System.currentTimeMillis()}.jpg")
+    val target = File(dir, "$prefix-${System.currentTimeMillis()}.jpg")
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target)
 }
 

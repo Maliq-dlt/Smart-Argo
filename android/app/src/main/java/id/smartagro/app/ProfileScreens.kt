@@ -108,7 +108,7 @@ internal fun dateOf(at: Instant): String = longDate.format(at.atZone(ZoneId.syst
     }
 }
 
-/** Profil: the photo (Photo Picker; nothing else on the phone is read) and the name. */
+/** Profil: the photo (camera or Photo Picker; nothing else on the phone is read) and the name. */
 @Composable internal fun ProfileScreen(state: AppState, model: AgroViewModel) {
     val p = palette
     val context = LocalContext.current
@@ -116,11 +116,16 @@ internal fun dateOf(at: Instant): String = longDate.format(at.atZone(ZoneId.syst
     var photoActions by rememberSaveable { mutableStateOf(false) }
     var editingName by rememberSaveable { mutableStateOf(false) }
     val name = state.displayName.ifBlank { state.email.substringBefore('@') }.ifBlank { "Pemilik Smart Agro" }
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) scope.launch {
-            try { model.setAvatar(withContext(Dispatchers.IO) { avatarBytes(context, uri) }, "image/webp") }
-            catch (error: Exception) { model.reportDocumentError(error.message ?: "Foto tidak bisa disiapkan.") }
-        }
+    val upload = { uri: Uri -> scope.launch {
+        try { model.setAvatar(withContext(Dispatchers.IO) { avatarBytes(context, uri) }, "image/webp") }
+        catch (error: Exception) { model.reportDocumentError(error.message ?: "Foto tidak bisa disiapkan.") }
+    } }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) upload(uri) }
+    // The system camera writes into our cache through the FileProvider, so the app needs no CAMERA permission.
+    var shot by rememberSaveable { mutableStateOf<String?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = shot?.let(Uri::parse); shot = null
+        if (ok && uri != null) upload(uri)
     }
     TitledScreen("Profil", back = "Akun", onBack = model::back) {
         notices(state)
@@ -139,6 +144,11 @@ internal fun dateOf(at: Instant): String = longDate.format(at.atZone(ZoneId.syst
     }
     if (photoActions) AgroSheet("Foto profil", { photoActions = false }) {
         Group(inset = 60.dp) {
+            Cell("Ambil foto", glyph = PhosphorPaths.Camera, onClick = {
+                photoActions = false
+                try { val target = tempCameraQrUri(context, "avatar"); shot = target.toString(); camera.launch(target) }
+                catch (_: android.content.ActivityNotFoundException) { shot = null; model.reportDocumentError("Aplikasi kamera tidak tersedia. Pilih foto dari galeri.") }
+            })
             Cell("Pilih dari galeri", glyph = PhosphorPaths.Image, onClick = {
                 photoActions = false; pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             })
