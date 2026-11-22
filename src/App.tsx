@@ -4,7 +4,7 @@ import { MotionConfig, motion, useReducedMotion } from 'framer-motion'
 import { gsap } from 'gsap'
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
 
-import { ArrowCounterClockwise, ArrowUpRight, BookOpenText, Broadcast, CaretRight, ChartLine, Check, Clock, DownloadSimple, Drop, Flask, FolderSimple, GitDiff, Hourglass, Leaf, LinkSimple, Pause, Play, Plant, Printer, Pulse, Question, ShieldCheck, SlidersHorizontal, SquaresFour, TerminalWindow, UploadSimple, Warning, X, UserCircle } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, ArrowUpRight, BookOpenText, Broadcast, CaretRight, ChartLine, Check, Clock, DownloadSimple, Drop, Flask, FolderSimple, GitDiff, Hourglass, Leaf, LinkSimple, Pause, Plant, Play, Printer, Pulse, Question, ShieldCheck, SlidersHorizontal, SquaresFour, TerminalWindow, Trash, UploadSimple, UserCircle, Warning, X } from '@phosphor-icons/react'
 import { addSample, evaluate, parseCase, phaseAt, type PotCase, type Profile } from './lib/agronomyEngine'
 import scenarios from './lib/scenarios.json'
 import ThemeToggle from './components/ThemeToggle'
@@ -54,6 +54,7 @@ import { settledMood } from './lib/mascot'
 // The ecosystem and profile pages (every online panel) load on first visit, keeping them out of the dashboard chunk.
 const MiroEcosystemWorkspace = lazy(() => import('./components/MiroEcosystemWorkspace'))
 const ProfilePage = lazy(() => import('./components/ProfilePage'))
+import DeleteAccount, { AFTER_SIGN_IN, DeletionPending } from './components/DeleteAccount'
 import AccountProvider from './components/AccountProvider'
 import { useAccount } from './components/accountContext'
 import AccountGate from './components/AccountGate'
@@ -80,6 +81,8 @@ const pages = [
   { id: 'terminal', hash: '#terminal', label: 'Terminal', title: 'Terminal', lead: 'Kejadian, data, dan alasan setiap keputusan.', icon: TerminalWindow },
   // Opened from the account menu, not the rail.
   { id: 'profile', hash: '#profil', label: 'Profil', title: 'Profil', lead: 'Akun, keamanan, dan produk Anda.', icon: UserCircle, hidden: true },
+  // Linked from Profil, the Android app and the store listing (Google Play asks for deletion on the web too).
+  { id: 'delete', hash: '#hapus-akun', label: 'Hapus akun', title: 'Hapus akun', lead: 'Akun nonaktif sekarang, data dihapus 14 hari kemudian.', icon: Trash, hidden: true },
 ] as const
 // Short words under the rail icons; the long labels stay as the accessible names.
 const RAIL_TEXT: Record<string, string> = { statistics: 'Dashboard', simulation: 'Ruang tanam', comparison: 'Bandingkan', devices: 'Perangkat', ecosystem: 'Ekosistem', terminal: 'Terminal' }
@@ -122,7 +125,13 @@ function Simulator() {
   // Opened on a Google or email-link return (?code= or #error=): the entry waits for its outcome (see entryView).
   const [returning] = useState(() => oauthReturn(location.search) !== null || location.hash.includes('error='))
   // Signed in while the address still says #masuk (back from the gate): open the dashboard instead.
-  useEffect(() => { if (account.signedIn && hash === '#masuk') location.replace('#statistik') }, [account.signedIn, hash])
+  useEffect(() => {
+    if (!account.signedIn || hash !== '#masuk') return
+    // A page that sent the visitor to sign in (#hapus-akun) gets them back; otherwise the dashboard.
+    let next = '#statistik'
+    try { next = sessionStorage.getItem(AFTER_SIGN_IN) ?? next; sessionStorage.removeItem(AFTER_SIGN_IN) } catch { /* storage blocked */ }
+    location.replace(next)
+  }, [account.signedIn, hash])
   const currentPage = pages.find(p => p.id === page)!
   const [careEffect, setCareEffect] = useState<CareEffect | null>(null)
   const [weather, setWeatherState] = useState<SimWeather>(readSimWeather)
@@ -135,7 +144,8 @@ function Simulator() {
   if (gardenState.scope !== gardenScope) setGardenState({ scope: gardenScope, book: readGarden(browserStorage(), gardenScope).book })
   const garden = gardenState.scope === gardenScope ? gardenState.book : emptyGarden()
   const setGarden = (change: (old: GardenBook) => GardenBook) => setGardenState(old => { const next = change(old.book); saveGarden(browserStorage(), old.scope, next); return { scope: old.scope, book: next } })
-  const server = account.signedIn && account.identity ? account.client : null
+  // An account waiting to be deleted may only cancel; every other call would be refused (and read as a lost session).
+  const server = account.signedIn && account.identity && !account.deletion ? account.client : null
   const gardenRpc: GardenRpc | null = server && ((name, body) => server.rpc(name, body))
   useEffect(() => {
     if (!server) return
@@ -568,6 +578,7 @@ function Simulator() {
     setGuest(true)
     if (!location.hash || location.hash === '#masuk') location.hash = '#statistik'
   })} />
+  if (account.signedIn && account.deletion) return <DeletionPending />
   // Signed in for the first time (Google or email): set up the first pot, which opens its journey.
   if (account.signedIn && account.identity && !account.identity.pot) return <PotSetup onSaved={pot => {
     const fresh = { ...createJourney(loadScenario(curated(pot.crop).scenario).data), name: pot.name }
@@ -692,6 +703,7 @@ function Simulator() {
         {page === 'ecosystem' && <MiroEcosystemWorkspace activePotCase={data} onApplyProfileVersion={(profile, label) => { applyProfile(profile); setNotice(`Profil terkurasi ${label} diterapkan ke sesi simulator.`) }} />}
         {page === 'profile' && <ProfilePage />}
       </Suspense>}
+      {page === 'delete' && <DeleteAccount />}
       {page === 'comparison' && <SessionComparison sessions={book.sessions} activeId={book.activeId} onSnapshot={snapshot} />}
       {page === 'terminal' && <section className="terminal-page" aria-label="Terminal sesi">
         <div className="terminal-page-heading"><div className="decision-code"><Pulse aria-hidden="true" /><span>Keputusan</span><code>{result.decision}</code></div>

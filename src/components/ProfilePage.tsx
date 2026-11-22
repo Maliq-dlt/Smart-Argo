@@ -1,6 +1,7 @@
-import { Package, ShieldCheck, SignOut, UserCircle, GoogleLogo, EnvelopeSimple, Wrench } from '@phosphor-icons/react'
+import { Package, ShieldCheck, SignOut, UserCircle, GoogleLogo, EnvelopeSimple, Wrench, Trash } from '@phosphor-icons/react'
 import { useState } from 'react'
 import DisplayNameEditor from './DisplayNameEditor'
+import AvatarEditor from './AvatarEditor'
 import ProductAccount from './ProductAccount'
 import ProductSecurity from './ProductSecurity'
 import ProductRecoveryCodes from './ProductRecoveryCodes'
@@ -27,11 +28,15 @@ export default function ProfilePage() {
       {section === 'account' && <section className="panel profile-account" aria-labelledby="profile-account-heading">
         <h2 id="profile-account-heading">Akun</h2>
         <dl>
+          <div><dt>Foto</dt><dd><AvatarEditor /></dd></div>
           <div><dt>Nama</dt><dd><DisplayNameEditor name={identity.name} onSave={async next => { await client.updateDisplayName(next); await account.refresh() }} /></dd></div>
           <div><dt>Email</dt><dd>{identity.email}</dd></div>
           <div><dt>Cara masuk</dt><dd>{identity.google ? <><GoogleLogo aria-hidden="true" />Google</> : <><EnvelopeSimple aria-hidden="true" />Email dan kata sandi</>}</dd></div>
         </dl>
-        <button type="button" className="button" onClick={() => { void account.signOut(); location.hash = '#masuk' }}><SignOut aria-hidden="true" />Keluar</button>
+        <div className="miro-actions-row">
+          <button type="button" className="button" onClick={() => { void account.signOut(); location.hash = '#masuk' }}><SignOut aria-hidden="true" />Keluar</button>
+          <a className="button danger" href="#hapus-akun"><Trash aria-hidden="true" />Hapus akun</a>
+        </div>
       </section>}
       {section === 'security' && <div className="panel profile-security"><ProductSecurity client={client} onChanged={() => void account.refresh()} /><ProductRecoveryCodes client={client} /></div>}
       {section === 'products' && <><ProductAccount /><ProductRecovery client={client} /></>}

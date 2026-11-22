@@ -20,6 +20,15 @@ export function parseOwnedProducts(value: unknown): OwnedProduct[] {
     return { ownership_id: item.ownership_id, product_id: item.product_id, serial_public: item.serial_public, variant: item.variant as OwnedProduct['variant'], start_at: item.start_at }
   })
 }
+/** Deletion with a 14-day grace period (20261122000000_account_deletion_avatar): serials, never names. */
+export interface AccountDeletion { pending: boolean; requestedAt: string; purgeAfter: string; released: string[]; restorable: string[] }
+const serials = (value: unknown) => Array.isArray(value) && value.length <= 1000 && value.every(s => typeof s === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(s)) ? value as string[] : null
+export function parseDeletion(value: unknown): AccountDeletion | null {
+  if (!record(value) || value.pending !== true) return null
+  const released = serials(value.released), restorable = serials(value.restorable)
+  if (!validDate(value.requested_at) || !validDate(value.purge_after) || !released || !restorable) throw new Error('Status penghapusan akun tidak valid.')
+  return { pending: true, requestedAt: value.requested_at, purgeAfter: value.purge_after, released, restorable }
+}
 export function parseProductChallenge(value: unknown): ProductChallenge {
   if (!record(value) || typeof value.nonce_id !== 'string' || !uuid.test(value.nonce_id) || typeof value.challenge !== 'string' || value.challenge.length < 1 || value.challenge.length > 2048 || !validDate(value.expires_at) || Date.parse(value.expires_at) <= Date.now() || Date.parse(value.expires_at) > Date.now() + 10 * 60000) throw new Error('Challenge tidak valid atau kedaluwarsa.')
   return { nonce_id: value.nonce_id, challenge: value.challenge, expires_at: value.expires_at }
@@ -72,6 +81,10 @@ const GATE_TEXT: Record<string, string> = {
   key_in_use: 'Salah satu kunci perangkat sudah terdaftar.',
   invalid_code: 'Kode tidak cocok.',
   email_exists: 'Email ini sudah terdaftar.',
+  reauth_required: 'Verifikasi ulang dulu: masukkan kata sandi, atau masuk ulang dengan Google.',
+  no_pending_deletion: 'Tidak ada penghapusan akun yang menunggu.',
+  invalid_image: 'Foto harus berupa gambar WebP, JPEG, atau PNG.',
+  avatar_too_large: 'Foto terlalu besar. Pilih foto lain.',
 }
 /** One wording for every failed account call: a known code gets the app's text, otherwise the server's message. */
 function accountError(value: unknown) {
@@ -81,7 +94,7 @@ function accountError(value: unknown) {
   return Object.assign(new Error(text), { code })
 }
 /** The RPCs the app calls (Supabase migrations define them). */
-type RpcName = 'append_my_care_journal' | 'read_my_care_journal' | 'read_my_measurement_history' |'compare_my_measurement_history' | 'open_reward_appeal' | 'my_reward_cases' | 'operator_reward_cases' | 'operator_take_reward_case' | 'operator_decide_reward_case' | 'open_ownership_recovery' | 'withdraw_ownership_recovery' | 'my_ownership_recoveries' | 'operator_recovery_cases' | 'operator_take_recovery_case' | 'operator_decide_recovery_case' | 'rename_my_unit' | 'archive_my_unit' | 'restore_my_unit' | 'place_my_device' | 'my_units' | 'my_unit_history' | 'my_unit_overview' | 'create_my_recovery_codes' | 'my_recovery_codes_status' | 'my_chain_proofs' | 'operator_outbox_status' | 'operator_rotate_device_key' | 'operator_revoke_device' | 'operator_revoke_product' | 'operator_registry_history' | 'ensure_my_account' | 'my_products' | 'issue_activation_nonce' | 'my_device_units' | 'unit_measurements' | 'create_my_unit' | 'published_profile_versions' | 'unit_explanations' | 'knowledge_workspace' | 'submit_profile_contribution' | 'revise_profile_contribution' | 'review_profile_contribution' | 'published_profile_details' | 'assign_unit_profile' | 'energy_workspace' | 'operator_register_energy_meter' | 'operator_revoke_energy_meter' | 'operator_set_reward_policy' | 'operator_upsert_catalog' | 'reserve_my_reward' | 'cancel_my_redemption' | 'operator_fulfill_redemption' | 'operator_compensate_redemption' | 'reward_workspace' | 'create_transfer_offer' | 'cancel_transfer_offer' | 'accept_transfer' | 'security_workspace' | 'my_garden' | 'add_my_site' | 'plant_in_my_slot' | 'switch_my_plant'
+type RpcName = 'append_my_care_journal' | 'read_my_care_journal' | 'read_my_measurement_history' |'compare_my_measurement_history' | 'open_reward_appeal' | 'my_reward_cases' | 'operator_reward_cases' | 'operator_take_reward_case' | 'operator_decide_reward_case' | 'open_ownership_recovery' | 'withdraw_ownership_recovery' | 'my_ownership_recoveries' | 'operator_recovery_cases' | 'operator_take_recovery_case' | 'operator_decide_recovery_case' | 'rename_my_unit' | 'archive_my_unit' | 'restore_my_unit' | 'place_my_device' | 'my_units' | 'my_unit_history' | 'my_unit_overview' | 'create_my_recovery_codes' | 'my_recovery_codes_status' | 'my_chain_proofs' | 'operator_outbox_status' | 'operator_rotate_device_key' | 'operator_revoke_device' | 'operator_revoke_product' | 'operator_registry_history' | 'ensure_my_account' | 'my_products' | 'issue_activation_nonce' | 'my_device_units' | 'unit_measurements' | 'create_my_unit' | 'published_profile_versions' | 'unit_explanations' | 'knowledge_workspace' | 'submit_profile_contribution' | 'revise_profile_contribution' | 'review_profile_contribution' | 'published_profile_details' | 'assign_unit_profile' | 'energy_workspace' | 'operator_register_energy_meter' | 'operator_revoke_energy_meter' | 'operator_set_reward_policy' | 'operator_upsert_catalog' | 'reserve_my_reward' | 'cancel_my_redemption' | 'operator_fulfill_redemption' | 'operator_compensate_redemption' | 'reward_workspace' | 'create_transfer_offer' | 'cancel_transfer_offer' | 'accept_transfer' | 'security_workspace' | 'my_garden' | 'add_my_site' | 'plant_in_my_slot' | 'switch_my_plant' | 'my_account_deletion' | 'request_account_deletion' | 'cancel_account_deletion' | 'my_avatar' | 'set_my_avatar' | 'clear_my_avatar'
 export interface TotpEnrollment { id: string; secret: string; uri: string }
 /** The first pot, asked once after sign-up. `crop` is a curated species id (src/lib/species.ts), which names the
  * simulator profile it opens; `device` says whether a Smart Agro unit is on hand to activate.
@@ -415,6 +428,15 @@ export class ProductAccountClient {
     await this.refreshIfNeeded()
     // The server may wait up to 20 s for the optional AI wording before it saves the snapshot.
     return this.request('/functions/v1/unit-explanation', { unit_id: unitId, device_id: deviceId, request_id: requestId, question }, this.session!.access_token, 'POST', 45000)
+  }
+
+  /** The server signs every session out when it accepts the request, so the local copy goes too. */
+  async requestDeletion(): Promise<AccountDeletion> {
+    const value = await this.rpc('request_account_deletion')
+    this.pending = null; this.clear()
+    const deletion = parseDeletion(record(value.deletion) ? value.deletion : null)
+    if (!deletion) throw new Error('Status penghapusan akun tidak valid.')
+    return deletion
   }
 
   async logout() {

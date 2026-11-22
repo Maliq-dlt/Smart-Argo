@@ -943,6 +943,29 @@ a.menu-item { text-decoration: none; }
 .profile-account dt { color: var(--muted); font-size: .8125rem; }
 .profile-account dd { margin: 0; display: flex; align-items: center; gap: .5rem; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
 .profile-account dd svg { width: 1.125rem; height: 1.125rem; flex: none; color: var(--primary); }
+/* Profile photo and account deletion (plan 2026-11-22). */
+.account-photo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.account-menu-head > .account-photo { flex: none; width: 2.5rem; height: 2.5rem; }
+.avatar-editor { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; min-width: 0; }
+.avatar-large { flex: none; width: 4.5rem; height: 4.5rem; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); font: 600 1.375rem/1 var(--font-ui); }
+.avatar-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; min-width: 0; }
+.avatar-actions > small { flex-basis: 100%; }
+.button.danger { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--warn-soft) 80%, var(--warn)); }
+.delete-account { display: grid; gap: 1rem; padding: 1.5rem; max-width: 40rem; }
+.delete-account h2 { margin: 0; font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100; font-size: 1.625rem; line-height: 1.15; letter-spacing: -.015em; }
+.delete-account h3 { margin: .5rem 0 0; font: 600 .8125rem/1.3 var(--font-ui); color: var(--muted); text-transform: none; }
+.delete-account p { margin: 0; }
+.delete-account .muted { color: var(--muted); }
+.delete-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.delete-list li { display: flex; align-items: flex-start; gap: .625rem; min-width: 0; }
+.delete-list svg { flex: none; width: 1.25rem; height: 1.25rem; margin-top: .0625rem; color: var(--primary); }
+.delete-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: .375rem; }
+.delete-steps li { width: 1.75rem; height: .25rem; border-radius: 1rem; background: var(--line-strong); transition: background .2s var(--ease); }
+.delete-steps li[aria-current], .delete-steps li:has(~ li[aria-current]) { background: var(--primary); }
+.delete-done { display: grid; gap: .75rem; justify-items: start; }
+.delete-done > svg { width: 2.5rem; height: 2.5rem; color: var(--primary); }
+.delete-account form { display: grid; gap: 1rem; }
 :is(.profile-account, .profile-empty) > .button { justify-self: start; }
 .profile-empty p { max-width: 52ch; color: var(--muted); }
 @media (max-width: 47.5rem) {

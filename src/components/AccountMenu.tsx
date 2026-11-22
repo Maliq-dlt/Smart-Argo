@@ -2,13 +2,14 @@ import { SignIn, SignOut, UserCircle } from '@phosphor-icons/react'
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover'
 import { useAccount } from './accountContext'
 
-const initialsOf = (name: string) => name.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase()
+import { initialsOf } from '../lib/avatar'
 
 /** Who is using the app, and the way out. Guests get the way in; a demo without a backend says why there is none. */
 export default function AccountMenu() {
-  const { client, signedIn, identity, signOut } = useAccount()
+  const { client, signedIn, identity, signOut, avatar } = useAccount()
   const name = identity?.name ?? 'Tamu'
-  const badge = identity ? <span className="account-initials" aria-hidden="true">{initialsOf(name)}</span> : <UserCircle className="account-guest" aria-hidden="true" />
+  const badge = identity ? avatar ? <img className="account-initials account-photo" src={avatar} alt="" referrerPolicy="no-referrer" />
+    : <span className="account-initials" aria-hidden="true">{initialsOf(name)}</span> : <UserCircle className="account-guest" aria-hidden="true" />
   return <Popover>
     <PopoverTrigger asChild><button type="button" className="account-trigger" aria-label={`Akun: ${name}`} title={name}>{badge}</button></PopoverTrigger>
     <PopoverContent className="account-menu" align="end" aria-label="Menu akun">

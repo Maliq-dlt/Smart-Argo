@@ -65,7 +65,8 @@ export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:543
         res.writeHead(200, {'Content-Type':types[extname(file)] || 'application/octet-stream','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin'})
         res.end(req.method === 'HEAD' ? undefined : await readFile(resolved));return
       }
-      const maxBody = ['/rest/v1/rpc/save_unit_explanation','/rest/v1/rpc/finish_unit_explanation'].includes(path) ? 600000 : 16384
+      // A profile photo is at most 256 kB, which base64 makes about 350 kB.
+      const maxBody = ['/rest/v1/rpc/save_unit_explanation','/rest/v1/rpc/finish_unit_explanation'].includes(path) ? 600000 : path === '/rest/v1/rpc/set_my_avatar' ? 360000 : 16384
       const parts=[];let length=0
       for await (const part of req) {length+=part.length;if(length>maxBody){res.writeHead(413);res.end();return}parts.push(part)}
       const body=Buffer.concat(parts)

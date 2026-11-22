@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { OwnedProduct, ProductAccountClient } from '../lib/productAccountClient'
+import type { AccountDeletion, OwnedProduct, ProductAccountClient } from '../lib/productAccountClient'
 import type { Identity } from '../lib/identity'
 
 export type { Identity }
@@ -13,6 +13,12 @@ export interface AccountState {
   roles: string[]
   /** Google returned a session that still needs the authenticator code. */
   mfaPending: boolean
+  /** Set when the account asked to be deleted and is inside its 14-day grace period: the app shows only the way back. */
+  deletion: AccountDeletion | null
+  /** The profile photo as a data URL, or the Google photo; null shows initials. */
+  avatar: string | null
+  setAvatar(avatar: string | null): void
+  cancelDeletion(): Promise<string[]>
   notice: { error: boolean; text: string } | null
   setNotice(notice: AccountState['notice']): void
   /** Reload account and products after any sign-in, and re-render readers of the session (aal changes). */
