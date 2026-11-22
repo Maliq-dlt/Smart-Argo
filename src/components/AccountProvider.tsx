@@ -38,6 +38,7 @@ export default function AccountProvider({ children }: { children: ReactNode }) {
   useEffect(() => { client?.googleEnabled().catch(() => undefined) }, [client])
   const [ready, setReady] = useState(!client)
   const [signedIn, setSignedIn] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   const [products, setProducts] = useState<OwnedProduct[]>([])
   const [roles, setRoles] = useState<string[]>([])
   const [mfaPending, setMfaPending] = useState(false)
@@ -73,7 +74,7 @@ export default function AccountProvider({ children }: { children: ReactNode }) {
       setDeletion(next.waiting); setRoles(next.roles); setProducts(next.owned); setAvatar(next.photo)
     } else { setProducts([]); setRoles([]); setDeletion(null); setAvatar(null) }
     setMfaPending(false)
-    setSignedIn(Boolean(client?.session)); setVersion(v => v + 1)
+    setSignedIn(Boolean(client?.session)); setLoaded(Boolean(client?.session)); setVersion(v => v + 1)
   }, [client, load])
   const cancelDeletion = useCallback(async () => {
     if (!client) return []
@@ -82,10 +83,10 @@ export default function AccountProvider({ children }: { children: ReactNode }) {
     return Array.isArray(value.restored) ? value.restored.filter((s): s is string => typeof s === 'string') : []
   }, [client, refresh])
   const expire = useCallback((text = 'Sesi berakhir. Masuk kembali.') => {
-    setProducts([]); setRoles([]); setDeletion(null); setAvatar(null); setSignedIn(false); setNotice({ error: true, text })
+    setProducts([]); setRoles([]); setDeletion(null); setAvatar(null); setSignedIn(false); setLoaded(false); setNotice({ error: true, text })
   }, [])
   const signOut = useCallback(async () => {
-    setProducts([]); setRoles([]); setDeletion(null); setAvatar(null); setSignedIn(false)
+    setProducts([]); setRoles([]); setDeletion(null); setAvatar(null); setSignedIn(false); setLoaded(false)
     try { await client?.logout(); setNotice({ error: false, text: 'Berhasil keluar.' }) }
     catch { setNotice({ error: true, text: 'Sesi pada browser sudah dihapus. Keluar dari layanan gagal; periksa koneksi sebelum masuk kembali.' }) }
   }, [client])
@@ -101,7 +102,7 @@ export default function AccountProvider({ children }: { children: ReactNode }) {
       if (client.session) {
         const next = await load(client)
         if (active) {
-          setDeletion(next.waiting); setProducts(next.owned); setRoles(next.roles); setAvatar(next.photo)
+          setDeletion(next.waiting); setProducts(next.owned); setRoles(next.roles); setAvatar(next.photo); setLoaded(true)
           if (viaGoogle === 'ok' && !next.waiting) setNotice({ error: false, text: 'Berhasil masuk dengan Google.' })
         }
       }
@@ -123,11 +124,11 @@ export default function AccountProvider({ children }: { children: ReactNode }) {
   }, [client, signedIn, expire])
 
   const value = useMemo<AccountState>(() => ({
-    client, ready, signedIn, identity: signedIn ? identityOf(client) : null, products, roles, mfaPending, deletion, avatar, setAvatar, cancelDeletion,
+    client, ready, signedIn, loaded, identity: signedIn ? identityOf(client) : null, products, roles, mfaPending, deletion, avatar, setAvatar, cancelDeletion,
     notice, setNotice, refresh, signOut, expire,
   // `version` re-derives the identity and re-renders readers after aal or token changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [client, ready, signedIn, products, roles, mfaPending, deletion, avatar, cancelDeletion, notice, refresh, signOut, expire, version])
+  }), [client, ready, signedIn, loaded, products, roles, mfaPending, deletion, avatar, cancelDeletion, notice, refresh, signOut, expire, version])
   return <AccountContext.Provider value={value}>{children}{stepUp && <StepUpDialog onDone={code => { stepUp.resolve(code); setStepUp(null) }} />}
     {signedIn && client?.resetting && <NewPasswordDialog onClose={() => { client.resetting = false; setVersion(v => v + 1) }}
       onSave={async password => { await client.setPassword(password); setNotice({ error: false, text: 'Kata sandi baru tersimpan.' }); setVersion(v => v + 1) }} />}</AccountContext.Provider>

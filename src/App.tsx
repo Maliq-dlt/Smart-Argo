@@ -145,7 +145,8 @@ function Simulator() {
   const garden = gardenState.scope === gardenScope ? gardenState.book : emptyGarden()
   const setGarden = (change: (old: GardenBook) => GardenBook) => setGardenState(old => { const next = change(old.book); saveGarden(browserStorage(), old.scope, next); return { scope: old.scope, book: next } })
   // An account waiting to be deleted may only cancel; every other call would be refused (and read as a lost session).
-  const server = account.signedIn && account.identity && !account.deletion ? account.client : null
+  // `loaded`: a first sign-in has no account row until ensure_my_account answers, and my_garden would sign it out.
+  const server = account.signedIn && account.loaded && account.identity && !account.deletion ? account.client : null
   const gardenRpc: GardenRpc | null = server && ((name, body) => server.rpc(name, body))
   useEffect(() => {
     if (!server) return

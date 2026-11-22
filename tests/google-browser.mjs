@@ -32,6 +32,9 @@ await page.route('**/auth/v1/token?grant_type=pkce',async route=>{
   const session=await fetch(base+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:config.anon,'Content-Type':'application/json'},body:JSON.stringify({email,password})})
   await route.fulfill({status:session.status,json:await session.json()})
 })
+// A first sign-in has no account row until ensure_my_account answers; until then account-scoped calls answer
+// 'unauthorized' ("Account required."). Holding that answer back makes the app prove it waits instead of racing (2026-11-22).
+await page.route('**/rest/v1/rpc/ensure_my_account',async route=>{await new Promise(r=>setTimeout(r,1500));await route.continue()})
 try{
   await page.goto(app);await curtainOpen(page)
   const google=gate(page).getByRole('button',{name:'Lanjut dengan Google',exact:true})

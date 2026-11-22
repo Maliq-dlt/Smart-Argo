@@ -130,7 +130,7 @@ export default function MiroEcosystemWorkspace({
   }, [eco])
 
   const account = useAccount()
-  const online = account.signedIn && account.client ? { client: account.client, onSessionExpired: account.expire } : null
+  const online = account.signedIn && account.loaded && account.client ? { client: account.client, onSessionExpired: account.expire } : null
   // Operator and curator tools open only in a 2FA session (privileged access); say so instead of hiding them silently.
   const locked = (role: 'operator' | 'curator') => online && !online.client.mfa && account.roles.includes(role)
     ? <p className="miro-callout">Alat {role === 'operator' ? 'operator' : 'kurator'} terbuka setelah 2FA aktif. Aktifkan di Profil → Keamanan.</p> : null

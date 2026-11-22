@@ -7,6 +7,10 @@ export interface AccountState {
   client: ProductAccountClient | null
   ready: boolean
   signedIn: boolean
+  /** ensure_my_account has answered for this session. The app opens on `signedIn` alone, but a first sign-in has no
+   * account row until then and account calls answer 'unauthorized', which reads as a lost session: call the server only
+   * once this is true. */
+  loaded: boolean
   identity: Identity | null
   products: OwnedProduct[]
   /** Account roles (owner, contributor, curator, operator): they choose which tools to show; the server checks every call. */
