@@ -10,12 +10,13 @@ import { createTelemetryIngestHandler } from '../supabase/functions/telemetry-in
 import { createProductClaimHandler } from '../supabase/functions/product-claim/handler.ts'
 import { createProductProvisionHandler, issuerKeysFrom } from '../supabase/functions/product-provision/handler.ts'
 import { createMfaRecoveryHandler } from '../supabase/functions/mfa-recovery/handler.ts'
+import { createAlertDispatchHandler } from '../supabase/functions/alert-dispatch/handler.ts'
 import { createWeatherForecastHandler, signedInVia } from '../supabase/functions/weather-forecast/handler.ts'
 import { explainerFromEnv } from '../src/lib/aiExplanation.ts'
 
-export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:54324', restUrl='http://127.0.0.1:54325', host='127.0.0.1', extraOrigins=[], staticRoot='', port=54321, log=console.log, explainer=explainerFromEnv(name => process.env[name]), issuerKeys=issuerKeysFrom(process.env.ISSUER_PUBLIC_KEYS)}) {
+export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:54324', restUrl='http://127.0.0.1:54325', host='127.0.0.1', extraOrigins=[], staticRoot='', port=54321, log=console.log, alertEnv=name=>process.env[name], explainer=explainerFromEnv(name => process.env[name]), issuerKeys=issuerKeysFrom(process.env.ISSUER_PUBLIC_KEYS)}) {
   const config = {url:'http://127.0.0.1:54321', serviceKey:settings.service, appOrigin}
-  const handlers = {'/functions/v1/history-export':createHistoryExportHandler(config), '/functions/v1/product-claim':createProductClaimHandler(config), '/functions/v1/product-provision':createProductProvisionHandler({...config, issuerKeys}), '/functions/v1/mfa-recovery':createMfaRecoveryHandler(config), '/functions/v1/telemetry-ingest':createTelemetryIngestHandler(config), '/functions/v1/unit-explanation':createUnitExplanationHandler({...config, explainer}), '/functions/v1/energy-ingest':createEnergyIngestHandler(config), '/functions/v1/weather-forecast':createWeatherForecastHandler({appOrigin, signedIn:signedInVia(config.url, settings.service)})}
+  const handlers = {'/functions/v1/alert-dispatch':createAlertDispatchHandler({...config, env:alertEnv}), '/functions/v1/history-export':createHistoryExportHandler(config), '/functions/v1/product-claim':createProductClaimHandler(config), '/functions/v1/product-provision':createProductProvisionHandler({...config, issuerKeys}), '/functions/v1/mfa-recovery':createMfaRecoveryHandler(config), '/functions/v1/telemetry-ingest':createTelemetryIngestHandler(config), '/functions/v1/unit-explanation':createUnitExplanationHandler({...config, explainer}), '/functions/v1/energy-ingest':createEnergyIngestHandler(config), '/functions/v1/weather-forecast':createWeatherForecastHandler({appOrigin, signedIn:signedInVia(config.url, settings.service)})}
   const allowedOrigins = new Set([appOrigin, ...extraOrigins])
   const server = createServer(async (req,res) => {
     const started = performance.now(), requestId = canonicalRequestId(req.headers['x-request-id'])

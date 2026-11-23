@@ -53,7 +53,7 @@ inline bool makeTelemetryEnvelope(const char *deviceId, const char *unitId, cons
                                   int32_t sequence, const char *measuredAt, const char *clockStatus,
                                   const SensorReading &moisture, const SensorReading &temperature,
                                   const SensorReading &ph, const SensorReading &battery, const uint8_t seed[32],
-                                  String &envelope) {
+                                  String &envelope, bool calibrated, const String &moistureAt, const String &phAt) {
     JsonDocument packet;
     packet["domain"] = "smart-agro.telemetry.v2";
     packet["schema_version"] = 2;
@@ -69,6 +69,11 @@ inline bool makeTelemetryEnvelope(const char *deviceId, const char *unitId, cons
         !addSensor(sensors["soil_temperature"].to<JsonObject>(), temperature, -20, 60) ||
         !addSensor(sensors["soil_ph"].to<JsonObject>(), ph, 0, 14)) return false;
     // Optional top-level object (docs/telemetry-v2.md): a bad battery reading never costs the soil readings.
+    if (calibrated) {
+        JsonObject calibration = packet["calibration"].to<JsonObject>();
+        calibration["moisture_at"] = moistureAt.length() ? moistureAt.c_str() : nullptr;
+        calibration["ph_at"] = phAt.length() ? phAt.c_str() : nullptr;
+    }
     if (!addSensor(packet["battery"].to<JsonObject>(), battery, 2.5, 4.5)) packet.remove("battery");
     return signEnvelope(packet, seed, envelope);
 }

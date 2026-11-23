@@ -1,0 +1,21 @@
+name: Smart Agro care alerts
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: smart-agro-care-alerts
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    if: vars.SMART_AGRO_MAINTENANCE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch alerts and purge due accounts
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          DISPATCH_SECRET: ${{ secrets.ALERT_DISPATCH_SECRET }}
+        run: >-
+          curl --silent --show-error --fail-with-body --max-time 100 --proto '=https' --request POST --header "Authorization: Bearer $DISPATCH_SECRET" "$SUPABASE_URL/functions/v1/alert-dispatch"

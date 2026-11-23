@@ -52,6 +52,10 @@ New packets may be at most seven days old or five minutes ahead of the database 
 | 429 | New-packet rate limit; retry later. |
 | 503 | Service/database temporarily unavailable; retry identical envelope. |
 
+## Calibration metadata
+
+An ESP32 with a saved sensor calibration may add a signed top-level `calibration` object. The optional `moisture_at` and `ph_at` fields are UTC ISO 8601 strings ending in `Z`, up to millisecond precision, at or before `measured_at`. Either value may be null when the RTC had no trusted time. Earlier firmware can omit the object. The owner reads the last reported pair through `my_unit_health`. See the [client contract](sensor-care-api.md).
+
 ## Owner UI and limits
 
 The account panel lists owned units/devices and creates units from real published profile versions (single-pot maximum one unit; garden operational ceiling 32, not a measured hardware capacity). It shows up to 120 latest sensor rows per unit, with NULL/error distinctions, UTC measurement/receipt times, clock status and staleness assessed when loaded. Refresh is manual. It does not claim continuous streaming or device calibration. The history includes all devices on the selected unit.

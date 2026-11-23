@@ -31,7 +31,15 @@ Ukur tegangan keluaran DMS dengan multimeter sebelum menyambungkannya. Pembagi 4
 
 Pantau serial pada 115200 baud. Masukkan nilai median mV dari media kering dan kondisi basah acuan ke moistureDryMv dan moistureWetMv. Sebut hasilnya indeks lembap, bukan kadar air volumetrik. Jika manual probe mengizinkan kalibrasi dengan buffer, siapkan pH 4,01 dan 6,86 sesuai label dan temperatur. Isi phLowMv/phHighMv dengan tegangan ADC aktual masing-masing. Probe yang dirancang untuk tanah padat dapat membutuhkan prosedur yang berbeda. Konfirmasi metode pengukuran tanah dan interval stabilisasi dari penjual. Kalibrasi kosong atau indeks lembap nol menghasilkan status pH not_measured. Media yang kering tidak menyediakan kontak yang andal untuk probe pH tanah. Bus suhu diharapkan berisi satu DS18B20 sesuai RAB agar identitas probe tanah pasti. Build tanpa DeviceConfig.h hanya mencetak diagnostik USB, tanpa koneksi Wi-Fi atau pengiriman data.
 
+### Uji kalibrasi lewat Wi-Fi perangkat
+
+Di jaringan setup berpassword, baca median mV langsung melalui `GET /api/calibration`. Kontrak untuk halaman portal ada di [API perawatan](../docs/sensor-care-api.md). Catat titik kering dan basah untuk kelembapan, lalu buffer 4,01 dan 6,86 untuk pH bila petunjuk probe mengizinkannya. Tunggu ADC stabil di tiap titik. Perangkat menerima 100 sampai 2999 mV, dengan selisih kering dikurangi basah setidaknya 100 mV dan selisih absolut kedua buffer setidaknya 50 mV.
+
+Pada ESP32 fisik, cek pasangan valid, penolakan titik di luar rentang, dan restart setelah titik pertama serta setelah pasangan tersimpan. Pastikan pasangan sebelumnya bertahan ketika penulisan gagal. Setelah sinkronisasi jam, ulangi satu kalibrasi dan cocokkan tanggal dalam paket bertanda tangan dengan `my_unit_health`. Pengukuran yang dilakukan sebelum sinkronisasi tetap dapat dipakai dengan tanggal kosong.
+
 ## Build dan commissioning
+
+Setelah perangkat terpasang, jalankan [uji bangku](UJI-BANGKU.md) dan isi tabel hasilnya sebelum memindahkan perangkat ke pot.
 
 Jalankan dari root repo dengan Arduino CLI dan ESP32 core yang ditentukan. Konfigurasikan direktori cache CLI di dalam workspace bila lingkungan membatasinya. Pada Windows, gunakan jalur pendek tanpa spasi untuk cache toolchain, misalnya alias drive sementara ke folder cache di workspace.
 

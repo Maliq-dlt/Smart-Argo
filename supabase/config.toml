@@ -29,3 +29,7 @@ verify_jwt = false
 # Only a live session (checked with Auth inside the handler) may ask; the place is rounded before it leaves.
 [functions.weather-forecast]
 verify_jwt = false
+
+# The scheduler presents ALERT_DISPATCH_SECRET; the service key stays inside the function.
+[functions.alert-dispatch]
+verify_jwt = false

@@ -189,24 +189,56 @@ uint32_t medianMv(uint8_t pin) {
   return samples[4];
 }
 
+// Each sensor pair is one atomic NVS blob; an interrupted portal session never mixes old and new points.
+struct CalibrationPair { int32_t first, second; int64_t epoch; };
+CalibrationPair moistureCal{device::moistureDryMv, device::moistureWetMv, 0};
+CalibrationPair phCal{device::phLowMv, device::phHighMv, 0};
+bool savedCalibration = false;
+
+bool validPair(const CalibrationPair &p, bool moisture) {
+  return p.first >= 100 && p.first < 3000 && p.second >= 100 && p.second < 3000 &&
+         (moisture ? p.first - p.second >= 100 : abs(p.first - p.second) >= 50);
+}
+
+void loadCalibration() {
+  Preferences prefs;
+  if (!prefs.begin("calib", true)) return;
+  for (const bool moisture : {true, false}) {
+    CalibrationPair pair{};
+    if (prefs.getBytes(moisture ? "moisture" : "ph", &pair, sizeof(pair)) == sizeof(pair) && validPair(pair, moisture)) {
+      (moisture ? moistureCal : phCal) = pair;
+      savedCalibration = true;
+    }
+  }
+  prefs.end();
+}
+
+String calibrationStamp(int64_t epoch) {
+  const time_t value = static_cast<time_t>(epoch);
+  tm utc{};
+  char date[24];
+  return epoch == value && trustworthyEpoch(value) && gmtime_r(&value, &utc) &&
+         strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%SZ", &utc) ? String(date) : String();
+}
+
 SensorReading readMoisture() {
   const uint32_t mv = medianMv(kMoisturePin);
   Serial.printf("Moisture ADC: %lu mV\n", static_cast<unsigned long>(mv));
-  if (device::moistureWetMv <= 0 || device::moistureDryMv > 3000 ||
-      device::moistureDryMv - device::moistureWetMv < 100) {
+  if (moistureCal.second <= 0 || moistureCal.first > 3000 ||
+      moistureCal.first - moistureCal.second < 100) {
     return {"not_measured", 0, nullptr};
   }
   if (mv < 100 || mv >= 3000) return {"error", 0, "Moisture ADC outside usable range"};
-  const double index = 100.0 * (device::moistureDryMv - static_cast<double>(mv)) /
-                       (device::moistureDryMv - device::moistureWetMv);
+  const double index = 100.0 * (moistureCal.first - static_cast<double>(mv)) /
+                       (moistureCal.first - moistureCal.second);
   return {"ok", constrain(index, 0.0, 100.0), nullptr};
 }
 
 SensorReading readPh(const SensorReading &moisture) {
   const uint32_t mv = medianMv(kPhPin);
   Serial.printf("pH ADC: %lu mV\n", static_cast<unsigned long>(mv));
-  const int low = device::phLowMv;
-  const int high = device::phHighMv;
+  const int low = phCal.first;
+  const int high = phCal.second;
   // The probe needs moisture for a meaningful soil pH reading.
   if (low < 100 || low >= 3000 || high < 100 || high >= 3000 || abs(high - low) < 50 ||
       strcmp(moisture.status, "ok") != 0 || moisture.value <= 0) {
@@ -334,13 +366,108 @@ void runSetupPortal() {
       "padding:0 1rem;color:#18211b;background:#ecefe7}input,button{font:inherit;width:100%;box-sizing:border-box;"
       "padding:.75rem;margin:.25rem 0 1rem;border:1px solid #55615a;border-radius:.75rem}"
       "button{background:#2f5a3c;color:#fff;border:0}</style>";
+  CalibrationPair pendingMoisture{-1, -1, 0}, pendingPh{-1, -1, 0};
+  const char *setupHeaders[] = {"X-Smart-Agro-Setup"};
+  server.collectHeaders(setupHeaders, 1);
+  server.on("/api/calibration", HTTP_GET, [&]() {
+    JsonDocument body;
+    body["ok"] = true;
+    body["moisture_mv"] = medianMv(kMoisturePin);
+    body["ph_mv"] = medianMv(kPhPin);
+    const String moistureAt = calibrationStamp(moistureCal.epoch), phAt = calibrationStamp(phCal.epoch);
+    body["moisture_at"] = moistureAt.length() ? moistureAt.c_str() : nullptr;
+    body["ph_at"] = phAt.length() ? phAt.c_str() : nullptr;
+    String response;
+    serializeJson(body, response);
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(200, "application/json", response);
+  });
+  server.on("/api/calibration", HTTP_POST, [&]() {
+    // Same-origin fetch from the setup portal. A form posted by another website cannot set this header.
+    if (server.hostHeader() != "192.168.4.1" || server.header("X-Smart-Agro-Setup") != "1") {
+      server.send(403, "application/json", "{\"ok\":false,\"code\":\"setup_required\"}");
+      return;
+    }
+    const String point = server.arg("point");
+    const bool moisture = point == "dry" || point == "wet";
+    if (!moisture && point != "ph4" && point != "ph686") {
+      server.send(400, "application/json", "{\"ok\":false,\"code\":\"invalid_point\"}");
+      return;
+    }
+    CalibrationPair &pending = moisture ? pendingMoisture : pendingPh;
+    const int mv = medianMv(moisture ? kMoisturePin : kPhPin);
+    if (mv < 100 || mv >= 3000) {
+      server.send(422, "application/json", "{\"ok\":false,\"code\":\"adc_out_of_range\"}");
+      return;
+    }
+    (point == "dry" || point == "ph4" ? pending.first : pending.second) = mv;
+    if (pending.first < 0 || pending.second < 0) {
+      server.send(200, "application/json", "{\"ok\":true,\"saved\":false}");
+      return;
+    }
+    if (!validPair(pending, moisture)) {
+      server.send(422, "application/json", "{\"ok\":false,\"code\":\"invalid_span\"}");
+      return;
+    }
+    // First setup may precede a trusted RTC sync. Keep the calibration and report an unknown date.
+    if (outbox.begin("smart-agro", true)) {
+      pending.epoch = readTrustedClock();
+      outbox.end();
+    }
+    Preferences prefs;
+    const bool stored = prefs.begin("calib", false) &&
+        prefs.putBytes(moisture ? "moisture" : "ph", &pending, sizeof(pending)) == sizeof(pending);
+    prefs.end();
+    if (!stored) {
+      server.send(500, "application/json", "{\"ok\":false,\"code\":\"storage_failed\"}");
+      return;
+    }
+    (moisture ? moistureCal : phCal) = pending;
+    pending = {-1, -1, 0};
+    savedCalibration = true;
+    server.send(200, "application/json", "{\"ok\":true,\"saved\":true}");
+  });
+  server.on("/calibrate", HTTP_GET, [&]() {
+    if (server.hostHeader() != "192.168.4.1") {
+      server.sendHeader("Location", "http://192.168.4.1/calibrate");
+      server.send(302);
+      return;
+    }
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(200, "text/html; charset=utf-8", head + R"HTML(
+<main><h1>Kalibrasi sensor</h1>
+<h2>Kelembapan</h2><p>Letakkan probe di udara kering, lalu pada acuan basah. Tunggu angka stabil sebelum mencatat setiap titik.</p>
+<p>ADC kelembapan <output id="moisture">...</output> mV</p>
+<button data-point="dry">Catat kering</button><button data-point="wet">Catat basah</button>
+<h2>pH</h2><p>Ikuti petunjuk probe. Bilas sebelum mengganti buffer.</p><p>ADC pH <output id="ph">...</output> mV</p>
+<button data-point="ph4">Catat pH 4,01</button><button data-point="ph686">Catat pH 6,86</button>
+<p id="status" role="status"></p><a href="/">Pengaturan Wi-Fi</a></main>
+<script>
+const msg=document.querySelector('#status'), buttons=document.querySelectorAll('[data-point]');
+async function read(){
+  try{const r=await fetch('/api/calibration',{cache:'no-store'});if(!r.ok)throw Error();
+    const v=await r.json();document.querySelector('#moisture').textContent=v.moisture_mv;document.querySelector('#ph').textContent=v.ph_mv;
+  }catch{document.querySelector('#moisture').textContent='?';document.querySelector('#ph').textContent='?'}
+  setTimeout(read,2000);
+}
+read();
+for(const b of buttons)b.onclick=async()=>{
+  buttons.forEach(x=>x.disabled=true);
+  try{const r=await fetch('/api/calibration',{method:'POST',headers:{'X-Smart-Agro-Setup':'1'},body:new URLSearchParams({point:b.dataset.point})});
+    const v=await r.json();
+    msg.textContent=v.ok?(v.saved?'Pasangan kalibrasi tersimpan.':'Titik tercatat. Lanjutkan ke acuan pasangannya.'):
+      ({invalid_span:'Selisih kedua titik terlalu kecil atau terbalik. Ulangi pengukuran.',adc_out_of_range:'Tegangan di luar rentang. Periksa probe.'}[v.code]||'Gagal menyimpan. Coba lagi.');
+  }catch{msg.textContent='Perangkat tidak terhubung.'}finally{buttons.forEach(x=>x.disabled=false)}
+};
+</script>)HTML");
+  });
   server.on("/", HTTP_GET, [&]() {
     server.send(200, "text/html; charset=utf-8",
                 head + "<h1>Wi-Fi perangkat</h1><form method=post action=/save>"
                        "<label>Nama Wi-Fi<input name=ssid list=found maxlength=32 required autocomplete=off></label>"
                        "<datalist id=found>" + options + "</datalist>"
                        "<label>Kata sandi Wi-Fi<input name=pass type=password maxlength=63></label>"
-                       "<button>Simpan dan sambungkan</button></form><p>Hanya Wi-Fi 2,4 GHz.</p>");
+                       "<button>Simpan dan sambungkan</button></form><p>Hanya Wi-Fi 2,4 GHz.</p><a href=/calibrate>Kalibrasi sensor</a>");
   });
   server.on("/save", HTTP_POST, [&]() {
     const String ssid = server.arg("ssid");
@@ -540,7 +667,10 @@ bool storeSample(uint32_t id, String &packet, char (&path)[13]) {
   char bootId[37];
   newBootId(bootId);
   if (!makeTelemetryEnvelope(device::deviceId, device::unitId, bootId, 1, measuredAt, "synced",
-                             moisture, temperature, ph, battery, device::signingSeed, packet)) {
+                             moisture, temperature, ph, battery, device::signingSeed, packet, savedCalibration,
+                             // A stamp after the sample (RTC corrected backwards) makes ingest reject, and drop, the soil reading.
+                             calibrationStamp(moistureCal.epoch <= epoch ? moistureCal.epoch : 0),
+                             calibrationStamp(phCal.epoch <= epoch ? phCal.epoch : 0))) {
     Serial.println("Telemetry could not be encoded.");
     return false;
   }
@@ -820,6 +950,7 @@ void setup() {
   analogSetPinAttenuation(kPhPin, ADC_11db);
   analogSetPinAttenuation(kBatteryPin, ADC_11db);
 
+  loadCalibration();
   const bool energy = energyEnabled();
   bool clockTrusted = false;
   WifiCredentials wifi = storedWifi();

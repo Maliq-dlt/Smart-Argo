@@ -1,4 +1,4 @@
-type Operation = 'weather-forecast' | 'history-export' | 'product-claim' | 'product-provision' | 'mfa-recovery' | 'telemetry-ingest' | 'energy-ingest' | 'unit-explanation' | 'auth' | 'rpc' | 'rest' | 'health' | 'static' | 'not_found'
+type Operation = 'alert-dispatch' | 'weather-forecast' | 'history-export' | 'product-claim' | 'product-provision' | 'mfa-recovery' | 'telemetry-ingest' | 'energy-ingest' | 'unit-explanation' | 'auth' | 'rpc' | 'rest' | 'health' | 'static' | 'not_found'
 type LogSink = (line: string) => void
 
 export function canonicalRequestId(value: unknown): string {
