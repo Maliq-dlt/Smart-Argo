@@ -14,7 +14,7 @@
 
 ---
 
-## Temuan
+## Temuan awal sebelum perbaikan
 
 ### Kelemahan mayor
 1. **Saran siram tidak pernah aktif untuk cabai/bawang dengan data nyata.** `care_band` (`supabase/migrations/20261123000000_unit_health.sql:43-76`) hanya memakai profil tervalidasi yang `pot_id`-nya sama dengan unit (baris 47-48). Jalur "pola pot Anda" hanya untuk spesies `tier='belajar'` (baris 52). Cabai (`kurasi`) tanpa profil per pot tidak masuk jalur mana pun, jadi status selamanya `learning`, tanpa perkiraan siram dan tanpa email `soil_dry`. Profil tervalidasi memang sengaja terikat satu pot (`assign_unit_profile` menolak dengan `calibration_mismatch`, `20261105030000_profile_curation.sql:213`) karena indeks kelembapan mentah tidak sebanding antar sensor.
@@ -136,8 +136,8 @@ Isinya langkah dengan hasil yang diharapkan dan tabel hasil (`No | Uji | Harapan
   - A. pH tetap dibaca terus (tanpa perubahan);
   - B. pH tetap dipasang tetapi diukur sekali sehari (Tugas 13), baterai lebih awet;
   - C. probe pH dilepas dari RAB, pH dicatat manual di jurnal dengan alat ukur terpisah (hemat ±40% biaya; kontrak telemetri sudah menerima `not_measured`).
-- [ ] **Langkah 2:** minta harga dan tautan INA228 dari pengguna (jangan mengarang harga).
-- [ ] **Langkah 3:** ubah RAB dengan `openpyxl` (muat tanpa `data_only`, agar rumus tetap): baris INA219 menjadi INA228 qty 2 (alamat 0x40 surya, 0x41 beban), dan baris pH sesuai pilihan. Buka ulang dengan `data_only` untuk memastikan total terhitung, lalu tunjukkan totalnya ke pengguna.
+- [x] **Langkah 2:** pengguna memilih modul INA228 EasyWare. Listing Tokopedia mencantumkan Rp225.000 per unit pada 23 November 2026.
+- [x] **Langkah 3:** dua RAB revisi ada di `docs/rab/`. Dua INA228 Rp450.000 untuk alamat 0x40 dan 0x41. Excel menghitung ulang rumus; total terverifikasi Rp1.125.650 (ringkas) dan Rp1.179.650 (lengkap), masing-masing tiga grafik. Anggaran pH harian tetap Rp300.000.
 
 ### Tugas 4: amankan pekerjaan (izin di tiap langkah)
 
@@ -419,11 +419,11 @@ Laporan crash tidak ditambahkan (ponytail: tambahkan saat rilis lewat Play Store
 
 ## Keputusan yang menunggu pengguna
 
-- Tugas 3: harga dan tautan INA228; apakah menambah sakelar daya MOSFET untuk modul pH (agar pH harian benar-benar menghemat baterai).
+- Tugas 3: apakah menambah sakelar daya MOSFET untuk modul pH (agar pH harian benar-benar menghemat baterai).
 - Tugas 4: izin commit, push, PR, merge, rilis cloud; PAT baru; nasib `android/design-preview/konsep-kebun/`.
 - Tugas 8: angka acuan spesies beserta sumbernya.
-- Tugas 18: sidik SHA-256 kunci rilis.
-- Sisa tinjauan Codex 23 Nov:
+- Tugas 18: verifikasi App Links publik setelah domain dan APK rilis memakai konfigurasi baru.
+- Temuan tambahan Codex 23 Nov (hasil pengerjaan di bagian Status):
   - (b) status `no_reading` saat perangkat diam;
   - (e) `device_silent` untuk perangkat yang belum dipasang;
   - (f) `<` vs `<=` antara peringatan dan Ringkasan;
@@ -438,7 +438,7 @@ Laporan crash tidak ditambahkan (ponytail: tambahkan saat rilis lewat Play Store
 | --- | --- | --- |
 | 1 | selesai (`698f978`) | Pot 17 (cabai) merah (`band_source` undefined) lalu hijau; backend 215/215 pada DB baru; p95 Ringkasan 136,6 ms. Belum di cloud. |
 | 2 | langkah 1–2 selesai, 3 menunggu ESP32 | `firmware/UJI-BANGKU.md`, ditautkan dari README firmware. |
-| 3 | pilihan B (pH sekali sehari) | Langkah 2–3 menunggu harga dan tautan INA228 dari pengguna. |
+| 3 | selesai | pH harian, dua INA228 EasyWare. Kedua RAB revisi di `docs/rab/`. |
 | 4 | langkah 1–3 selesai (`698f978`, `e69ebea`, `574f67a`, `3134246`, lokal) | Langkah 4–5 (push, PR, merge, cloud) menunggu izin. `android/design-preview/konsep-kebun/` menunggu keputusan. |
 | 5 | selesai | `tests/parity.test.ts` 2/2; mutasi tag Kotlin `PN`→`PX` membuatnya merah, lalu dipulihkan. |
 | 6 | selesai | README "Feature status"; `docs/backend-operations.md` "Single points of failure"; semua jalur dicek ada. |
@@ -446,5 +446,14 @@ Laporan crash tidak ditambahkan (ponytail: tambahkan saat rilis lewat Play Store
 | 8 | menunggu data | |
 | 13 | selesai | Firmware 60% flash tanpa peringatan sketsa (`DeviceConfig.example.h`; salinan `.cache/firmware/compile` memakai config lama dan gagal). Migrasi `20261123040000` (lokal saja). Penjelasan aturan menyebut pH harian. **pH harian tidak menghemat baterai tanpa sakelar MOSFET** (keputusan pengguna). |
 | 9 | selesai kecuali uji emulator | 115 tes Android, lint tanpa galat. |
-| 10–12, 14 | belum | |
-| 15–20 | belum | |
+| 10 | selesai (Codex), belum uji emulator | Pemindai Google, jatuh ke foto bila modul tidak ada. |
+| 11 | selesai (Codex) + perbaikan Claude | Cache tanpa `care` (server lama) kini tetap dipulihkan. |
+| 12 | langkah 1–2 selesai (Codex) + perbaikan Claude, langkah 3 menunggu ESP32 | Wizard kini menawarkan "Pakai kalibrasi tersimpan": kalibrasi ulang hanya untuk ganti Wi-Fi mengulang belajar pola pot 7 hari (migrasi 20261123050000). |
+| 14 | selesai (Codex) | RemoteViews, bukan Glance (tanpa runtime UI tambahan). |
+| 15 | selesai (Codex) + perbaikan Claude | `my_overview` opsional saat memuat (cloud belum punya fungsinya: dulu seluruh akun gagal dimuat), rincian tanpa banner galat untuk RPC yang belum ada (404), zona waktu non-IANA dikirim WIB, kode galat perawatan dipetakan, unit milik tanaman lain tidak ditawarkan. |
+| 16 | selesai (Codex) + perbaikan Claude | Ringkasan akun dimuat ulang saat tanaman ditambah/diganti, spesies dari katalog (bukan jatuh ke cabai), `aria-live` bukan `role=status` tambahan, ikon menu, kontras kotak centang. |
+| 17 | selesai (Codex) | Grup "Peringatan" di Akun. |
+| 18 | selesai (Codex) + perbaikan Claude, verifikasi live menunggu deploy | Serial tautan dilepas setelah ditangani (dulu rotasi HP atau membuka Produk lagi mengulang tautan). |
+| 19 | selesai (Codex) | |
+| 20 | langkah 1 selesai (Codex), langkah 2 menunggu tinjauan pengguna | `public/privasi.html`, `docs/play-data-safety.md`. |
+| Migrasi 20261123050000 (Codex: b, e, f, i, j) | selesai + perbaikan Claude, lokal saja | `care_moisture_since` sebagai fungsi SQL direncanakan ulang tiap panggilan dan menggandakan Ringkasan (p95 315 ms > 300). Kini plpgsql: median 136 ms. |
