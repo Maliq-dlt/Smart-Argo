@@ -49,12 +49,17 @@ END $$;
 CREATE FUNCTION public.care_alert_signals(p_unit uuid,p_device uuid,p_since timestamptz,p_low double precision)
 RETURNS TABLE(kind text,bad_at timestamptz,good_at timestamptz) LANGUAGE sql STABLE SET search_path='' AS $$
   WITH samples AS MATERIALIZED (SELECT * FROM public.care_samples(p_unit,p_device,greatest(p_since,now()-interval '48 hours'))),
-  readings AS (SELECT at, v.kind, v.bad FROM samples CROSS JOIN LATERAL (VALUES
-    ('soil_dry',moisture<p_low),('battery_low',volts<3.4),('soil_hot',temperature>=35)) v(kind,bad)),
-  pairs AS (SELECT *, lag(bad) OVER w AS prev_bad, lag(at) OVER w AS prev_at FROM readings
+  -- `good` is what counts toward recovery. A battery on a solar panel dips under 3.4 V at night and charges by day, so it
+  -- recovers only at 3.6 V or more after 24 h without a low reading: one episode, one mail, until a healthy day.
+  -- ponytail: 3.6 V and 24 h are engineering hysteresis for one Li-ion cell, not measured; revisit after the bench test.
+  readings AS (SELECT at, v.kind, v.bad, v.good FROM samples CROSS JOIN LATERAL (VALUES
+    ('soil_dry',moisture<p_low,moisture>=p_low),('battery_low',volts<3.4,volts>=3.6),
+    ('soil_hot',temperature>=35,temperature<35)) v(kind,bad,good)),
+  pairs AS (SELECT *, lag(bad) OVER w AS prev_bad, lag(good) OVER w AS prev_good, lag(at) OVER w AS prev_at FROM readings
     WINDOW w AS (PARTITION BY kind ORDER BY at)),
   runs AS (SELECT *, max(at) FILTER (WHERE bad IS DISTINCT FROM prev_bad OR prev_at IS NULL
-      OR at-prev_at>interval '75 minutes' OR at=prev_at) OVER (PARTITION BY kind ORDER BY at) AS run_start FROM pairs),
+      OR at-prev_at>interval '75 minutes' OR at=prev_at) OVER (PARTITION BY kind ORDER BY at) AS run_start,
+    max(at) FILTER (WHERE bad) OVER (PARTITION BY kind ORDER BY at) AS last_bad FROM pairs),
   arrivals AS (SELECT DISTINCT t.received_at AS received FROM public.telemetry_packet t
     WHERE t.device_id=p_device AND t.unit_id=p_unit AND t.measured_at>=p_since
       AND t.received_at BETWEEN greatest(p_since,now()-interval '48 hours') AND now()),
@@ -65,7 +70,8 @@ RETURNS TABLE(kind text,bad_at timestamptz,good_at timestamptz) LANGUAGE sql STA
     max(at) FILTER (WHERE bad AND at >= now()-interval '75 minutes' AND
       (kind='battery_low' OR (kind='soil_dry' AND prev_bad AND at>prev_at AND at-prev_at<=interval '75 minutes')
        OR (kind='soil_hot' AND at-run_start>=interval '3 hours'))),
-    max(at) FILTER (WHERE NOT bad AND NOT prev_bad AND at>prev_at AND at-prev_at<=interval '75 minutes')
+    max(at) FILTER (WHERE good AND prev_good AND at>prev_at AND at-prev_at<=interval '75 minutes'
+      AND (kind<>'battery_low' OR last_bad IS NULL OR at-last_bad>=interval '24 hours'))
   FROM runs GROUP BY kind
   UNION ALL
   SELECT 'device_silent', CASE WHEN now()-at>interval '90 minutes' THEN at+interval '90 minutes' END,

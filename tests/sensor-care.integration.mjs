@@ -176,7 +176,8 @@ test('owner sensor care, calibration and scheduled mail',async t=>{
   await t.test('scheduled worker retries SMTP, delivers once, purges due accounts and rearms only on two normal readings',async()=>{
     const sink=await smtpSink()
     const secret=randomBytes(32).toString('hex')
-    const env={ALERT_DISPATCH_SECRET:secret,SMTP_HOST:'127.0.0.1',SMTP_PORT:String(sink.port),SMTP_MODE:'local',SMTP_FROM:'agro@example.test'}
+    const env={ALERT_DISPATCH_SECRET:secret,SMTP_HOST:'127.0.0.1',SMTP_PORT:String(sink.port),SMTP_MODE:'local',SMTP_FROM:'agro@example.test',
+      ALERT_APP_URL:'https://app.example.test'}
     const gateway=startGateway({settings:config,port:0,appOrigin:base,alertEnv:key=>env[key],log:()=>{}})
     await once(gateway,'listening')
     const url='http://127.0.0.1:'+gateway.address().port+'/functions/v1/alert-dispatch'
@@ -208,6 +209,10 @@ test('owner sensor care, calibration and scheduled mail',async t=>{
       assert.equal((await work()).sent,0)
       assert.equal(sink.messages.length,1);assert.match(sink.messages[0],/Peringatan perangkat Smart Agro/)
       assert.match(sink.messages[0],/Dua bacaan/);assert.ok(sink.recipients.some(r=>r.includes(a.email)))
+      // Owners read Jakarta time, not a raw UTC stamp, and can find the switch that stops these mails.
+      assert.match(sink.messages[0],/Mulai: \d{1,2} [A-Z][a-z]{2} \d{2}\.\d{2} WIB/)
+      assert.doesNotMatch(sink.messages[0],/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)
+      assert.ok(sink.messages[0].includes('https://app.example.test/#pengaturan-peringatan'))
       await sample(18,41);await queue()
       await sample(15,39);await queue()
       assert.equal(sql(`SELECT count(*) FROM alert_episode WHERE unit_id=${q(unit)} AND kind='soil_dry' AND closed_at IS NULL`),'1')
@@ -260,6 +265,24 @@ test('owner sensor care, calibration and scheduled mail',async t=>{
     sql(`INSERT INTO ownership(account_id,product_id) VALUES(${q(b.id)},${q(product)})`)
     const h=await health(b.token)
     assert.deepEqual(h.battery,[]);assert.deepEqual(h.energy_days,[]);assert.equal(h.calibration,null)
+  })
+  await t.test('a solar battery that dips every night recovers only after a full healthy day',async()=>{
+    // SINTETIS. Half-hourly battery readings for a fresh probe; low marks the hours given, the rest follow `rest`.
+    const cell=(hours,low,rest)=>{
+      const u=randomUUID(),d=randomUUID()
+      sql(`INSERT INTO device(id,product_id,public_key) VALUES(${q(d)},${q(product)},${q(randomBytes(32).toString('base64'))});
+        INSERT INTO unit(id,product_id,profile_version_id,location_label) VALUES(${q(u)},${q(product)},${q(version)},'Baterai');
+        INSERT INTO device_placement(device_id,unit_id,placed_by,start_at) VALUES(${q(d)},${q(u)},${q(a.id)},now()-interval '3 days');
+        INSERT INTO telemetry_packet(device_id,unit_id,boot_id,sequence,clock_status,measured_at,received_at,payload,payload_sha256,signature)
+          SELECT ${q(d)},${q(u)},gen_random_uuid(),1,'synced',now()-h*interval '1 hour',now()-h*interval '1 hour',
+            jsonb_build_object('battery',jsonb_build_object('status','ok','value',CASE WHEN ${low} THEN 3.35 ELSE ${rest} END))::text,'fixture','fixture'
+          FROM generate_series(0.2,${hours},0.5) h`)
+      return sql(`SELECT coalesce(good_at::text,'none') FROM care_alert_signals(${q(u)},${q(d)},now()-interval '3 days',NULL) WHERE kind='battery_low'`)
+    }
+    // Low last night, 12 sunny hours at 3.95 V, an evening at 3.5 V (between the thresholds), low again now.
+    assert.equal(cell(30,'h>=29.5 OR h<=0.5','CASE WHEN h>17 THEN 3.95 ELSE 3.5 END'),'none','a sunny day inside 24 h of a low reading')
+    // Low two days ago, then a full day at 3.95 V: recovered, so the next dip may mail again.
+    assert.notEqual(cell(46,'h>=45.5','3.95'),'none','24 h at or above 3.6 V')
   })
 })
 

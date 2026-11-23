@@ -4,9 +4,27 @@ import nodemailer from 'nodemailer'
 type Env = (name: string) => string | undefined
 const messages = {
   soil_dry: 'Dua bacaan berturut-turut menunjukkan media lebih kering dari acuan pot.',
-  battery_low: 'Tegangan baterai perangkat berada di bawah 3,4 V.',
+  battery_low: 'Tegangan baterai perangkat berada di bawah 3,4 V. Peringatan ini tidak diulang sampai baterai sehat (3,6 V atau lebih) selama sehari penuh.',
   device_silent: 'Perangkat belum mengirim paket selama lebih dari 90 menit.',
   soil_hot: 'Suhu tanah berada pada atau di atas 35 derajat Celsius selama sedikitnya tiga jam.',
+}
+
+// "23 Nov 14.30 WIB": owners read Jakarta time, not the UTC stamp the database keeps.
+export function wib(at: string): string {
+  const parts = new Intl.DateTimeFormat('id-ID', {timeZone:'Asia/Jakarta', day:'numeric', month:'short', hour:'2-digit',
+    minute:'2-digit', hourCycle:'h23'}).formatToParts(new Date(at))
+  const part = (type: string) => parts.find(p => p.type === type)?.value ?? ''
+  return `${part('day')} ${part('month').replace('.', '')} ${part('hour')}.${part('minute')} WIB`
+}
+
+// The settings page that turns these mails off. Without a valid ALERT_APP_URL the line is left out, never a broken link.
+function settingsLink(env: Env): string {
+  try {
+    const url = new URL(env('ALERT_APP_URL') || '')
+    const local = ['localhost', '127.0.0.1'].includes(url.hostname)
+    return url.protocol === 'https:' || (local && url.protocol === 'http:')
+      ? `\nAtur atau matikan peringatan:\n${url.origin}/#pengaturan-peringatan` : ''
+  } catch { return '' }
 }
 
 function mailer(env: Env) {
@@ -52,7 +70,8 @@ export function createAlertDispatchHandler(config: {url:string; serviceKey:strin
           if(!job){await rpc('finish_alert_delivery',{...claim,p_sent:false});continue}
           sending=true
           await transport.sendMail({from,to:job.email,subject:'Peringatan perangkat Smart Agro',messageId:'<'+id+'@alerts.smart-agro>',
-            text:'Pot: '+job.unit_name+'\n'+messages[job.kind as keyof typeof messages]+'\nMulai: '+job.opened_at+'\nLihat perangkat di aplikasi Smart Agro.'})
+            text:'Pot: '+job.unit_name+'\n'+messages[job.kind as keyof typeof messages]+'\nMulai: '+wib(job.opened_at)+
+              '\nLihat perangkat di aplikasi Smart Agro.'+settingsLink(config.env)})
         } catch(error) {
           const smtp=error as {responseCode?:number; command?:string; code?:string; syscall?:string; timeoutType?:string}
           // Nodemailer also reports a socket reset after DATA as CONN. Retry only a known rejection or setup failure.
