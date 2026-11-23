@@ -1,5 +1,10 @@
 package id.smartagro.app
 
+import android.content.Intent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -58,6 +63,14 @@ internal fun number(value: Double?) = value?.let { String.format(Locale.forLangu
 
 class MainActivity : ComponentActivity() {
     private val model: AgroViewModel by viewModels()
+    private var incomingSerial by mutableStateOf<String?>(null)
+    private var incomingLinkVersion by mutableIntStateOf(0)
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        incomingSerial = productLinkSerial(intent.dataString)
+        incomingLinkVersion++
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val legacyCodes = java.io.File(cacheDir, "shared/smart-agro-recovery-codes.txt")
@@ -66,10 +79,22 @@ class MainActivity : ComponentActivity() {
             revokeUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
             legacyCodes.delete()
         }
+        incomingSerial = savedInstanceState?.getString("product-link-serial") ?: productLinkSerial(intent.dataString)
         enableEdgeToEdge()
-        setContent { SmartAgroApp(model) }
+        // Held through sign-in (and rotation) until handled, then dropped so a later rotation does not reopen Produk.
+        setContent { SmartAgroApp(model, incomingSerial, incomingLinkVersion) { incomingSerial = null } }
+    }
+    override fun onSaveInstanceState(outState: Bundle) {
+        incomingSerial?.let { outState.putString("product-link-serial", it) }
+        super.onSaveInstanceState(outState)
     }
 }
+
+internal fun productLinkSerial(raw: String?): String? = runCatching {
+    val uri = java.net.URI(raw ?: return null)
+    require(uri.scheme == "https" && uri.host == "live.smart-agro-demo.pages.dev" && uri.path == "/" && uri.port == -1 && uri.userInfo == null)
+    parseProductScan(raw).serial
+}.getOrNull()
 
 /** How deep a screen sits, so a push slides in from the trailing edge and a pop slides back (iOS navigation stack). */
 private fun depth(screen: Screen) = when (screen) {
@@ -87,8 +112,19 @@ private val tabScreens = listOf(Screen.Products, Screen.History, Screen.Account)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
-private fun SmartAgroApp(model: AgroViewModel) {
+private fun SmartAgroApp(model: AgroViewModel, incomingSerial: String?, incomingLinkVersion: Int, onLinkHandled: () -> Unit) {
     val state = model.state
+    var handledLink by remember { mutableStateOf<String?>(null) }
+    var handledLinkVersion by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(incomingSerial, incomingLinkVersion, state.email, state.demo, state.screen) {
+        if (incomingSerial != null && incomingLinkVersion != handledLinkVersion && state.email.isNotBlank() && !state.demo &&
+            state.screen !in listOf(Screen.Login, Screen.Mfa, Screen.DeletionPending) && state.deletionScheduled == null) {
+            handledLink = incomingSerial
+            handledLinkVersion = incomingLinkVersion
+            model.navigate(Screen.ManageProducts)
+            onLinkHandled()
+        }
+    }
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
     // Screenshots, screen recording and Recents thumbnail are blocked whenever a one-time code,
@@ -164,7 +200,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
                                             Screen.History -> ActivityScreen(state, model)
                                             Screen.Account -> AccountScreen(state, model)
                                             Screen.Security -> SecurityScreen(state, model)
-                                            Screen.ManageProducts -> ProductsManageScreen(state, model)
+                                            Screen.ManageProducts -> ProductsManageScreen(state, model, handledLink) { handledLink = null }
                                             Screen.Rewards -> RewardsScreen(
                                                 state,
                                                 model::loadRewards,

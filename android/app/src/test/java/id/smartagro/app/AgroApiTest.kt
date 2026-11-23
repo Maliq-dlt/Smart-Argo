@@ -268,6 +268,15 @@ class AgroApiTest {
         assertEquals("access-2",api.session?.accessToken)
         assertEquals("refresh-2",store.read()?.refreshToken)
     }
+    @Test fun aLogoutDuringABackgroundRefreshIsNotUndone() = runBlocking {
+        store.save(Session("old-access","refresh-1",Instant.now().epochSecond-1,"grower@example.test"))
+        val worker=AgroApi(config,store) { uri -> URI("http://127.0.0.1:${server.address.port}${uri.rawPath}${uri.rawQuery?.let { "?$it" }.orEmpty()}").toURL().openConnection() as HttpURLConnection }
+        assertTrue(worker.resume())
+        // The owner signs out in the app (another AgroApi) while the worker's refresh is in flight.
+        reply("/auth/v1/token?grant_type=refresh_token",token("access-2").put("refresh_token","refresh-2")) { store.clear() }
+        try { worker.rpc("my_overview");fail("Expected the refreshed session to be dropped") } catch(error: ApiFailure) { assertTrue(error.expired) }
+        assertNull("the signed-out session must not come back",store.read())
+    }
     @Test fun refreshAndLoginResponsesCannotUndoLogoutOrCancelledLogin() = runBlocking {
         store.save(Session("old-contract","refresh-contract",Instant.now().epochSecond-1,"grower@example.test"))
         reply("/auth/v1/token?grant_type=refresh_token",token("late-refresh")) { runBlocking { api.clear() } }

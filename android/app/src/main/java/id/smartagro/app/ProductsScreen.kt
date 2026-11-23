@@ -1,5 +1,8 @@
 package id.smartagro.app
 
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,7 +19,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
+internal fun ProductsManageScreen(state: AppState, model: AgroViewModel, initialSerial: String? = null, onSerialUsed: () -> Unit = {}) {
+    var deviceSetupOpen by remember { mutableStateOf(false) }
+    if (deviceSetupOpen) DeviceSetupSheet { deviceSetupOpen = false }
     val p = palette
     val context = LocalContext.current
     val now = rememberNow()
@@ -63,6 +68,35 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
             else scanWarning = "QR tidak ditemukan pada gambar tersebut."
         }
     }
+    fun photographQr() {
+        try {
+            val target = tempCameraQrUri(context)
+            pendingCameraUri = target
+            cameraLauncher.launch(target)
+        } catch (_: android.content.ActivityNotFoundException) {
+            pendingCameraUri = null
+            scanWarning = "Aplikasi kamera tidak tersedia. Pilih foto QR atau isi nomor seri."
+        } catch (_: SecurityException) {
+            pendingCameraUri = null
+            scanWarning = "Kamera tidak dapat dibuka. Pilih foto QR atau isi nomor seri."
+        }
+    }
+    // Google's scanner reads the code live and needs no camera permission. Without Google Play services or its scanner
+    // module (first use downloads it), the photo route below still works.
+    fun scanQr() {
+        val scanner = runCatching {
+            GmsBarcodeScanning.getClient(context, GmsBarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE).enableAutoZoom().build())
+        }.getOrNull() ?: return photographQr()
+        scanner.startScan()
+            .addOnSuccessListener { code -> code.rawValue?.let(::handleQrString) ?: run { scanWarning = "QR tidak memuat teks." } }
+            .addOnFailureListener { photographQr() }
+    }
+
+    LaunchedEffect(initialSerial) {
+        // A packaging link fills the form once; opening Produk later must not jump back to it.
+        initialSerial?.let { serialInput = it; tab = 1; if (!state.demo) model.checkPublicProduct(it); onSerialUsed() }
+    }
 
     LaunchedEffect(tab, state.demo, state.email, state.recoveriesLoaded, state.busy) {
         if (tab == 2 && !state.demo && state.email.isNotBlank() && !state.recoveriesLoaded && !state.busy) {
@@ -78,6 +112,9 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
         actions = { RefreshAction(state, model) },
     ) {
         notices(state)
+        if (!state.demo) item(key = "device-wifi-setup") {
+            Group { Cell("Siapkan Wi-Fi & kalibrasi", subtitle = "Sambung ke jaringan alat pada label", onClick = { deviceSetupOpen = true }) }
+        }
         item(key = "product-tabs") {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                 Segmented(listOf("Unit", "QR", "Transfer"), tab, { tab = it })
@@ -204,19 +241,7 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TintedButton(
                             "Kamera QR",
-                            {
-                                try {
-                                    val target = tempCameraQrUri(context)
-                                    pendingCameraUri = target
-                                    cameraLauncher.launch(target)
-                                } catch (_: android.content.ActivityNotFoundException) {
-                                    pendingCameraUri = null
-                                    scanWarning = "Aplikasi kamera tidak tersedia. Pilih foto QR atau isi nomor seri."
-                                } catch (_: SecurityException) {
-                                    pendingCameraUri = null
-                                    scanWarning = "Kamera tidak dapat dibuka. Pilih foto QR atau isi nomor seri."
-                                }
-                            },
+                            { scanQr() },
                             Modifier.weight(1f),
                             enabled = !state.busy,
                             path = PhosphorPaths.Camera,

@@ -42,15 +42,15 @@ class GardenTest {
     @Test fun optionalGardenRetainsPriorSnapshotAndPropagatesSessionAndCancellation() {
         val previous = parseGarden(garden())
         val unavailable = ApiFailure("Kebun tidak tersedia", status = 503)
-        val failed = runBlocking { fetchOptionalGarden { throw unavailable } }
+        val failed = runBlocking { fetchOptional<Garden> { throw unavailable } }
         assertSame(unavailable, failed.exceptionOrNull())
         assertSame(previous, failed.getOrElse { previous })
         val expired = ApiFailure("Sesi berakhir", expired = true)
         assertSame(expired, assertThrows(ApiFailure::class.java) {
-            runBlocking { fetchOptionalGarden { throw expired } }
+            runBlocking { fetchOptional<Garden> { throw expired } }
         })
         assertThrows(CancellationException::class.java) {
-            runBlocking { fetchOptionalGarden { throw CancellationException() } }
+            runBlocking { fetchOptional<Garden> { throw CancellationException() } }
         }
     }
 

@@ -74,19 +74,21 @@ internal fun careMarks(entries: List<CareEntry>, from: LocalDate, to: LocalDate,
     var why by rememberSaveable(unit.id) { mutableStateOf(false) }
     var diagnostics by rememberSaveable(unit.id) { mutableStateOf(false) }
     var practice by rememberSaveable { mutableStateOf(false) }
+    var confirmingRise by remember(unit.id) { mutableStateOf<WateringRise?>(null) }
     var watering by rememberSaveable(unit.id) { mutableStateOf(false) }
     var chart by rememberSaveable(unit.id) { mutableStateOf<Sensor?>(null) }
     val uri = rememberSafeUriHandler()
     val scope = rememberCoroutineScope()
     val cycle = state.garden?.plants?.firstOrNull { it.unitId == unit.id && it.endedOn == null }
     val species = remember(cycle?.species, unit.crop) { cycle?.let { SpeciesCatalog.byCode(it.species) } ?: SpeciesCatalog.ofCrop(unit.crop) }
-    val ref = if (species.curated) referenceFor(species.speciesId) else null
+    val ref = if (state.demo && species.curated) referenceFor(species.speciesId) else null
     val today = remember(cycle?.plantedOn, state.demo, LocalDate.now()) {
         (cycle?.let { ChronoUnit.DAYS.between(it.plantedOn, LocalDate.now()).toInt().coerceAtLeast(0) } ?: 35.takeIf { state.demo })?.coerceAtMost(species.maxDay)
     }
     var shownDay by rememberSaveable(unit.id, today) { mutableIntStateOf(today ?: 0) }
     LaunchedEffect(unit.id, state.demo, state.email) {
         if (!state.demo && state.email.isNotBlank() && (!state.careLoaded || state.careUnitId != unit.id)) model.loadCareJournal(unit.id)
+        if (!state.demo && state.email.isNotBlank()) model.loadCareDetails(unit.id)
     }
     val weather = state.weather.takeIf { state.weatherSiteId == state.weatherSite?.id }
     val outdoor = state.weatherSite?.placement?.let { it != "indoor" } == true
@@ -134,12 +136,56 @@ internal fun careMarks(entries: List<CareEntry>, from: LocalDate, to: LocalDate,
                 }
             }
             state.message?.let { message -> item(key = "message") { Sheet { Banner(message, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), state.messageIsError) } } }
-            if (species.curated) item(key = "action") {
+            if (!state.demo) item(key = "server-care") {
+                Sheet {
+                    SectionTitle("Perawatan")
+                    Panel {
+                        val plant = state.carePlants.firstOrNull { it.unitId == unit.id }
+                        Text(plant?.let { careStateLabel(careState(it, now)) } ?: "Menunggu data perawatan", style = T.headline, color = p.ink)
+                        Text(bandSourceLabel(plant?.bandSource), style = T.subhead, color = p.secondary)
+                        if (state.careDetailsUnit == unit.id) {
+                            val outlook = state.wateringOutlook
+                            Text(when(outlook?.state) {
+                                "window" -> "Siram sekitar ${hhmm(outlook.from!!)} - ${hhmm(outlook.to!!)}"
+                                "below" -> "Tanah sudah mencapai batas siram pot ini."
+                                "learning" -> "Catat inspeksi dan siram untuk membentuk pola pot."
+                                else -> "Menunggu rangkaian bacaan untuk memperkirakan siram."
+                            }, style = T.subhead, color = p.secondary)
+                        }
+                        PlainButton("Catat siram", { watering = true }, enabled = !state.busy && state.pendingCare == null)
+                        PlainButton("Minta saran", { why = true }, enabled = !state.busy)
+                        state.pendingCare?.takeIf { it.unitId == unit.id }?.let {
+                            if (state.pendingCareSending) PlainButton("Coba simpan lagi", model::retryPendingCare, enabled = !state.busy)
+                            else PlainButton("Urungkan", model::undoCare)
+                        }
+                    }
+                    if (state.careDetailsUnit == unit.id) {
+                        state.wateringRises.forEach { rise ->
+                            Panel {
+                                Text("Sepertinya Anda menyiram pukul ${hhmm(rise.to)}. Catat?", style = T.headline, color = p.ink)
+                                PlainButton("Catat", { confirmingRise = rise }, enabled = !state.busy && state.pendingCare == null)
+                                PlainButton("Bukan", { model.dismissRise(unit.id, rise) }, enabled = !state.busy)
+                            }
+                        }
+                        state.unitHealth?.let { device ->
+                            SectionTitle("Perangkat")
+                            Group {
+                                Cell("Baterai", value = device.volts?.let { "%.2f V".format(it) } ?: "Belum ada bacaan", chevron = false)
+                                Cell("Perkiraan daya", value = device.daysLeft?.let { "%.1f hari".format(it) } ?: "Belum cukup data", chevron = false)
+                                Cell("Jeda kiriman", value = "${device.gaps} dalam 7 hari", chevron = false)
+                                Cell("Kalibrasi kelembapan", value = device.moistureAt?.let(::time) ?: "Belum dikalibrasi", chevron = false)
+                                Cell("Kalibrasi pH", value = device.phAt?.let(::time) ?: "Belum dikalibrasi", chevron = false)
+                            }
+                        }
+                    }
+                }
+            }
+            if (species.curated && state.demo) item(key = "action") {
                 Sheet {
                     ActionCard(state, unit, word, moistureAt, h.moisture, onWater = { watering = true }, onWhy = { why = true }, onUndo = model::undoCare,
                         onSimulate = { scope.launch { list.animateScrollToItem(0); delay(380); model.simulateDemoReading(unit.id) } })
                 }
-            } else item(key = "learning") {
+            } else if (!species.curated) item(key = "learning") {
                 Sheet {
                     SectionTitle("Mode belajar")
                     if (!state.demo && (!state.careLoaded || state.careUnitId != unit.id || state.careNext != null)) {
@@ -222,6 +268,12 @@ internal fun careMarks(entries: List<CareEntry>, from: LocalDate, to: LocalDate,
     chart?.let { s -> ChartSheet(state, model, s, ref) { chart = null } }
     if (diagnostics) SensorDiagnosticsSheet(unit, h, state.demo) { diagnostics = false }
     if (practice) PracticeSheet({ practice = false; model.logout() }) { practice = false }
+    confirmingRise?.let { rise ->
+        WaterSheet(unit.name, null, { confirmingRise = null }) { amount ->
+            confirmingRise = null
+            model.recordCareWithUndo(unit.id, "watering", amount, rise.to)
+        }
+    }
     if (watering) {
         val last = state.careJournal.filter { it.unitId == unit.id && it.kind == "watering" }.maxByOrNull { it.observedAt }?.amountMl
         WaterSheet(unit.name, last, { watering = false }) { amount -> watering = false; model.recordCareWithUndo(unit.id, "watering", amount) }
@@ -345,10 +397,13 @@ internal fun careMarks(entries: List<CareEntry>, from: LocalDate, to: LocalDate,
     val p = palette
     val options = listOf(100.0, 250.0, 500.0, 1000.0)
     var pick by rememberSaveable { mutableIntStateOf(options.indexOf(last).takeIf { it >= 0 } ?: 1) }
+    var amount by rememberSaveable { mutableStateOf((last ?: 250.0).toInt().toString()) }
+    val actual = amount.replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 && it <= 100_000 }
     AgroSheet("Catat siram", onDismiss) {
         Text("Takaran untuk $unitName", Modifier.padding(horizontal = 20.dp), style = T.subhead, color = p.secondary)
-        Box(Modifier.padding(16.dp)) { Segmented(options.map { "${it.toInt()} mL" }, pick, { pick = it }) }
+        Box(Modifier.padding(16.dp)) { Segmented(options.map { "${it.toInt()} mL" }, pick, { pick = it; amount = options[it].toInt().toString() }) }
+        Group { FieldRow("Volume aktual (mL)", amount, { amount = it.take(12) }, "250", keyboard = androidx.compose.ui.text.input.KeyboardType.Decimal) }
         Footnote("Catatan dikirim lima detik setelah disimpan. Sebelum itu masih bisa diurungkan.")
-        PrimaryButton("Simpan", { onSave(options[pick]) }, Modifier.padding(16.dp).fillMaxWidth(), path = PhosphorPaths.Drop)
+        PrimaryButton("Simpan", { actual?.let(onSave) }, Modifier.padding(16.dp).fillMaxWidth(), path = PhosphorPaths.Drop, enabled = actual != null)
     }
 }

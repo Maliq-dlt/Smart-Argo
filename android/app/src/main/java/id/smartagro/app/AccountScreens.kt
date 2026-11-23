@@ -53,6 +53,13 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
         CareNotifications.setEnabled(context, granted); notify = granted
     }
 
+    var alertsRequested by remember(state.email) { mutableStateOf(false) }
+    LaunchedEffect(state.demo, state.email, state.busy) {
+        if (!state.demo && !state.busy && state.email.isNotBlank() && !alertsRequested && state.alertPreferences == null) {
+            alertsRequested = true
+            model.loadAlertPreferences()
+        }
+    }
     TitledScreen("Akun", actions = { RefreshAction(state, model) }) {
         notices(state)
         if (state.demo) {
@@ -126,6 +133,21 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                     )
                 }
             }
+            item(key = "apk-update") { UpdateAvailableRow() }
+            item(key = "alert-preferences") {
+                SectionTitle("Peringatan")
+                val alerts = state.alertPreferences
+                Group(footer = "Jenis berlaku untuk email dan notifikasi di HP. Email hanya dikirim ke alamat terkonfirmasi.") {
+                    if (alerts == null) {
+                        Cell("Muat pengaturan peringatan", enabled = !state.busy, onClick = model::loadAlertPreferences)
+                    } else {
+                        ToggleCell("Peringatan email", alerts.emailEnabled, { on -> model.setAlertPreferences(on, alerts.kinds) }, enabled = !state.busy)
+                        careKinds.forEach { (kind, label) ->
+                            ToggleCell(label, kind in alerts.kinds, { on -> model.setAlertPreferences(alerts.emailEnabled, if(on) alerts.kinds + kind else alerts.kinds - kind) }, enabled = !state.busy)
+                        }
+                    }
+                }
+            }
             item(key = "security-group") {
                 SectionTitle("Keamanan & pengaturan")
                 val mfaLabel = state.security?.let { if (it.mfaEnabled) "2FA aktif" else "2FA nonaktif" }
@@ -170,6 +192,7 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
             item(key = "privacy") {
                 SectionTitle("Data & privasi")
                 Group(footer = "Penghapusan juga bisa diminta lewat web: live.smart-agro-demo.pages.dev/#hapus-akun") {
+                    Cell("Kebijakan privasi", onClick = { uri.openUri("https://live.smart-agro-demo.pages.dev/privasi.html") })
                     Cell("Hapus akun", destructive = true, enabled = !state.busy, onClick = { model.navigate(Screen.DeleteAccount) })
                 }
             }

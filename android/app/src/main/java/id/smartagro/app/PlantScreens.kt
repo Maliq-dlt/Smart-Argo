@@ -141,10 +141,11 @@ internal fun health(state: AppState, unit: PlantUnit, now: Instant): Health {
     val status = when {
         state.demo -> "Skenario latihan"
         revoked -> "Perangkat dicabut"
+        state.carePlants.any { it.unitId == unit.id } -> careStateLabel(careState(state.carePlants.first { it.unitId == unit.id }, now))
         stale -> "Menunggu data terbaru"
         else -> stateLabels[overview?.state] ?: "Data perangkat tersimpan"
     }
-    val attention = !stale && (overview?.state in listOf("sedih_perhatian", "waspada_marah") ||
+    val attention = state.carePlants.any { it.unitId == unit.id && careState(it, now) == "below" } || !stale && (overview?.state in listOf("sedih_perhatian", "waspada_marah") ||
         overview?.alerts.orEmpty().any { it in listOf("sensor_error", "battery_low", "energy_deficit") }) || revoked
     return Health(samples, statuses, status, attention, stale && !revoked, overview?.at, overview?.battery)
 }

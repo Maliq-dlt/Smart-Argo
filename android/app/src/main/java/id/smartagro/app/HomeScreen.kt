@@ -53,7 +53,7 @@ private class PlantCard(val unit: PlantUnit, val species: SpeciesSpec, val day: 
         val cycle = cycles.firstOrNull { it.unitId == u.id }
         val species = cycle?.let { SpeciesCatalog.byCode(it.species) } ?: SpeciesCatalog.ofCrop(u.crop)
         val day = cycle?.let { ChronoUnit.DAYS.between(it.plantedOn, LocalDate.now()).toInt().coerceAtLeast(0) } ?: 35.takeIf { state.demo }
-        PlantCard(u, species, day, if (species.curated) referenceFor(species.speciesId) else null, healths.getValue(u.id))
+        PlantCard(u, species, day, if (state.demo && species.curated) referenceFor(species.speciesId) else null, healths.getValue(u.id))
     }
     val shown = cards.filter { c ->
         listOf(c.unit.name, c.unit.crop, state.plantCode(c.unit), state.products.find { it.id == c.unit.productId }?.serial.orEmpty())
@@ -66,6 +66,16 @@ private class PlantCard(val unit: PlantUnit, val species: SpeciesSpec, val day: 
         RefreshAction(state, model)
     }) {
         notices(state)
+        state.cachedAt?.let { at -> item(key = "offline-time") { Footnote("Offline - Terakhir diperbarui ${time(at)}") } }
+        if (!state.demo && state.carePlants.isNotEmpty()) item(key = "care-overview") {
+            SectionTitle("Perawatan tanaman")
+            Group {
+                state.carePlants.forEach { plant ->
+                    Cell(plant.name, subtitle = bandSourceLabel(plant.bandSource), value = careStateLabel(careState(plant, now)),
+                        chevron = plant.unitId != null, onClick = { state.units.find { it.id == plant.unitId }?.let(model::openUnit) })
+                }
+            }
+        }
         if (cards.isNotEmpty() || cycles.isNotEmpty()) item(key = "summary") {
             Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp)) {
                 if (cards.isNotEmpty()) Text(when {

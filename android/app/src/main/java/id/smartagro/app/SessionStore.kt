@@ -13,10 +13,11 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** Only authenticated sessions are persisted, encrypted by a non-exportable Android Keystore key. */
 class SessionStore(private val context: Context, endpoint: String, private val keyProvider: ()->SecretKey = ::androidSessionKey) {
+    companion object { internal val lock = Any() }
     private val scope = java.security.MessageDigest.getInstance("SHA-256").digest(endpoint.trimEnd('/').toByteArray()).joinToString("") { "%02x".format(it) }
     private val file = File(context.noBackupFilesDir, "account-$scope.enc")
-    fun read(): Session? {
-        return try {
+    fun read(): Session? = synchronized(lock) {
+        try {
             val bytes = android.util.AtomicFile(file).openRead().use { input ->
                 require(file.length() in 29..32768)
                 input.readBytes()
@@ -27,7 +28,7 @@ class SessionStore(private val context: Context, endpoint: String, private val k
         } catch (_: java.io.FileNotFoundException) { null }
         catch (_: Exception) { clear(); null }
     }
-    fun save(session: Session) {
+    fun save(session: Session) = synchronized(lock) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, keyProvider()) }
         val bytes = cipher.iv + cipher.doFinal(session.toJson().toString().toByteArray(Charsets.UTF_8))
         val atomic = android.util.AtomicFile(file)
@@ -97,7 +98,7 @@ class SessionStore(private val context: Context, endpoint: String, private val k
         val hash = java.security.MessageDigest.getInstance("SHA-256").digest("$email:$key".toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
         return File(context.noBackupFilesDir,"$kind-$scope-$hash.id")
     }
-    fun clear() { android.util.AtomicFile(file).delete() }
+    fun clear() = synchronized(lock) { android.util.AtomicFile(file).delete() }
 }
 
 private fun androidSessionKey(): SecretKey {

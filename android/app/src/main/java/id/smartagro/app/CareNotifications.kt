@@ -68,16 +68,29 @@ internal fun noticesFor(previous: Set<String>, overview: JSONObject, kinds: Set<
 class CareCheckWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val context = applicationContext
-        if (!CareNotifications.enabled(context)) return Result.success()
+        if (!CareNotifications.enabled(context) && !CareWidget.active(context)) return Result.success()
         val config = BackendConfig(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, allowEmulatorHost = BuildConfig.DEBUG)
         val api = AgroApi(config, SessionStore(context, config.url))
         try {
             if (!api.resume()) return Result.success()  // signed out: nothing to watch
             val kinds = api.rpc("my_alert_preferences").optJSONArray("kinds")
                 ?.let { list -> (0 until list.length()).map(list::getString).toSet() }.orEmpty()
-            val (notices, keys) = noticesFor(CareNotifications.seen(context), api.rpc("my_overview"), kinds)
-            notices.forEach { CareNotifications.post(context, it) }
-            CareNotifications.remember(context, keys)
+            val overview = api.rpc("my_overview")
+            synchronized(SessionStore.lock) {
+                val account = api.session!!.email
+                if (SessionStore(context, config.url).read()?.refreshToken != api.session?.refreshToken || !CareNotifications.enabled(context) && !CareWidget.active(context)) return Result.success()
+                parseCarePlants(overview)
+                val cache = OverviewCache(java.io.File(context.filesDir, "care-cache"))
+                val key = config.url + ":" + account
+                val previous = cache.load(key)?.let { JSONObject(it.json) } ?: JSONObject()
+                cache.save(key, previous.put("care", overview).toString(), cache.load(key)?.at ?: java.time.Instant.now())
+                CareWidget.refresh(context)
+                val (notices, keys) = noticesFor(CareNotifications.seen(context), overview, kinds)
+                if (CareNotifications.enabled(context)) {
+                    notices.forEach { CareNotifications.post(context, it) }
+                    CareNotifications.remember(context, keys)
+                }
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
@@ -102,10 +115,15 @@ internal object CareNotifications {
     fun allowed(context: Context) = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    fun setEnabled(context: Context, on: Boolean) {
+    fun setEnabled(context: Context, on: Boolean) = synchronized(SessionStore.lock) {
+        val wasEnabled = enabled(context)
         prefs(context).edit { putBoolean("enabled", on); remove("seen") }
+        if (!on) {
+            context.getSystemService(NotificationManager::class.java).cancelAll()
+            if (wasEnabled) WorkManager.getInstance(context).cancelUniqueWork(WORK)
+            return@synchronized
+        }
         val work = WorkManager.getInstance(context)
-        if (!on) { work.cancelUniqueWork(WORK); return }
         val request = PeriodicWorkRequestBuilder<CareCheckWorker>(1, TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
         work.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.KEEP, request)

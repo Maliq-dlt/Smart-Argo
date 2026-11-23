@@ -66,14 +66,17 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
             } finally { connection.disconnect() }
         }
 
-    internal suspend fun save(value: Session, expectedVersion: Long = authenticationVersion()) {
+    internal suspend fun save(value: Session, expectedVersion: Long = authenticationVersion(), expectedRefresh: String? = null) {
         require(value.expiresAt > Instant.now().epochSecond && value.email.length <= 320 &&
             Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$").matches(value.email)) { "Respons sesi tidak valid atau kedaluwarsa." }
         withContext(Dispatchers.IO) {
             // Serialize disk and memory together so logout cannot be undone by an older response.
             synchronized(authLock) {
                 check(authVersion == expectedVersion) { "Proses masuk sudah berubah. Silakan masuk kembali." }
-                store.save(value)
+                synchronized(SessionStore.lock) {
+                    if (expectedRefresh != null && store.read()?.refreshToken != expectedRefresh) throw ApiFailure("Sesi berakhir. Silakan masuk kembali.", true)
+                    store.save(value)
+                }
                 session = value
                 pending = null
                 factorId = null
@@ -157,21 +160,22 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
     fun cancelMfa() = synchronized(authLock) { pending = null; factorId = null; authVersion++ }
     internal suspend fun refresh() = refreshLock.withLock {
         var (value, version) = synchronized(authLock) { (session ?: throw ApiFailure("Silakan masuk kembali.", true)) to authVersion }
-        if (value.expiresAt > Instant.now().epochSecond + 60) return@withLock
         // The app and the background worker each hold an AgroApi. Auth rotates the refresh token on every use and can
         // end the whole session when a used one comes back, so take a newer token another instance already stored.
         val stored = withContext(Dispatchers.IO) { store.read() }
-        if (stored != null && stored.email.equals(value.email, ignoreCase=true) && stored.refreshToken != value.refreshToken &&
+        if (stored == null || !stored.email.equals(value.email, ignoreCase=true)) throw ApiFailure("Sesi berakhir. Silakan masuk kembali.", true)
+        if (stored.email.equals(value.email, ignoreCase=true) && stored.refreshToken != value.refreshToken &&
             stored.expiresAt > value.expiresAt) {
             synchronized(authLock) { if (authVersion == version) session = stored else return@withLock }
             if (stored.expiresAt > Instant.now().epochSecond + 60) return@withLock
             value = stored
         }
+        if (value.expiresAt > Instant.now().epochSecond + 60) return@withLock
         try {
             val json = request("/auth/v1/token?grant_type=refresh_token", JSONObject().put("refresh_token", value.refreshToken))
             val refreshed = Session.parse(json).let { it.copy(email = it.email.ifBlank { value.email }, displayName = it.displayName.ifBlank { value.displayName }) }
             require(refreshed.email.equals(value.email, ignoreCase=true)) { "Identitas akun tidak sesuai dengan sesi." }
-            save(refreshed, version)
+            save(refreshed, version, value.refreshToken)
         } catch (error: ApiFailure) {
             // Network failures never get here, and 5xx, 408 and 429 are temporary: the session stays. Any other 4xx is Auth
             // refusing this refresh token (hosted Auth: 400 validation_failed or refresh_token_not_found), so sign-in is required.
@@ -180,7 +184,7 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
         }
     }
     suspend fun rpc(name: String, body: JSONObject = JSONObject()): JSONObject {
-        require(name in setOf("ensure_my_account", "my_account_deletion", "request_account_deletion", "cancel_account_deletion", "my_avatar", "set_my_avatar", "clear_my_avatar", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "archive_my_unit", "restore_my_unit", "place_my_device", "my_unit_history", "product_public_status", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden", "my_device_units", "unit_explanations", "add_my_site", "plant_in_my_slot", "switch_my_plant", "append_my_care_journal", "read_my_care_journal", "read_my_measurement_history", "compare_my_measurement_history", "security_workspace", "create_my_recovery_codes", "my_recovery_codes_status", "issue_activation_nonce", "create_transfer_offer", "cancel_transfer_offer", "accept_transfer", "open_ownership_recovery", "withdraw_ownership_recovery", "my_ownership_recoveries", "open_reward_appeal", "my_reward_cases", "energy_workspace", "set_slot_sharing", "share_my_cycle", "unshare_my_cycle", "community_knowledge", "my_overview", "my_alert_preferences"))
+        require(name in setOf("ensure_my_account", "my_account_deletion", "request_account_deletion", "cancel_account_deletion", "my_avatar", "set_my_avatar", "clear_my_avatar", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "archive_my_unit", "restore_my_unit", "place_my_device", "my_unit_history", "product_public_status", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden", "my_device_units", "unit_explanations", "add_my_site", "plant_in_my_slot", "switch_my_plant", "append_my_care_journal", "read_my_care_journal", "read_my_measurement_history", "compare_my_measurement_history", "security_workspace", "create_my_recovery_codes", "my_recovery_codes_status", "issue_activation_nonce", "create_transfer_offer", "cancel_transfer_offer", "accept_transfer", "open_ownership_recovery", "withdraw_ownership_recovery", "my_ownership_recoveries", "open_reward_appeal", "my_reward_cases", "energy_workspace", "set_slot_sharing", "share_my_cycle", "unshare_my_cycle", "community_knowledge", "my_overview", "my_alert_preferences", "set_my_alert_preferences", "my_watering_outlook", "my_unlogged_rises", "dismiss_my_rise", "my_unit_health", "set_my_slot_unit"))
         refresh()
         return request("/rest/v1/rpc/$name", body, session!!.accessToken)
     }
@@ -293,7 +297,13 @@ internal fun friendlyError(status: Int, json: JSONObject?): String {
         "state_conflict" to "Status sudah berubah. Muat ulang sebelum melanjutkan.",
         "redemption_unavailable" to "Reservasi ini tidak tersedia untuk akun Anda.",
         "request_conflict" to "Permintaan berbeda dari kiriman sebelumnya. Muat ulang.",
-        "invalid_label" to "Nama tanaman harus 1-120 karakter.")
+        "invalid_label" to "Nama tanaman harus 1-120 karakter.",
+        "unit_already_assigned" to "Unit ini sudah terhubung ke tanaman lain. Lepaskan dari tanaman lama dahulu.",
+        "slot_unavailable" to "Pot atau zona ini tidak tersedia untuk akun Anda. Segarkan data.",
+        "unit_unavailable" to "Unit ini tidak tersedia untuk akun Anda. Segarkan data.",
+        "device_unavailable" to "Perangkat tidak aktif atau bukan milik Anda.",
+        "rise_unavailable" to "Kenaikan ini sudah tidak tersedia. Segarkan data.",
+        "invalid_request" to "Isian tidak valid. Periksa lagi lalu coba kembali.")
     codes[json?.optString("code")]?.let { return it }
     return when {
         "invalid login credentials" in detail || "invalid_credentials" in detail -> "Email atau kata sandi salah. Coba periksa kembali."

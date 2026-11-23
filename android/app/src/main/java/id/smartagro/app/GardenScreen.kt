@@ -40,6 +40,17 @@ internal fun GardenPlantScreen(state: AppState, model: AgroViewModel) {
         },
     ) {
         notices(state)
+        if (!state.demo) item(key = "slot-unit") {
+            SectionTitle("Perangkat untuk pot ini")
+            Group(footer = "Lepaskan unit dari pot lama sebelum memindahkannya ke pot ini.") {
+                Cell("Unit terhubung", value = unit?.name ?: "Belum terhubung", chevron = false)
+                if (plant.unitId != null) Cell("Lepaskan perangkat", enabled = !state.busy, onClick = { model.assignSlotUnit(plant.slotId, null) })
+                // One unit per pot or zone (set_my_slot_unit refuses a unit another active plant holds).
+                state.units.filter { u -> state.garden?.plants.orEmpty().none { it.unitId == u.id && it.endedOn == null } }.forEach { available ->
+                    Cell("Gunakan ${available.name}", enabled = !state.busy, onClick = { model.assignSlotUnit(plant.slotId, available.id) })
+                }
+            }
+        }
         item(key = "stage") {
             Panel {
                 PlantScene(
