@@ -7,7 +7,7 @@ import './siteCurtain.css'
 gsap.registerPlugin(DrawSVGPlugin)
 
 /* Site curtain: the loading screen on first visit and between the landing and the simulator.
- * Large blocks in two rows (the landing's block motif) cover the screen, a sprout draws itself and sways while
+ * Large blocks in two rows (the landing's block motif) cover the screen, a sprout draws itself and stays still while
  * the page or the simulator chunk loads, then the blocks lift away along a staircase. */
 
 export type CurtainHandle = {
@@ -26,7 +26,7 @@ const delay = (i: number, lift: boolean) => {
 }
 
 const SiteCurtain = forwardRef<CurtainHandle, { boot: boolean; onCancel: () => void }>(function SiteCurtain({ boot, onCancel }, ref) {
-  const root = useRef<HTMLDivElement>(null), sway = useRef<gsap.core.Tween | null>(null), bar = useRef<gsap.core.Tween | null>(null), offer = useRef<gsap.core.Tween | null>(null)
+  const root = useRef<HTMLDivElement>(null), bar = useRef<gsap.core.Tween | null>(null), offer = useRef<gsap.core.Tween | null>(null)
   const state = useRef<'covered' | 'open' | 'moving'>(boot ? 'covered' : 'open')
   const [label, setLabel] = useState('Membaca zona akar…')
   const [cancellable, setCancellable] = useState(false)
@@ -37,12 +37,11 @@ const SiteCurtain = forwardRef<CurtainHandle, { boot: boolean; onCancel: () => v
   /** Draws the sprout. On boot the words are already on screen (the static loader in index.html shows them). */
   const drawSprout = (withWords: boolean) => {
     const host = root.current!
-    sway.current?.kill(); bar.current?.kill()
+    bar.current?.kill()
     const tl = gsap.timeline()
     tl.fromTo(host.querySelectorAll('.curtain-line'), { drawSVG: '0%' }, { drawSVG: '100%', duration: withWords ? .6 : 1.1, stagger: .12, ease: 'power2.inOut' })
       .fromTo(host.querySelectorAll('.curtain-leaf'), { fillOpacity: 0 }, { fillOpacity: 1, duration: .5, stagger: .1 }, withWords ? .35 : .7)
     if (withWords) tl.fromTo(host.querySelectorAll('.curtain-word, .curtain-label'), { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: .6, stagger: .08, ease: 'expo.out' }, .15)
-    sway.current = gsap.fromTo(host.querySelector('.curtain-crown'), { rotation: -3 }, { rotation: 3, duration: 1.8, ease: 'sine.inOut', repeat: -1, yoyo: true, transformOrigin: '50% 100%' })
     // The bar fills toward 90 % while waiting and completes on reveal.
     bar.current = gsap.fromTo(host.querySelector('.curtain-bar i'), { scaleX: 0 }, { scaleX: .9, duration: 4, ease: 'power2.out' })
   }
@@ -80,7 +79,7 @@ const SiteCurtain = forwardRef<CurtainHandle, { boot: boolean; onCancel: () => v
       offer.current?.kill()
       setCancellable(false)
       bar.current?.kill()
-      const tl = gsap.timeline({ onComplete: () => { sway.current?.kill(); state.current = 'open'; host.dataset.state = 'open'; announce('open'); markRevealed(); resolve() } })
+      const tl = gsap.timeline({ onComplete: () => { state.current = 'open'; host.dataset.state = 'open'; announce('open'); markRevealed(); resolve() } })
       tl.to(host.querySelector('.curtain-bar i'), { scaleX: 1, duration: .3, ease: 'power2.out' })
         .to(body(), { autoAlpha: 0, y: -18, duration: .45, ease: 'power2.in' }, .15)
       blocks().forEach((block, i) => tl.fromTo(block, { scaleY: 1, transformOrigin: '50% 0%' }, { scaleY: 0, duration: .7, ease: 'power3.inOut' }, .4 + delay(i, true)))

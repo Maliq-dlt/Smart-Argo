@@ -202,14 +202,15 @@
 .v5-stage[data-phase]:not([data-phase="2"]):not([data-phase="all"]) .v5-flow li { transform: translateY(40px); opacity: 0; }
 .v5-stage[data-phase="all"] .v5-flow li::before { background: var(--stage-mark); }
 @media (prefers-reduced-motion: no-preference) {
-  .v5-stage[data-phase="2"] .v5-flow::after { animation: v5-flow-sweep 3s linear .6s infinite; }
-  .v5-stage[data-phase="2"] .v5-flow li::before { animation: v5-flow-node 3s linear infinite; }
+  .v5-stage[data-phase="2"] .v5-flow::after { animation: v5-flow-sweep 3s linear .6s both; }
+  .v5-stage[data-phase="2"] .v5-flow li::before { animation: v5-flow-node .4s linear both; }
   .v5-stage[data-phase="2"] .v5-flow li:nth-child(1)::before { animation-delay: .6s; }
   .v5-stage[data-phase="2"] .v5-flow li:nth-child(2)::before { animation-delay: 1.65s; }
   .v5-stage[data-phase="2"] .v5-flow li:nth-child(3)::before { animation-delay: 2.7s; }
 }
-@keyframes v5-flow-sweep { 0% { transform: scaleX(0); opacity: 1; } 70% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
-@keyframes v5-flow-node { 0%, 28% { background: var(--stage-mark); } 40%, 100% { background: var(--stage-plate); } }
+/* Played once, not looped: a repeating sweep read as blinking (2026-11-24). Each node lights as the line reaches it. */
+@keyframes v5-flow-sweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes v5-flow-node { from { background: var(--stage-plate); } to { background: var(--stage-mark); } }
 
 /* Numbers beside the sticky device, which lights the part each figure comes from */
 .v5-numbers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: var(--bg); }

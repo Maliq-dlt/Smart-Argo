@@ -61,19 +61,26 @@ try {
   await page.waitForFunction(() => location.hash === '#tanaman')
   ok((await morph).some(p => /plant-stage/.test(p)), 'The card travels into the stage (a View Transition named plant-stage)')
   ok(await page.getByRole('navigation', { name: 'Navigasi utama' }).locator('[aria-current=page]').innerText() === 'Tanaman', 'The Tanaman tab is current')
-  ok(/Cabai/.test(await page.locator('.plant-rail [aria-current]').innerText()), 'The plant opened is the current tick')
+  ok(/^CB-\d+$/.test((await page.locator('.plant-rail [aria-current]').innerText()).trim()), 'The plant opened is the current tick')
 
-  // The rail: every tick labelled (a code, or the current plant's name), a preview on hover, a click switches in place.
+  // The rail: every tick labelled with its code, a preview that fades in on hover, a click switches in place and no
+  // tick moves (2026-11-24: a longer label on the current tick pushed the others sideways, which read as a jitter).
   const rail = page.getByRole('navigation', { name: 'Tanaman lain' })
   ok(await rail.getByRole('button').count() === 3, 'One tick per plant')
-  const others = await rail.locator('button:not([aria-current])').allInnerTexts()
-  ok(others.every(label => /^[A-Z]{2}-\d+$/.test(label.trim())), `Other ticks carry their code: ${others.join(', ')}`)
+  const labels = await rail.getByRole('button').allInnerTexts()
+  ok(labels.every(label => /^[A-Z]{2}-\d+$/.test(label.trim())), `Every tick carries its code: ${labels.join(', ')}`)
+  const positions = () => rail.getByRole('button').evaluateAll(buttons => buttons.map(b => Math.round(b.getBoundingClientRect().left)).join(','))
+  const placed = await positions()
   const next = rail.locator('button:not([aria-current])').first()
-  await next.hover(); ok(await page.locator('.plant-rail-peek').isVisible(), 'Pointing at a tick previews that plant')
+  await next.hover(); await page.locator('.plant-rail-peek[data-open]').waitFor()
+  ok(true, 'Pointing at a tick previews that plant')
   const before = await page.locator('.plant-scene svg').getAttribute('aria-label')
   await next.click()
   await page.waitForFunction(label => document.querySelector('.plant-scene svg')?.getAttribute('aria-label') !== label, before)
   ok(new URL(page.url()).hash === '#tanaman', 'Switching from the rail stays on the plant page')
+  ok(await positions() === placed, `Choosing another plant moves no tick (${placed} → ${await positions()})`)
+  await page.mouse.move(5, 895)
+  ok(await page.locator('.plant-rail-peek[data-open]').count() === 0, 'Leaving the rail closes the preview (it fades out)')
 
   // Riwayat: one card, three views in the same place.
   ok(await page.locator('.history-card').count() === 1 && await page.locator('.analysis-toolbar').count() === 1, 'Riwayat opens on the chart')

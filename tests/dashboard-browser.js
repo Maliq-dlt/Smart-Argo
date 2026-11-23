@@ -48,7 +48,7 @@ try {
     assert.equal(await page.locator('.chart-details[open], .dashboard-details[open]').count(), 0)
     assert.match(await page.locator('.dash-stage').getAttribute('data-sky') ?? '', /^(pagi|siang|sore|malam)$/, 'The stage sky follows the session clock')
     await page.locator('.band-chart').focus(); await page.keyboard.press('ArrowLeft')
-    assert.match(await page.locator('.band-tip').innerText(), /^−.+ · \d/, 'The condition chart reads a value by keyboard')
+    assert.match(await page.locator('.condition-band .scrub-tip[data-reading]').innerText(), /^−.+ · \d/, 'The condition chart reads a value by keyboard')
     await page.keyboard.press('Escape')
     assert.equal(await page.locator('.chart-care-marker').count(), 2, 'Same-time water/feed share one marker')
     const marker = page.locator('.chart-care-marker').last()

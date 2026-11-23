@@ -337,9 +337,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .plant-heading p { margin-top: .625rem; color: var(--muted); font-size: .9375rem; }
 .reading-status { display: inline-flex; align-items: center; gap: .5rem; margin-top: .875rem; padding: .375rem .875rem .375rem .75rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); color: var(--muted); font-size: .8125rem; }
 .reading-status i { position: relative; width: .5rem; height: .5rem; border-radius: 50%; background: var(--primary-2); }
-.reading-status i::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: inherit; animation: ping 2.4s var(--ease) infinite; }
 .reading-status[data-alert] { color: var(--warn); } .reading-status[data-alert] i { background: var(--warn); }
-@keyframes ping { 70%, 100% { transform: scale(2.6); opacity: 0; } }
 
 .pending-water { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding: .875rem .875rem .875rem 1.125rem; border-radius: var(--r-tile); background: var(--water-soft); border: 1px solid color-mix(in srgb, var(--water) 22%, transparent); }
 .pending-water > div { display: flex; align-items: center; gap: .625rem; min-width: 0; }
@@ -390,10 +388,12 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .rail-tick:hover i, .rail-tick:focus-visible i { height: 1.375rem; background: var(--muted); }
 .rail-tick[data-tone=dry] i { background: var(--amber); }
 .rail-tick[data-tone=check] i, .rail-tick[data-tone=hot] i, .rail-tick[data-tone=wet] i { background: var(--warn); }
-.rail-tick[aria-current] { color: var(--ink); font-weight: 600; }
+.rail-tick[aria-current] { color: var(--ink); }
 .rail-tick[aria-current] i { width: 3px; height: 2rem; background: var(--ink); }
 .rail-tick:focus-visible { outline-offset: 0; border-radius: .375rem; }
-.plant-rail-peek { position: absolute; z-index: 5; top: calc(100% + .375rem); width: 15rem; max-width: 100%; display: grid; gap: .125rem; padding: .625rem .875rem; border-radius: 1rem; background: var(--raised); border: 1px solid var(--line); box-shadow: var(--shadow-pop); pointer-events: none; }
+.plant-rail-peek { position: absolute; z-index: 5; top: calc(100% + .375rem); width: 15rem; max-width: 100%; display: grid; gap: .125rem; padding: .625rem .875rem; border-radius: 1rem; background: var(--raised); border: 1px solid var(--line); box-shadow: var(--shadow-pop); pointer-events: none;
+  opacity: 0; translate: 0 -.25rem; transition: opacity .16s var(--ease-ui), translate .16s var(--ease-ui), left .22s var(--ease-ui); }
+.plant-rail-peek[data-open] { opacity: 1; translate: 0 0; }
 .plant-rail-peek b { font-weight: 600; } .plant-rail-peek span { color: var(--muted); font-size: .8125rem; }
 .analysis-toolbar p { margin-top: .25rem; color: var(--muted); }
 .analysis-filters { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
@@ -417,7 +417,19 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .history-area { fill: color-mix(in srgb, var(--accent-2) 22%, transparent); }
 .chart-help { padding: .375rem 1.5rem 0; color: var(--muted); font-size: .8125rem; }
 .chart-wrap { padding: .75rem 1rem 0; }
-.chart-wrap > svg { display: block; width: 100%; height: auto; overflow: visible; }
+.scrub-host { position: relative; }
+/* Chart reading dot (ChartScrub.tsx): follows quickly, returns to the newest point a little slower, never overshoots. */
+.scrub, .scrub-dot { transition: transform .42s var(--ease); }
+.scrub[data-reading], .scrub[data-reading] .scrub-dot { transition-duration: .12s; }
+.scrub-line { stroke: var(--ink); stroke-opacity: .4; stroke-dasharray: 3 3; opacity: 0; transition: opacity .2s var(--ease); }
+.scrub[data-reading] .scrub-line { opacity: 1; }
+.scrub-dot { fill: var(--surface); stroke: var(--primary); stroke-width: 2.6; }
+.scrub-tip { position: absolute; max-width: 100%; padding: .375rem .6875rem; border-radius: .75rem; background: var(--ink); color: var(--bg);
+  font-size: .78rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; opacity: 0;
+  transition: opacity .2s var(--ease), left .42s var(--ease), top .42s var(--ease), translate .42s var(--ease); }
+.scrub-tip[data-reading] { opacity: 1; transition-duration: .2s, .12s, .12s, .12s; }
+@media (prefers-reduced-motion: reduce) { .scrub, .scrub-dot, .scrub-tip { transition: none; } }
+.chart-wrap .scrub-host > svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
 .reading-feedback text { fill: var(--muted); font-family: var(--font-ui); font-size: 11px; }
 .chart-point { cursor: pointer; outline: none; }
 .chart-point:focus-visible circle:first-child { stroke: var(--primary); stroke-width: 2; }
@@ -563,7 +575,6 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .panel-heading .playback-state { display: inline-flex; align-items: center; gap: .375rem; color: var(--muted); font-size: .75rem; }
 .playback-state i { width: .5rem; height: .5rem; border-radius: 50%; background: var(--line-strong); }
 .playback-state i.running-dot { position: relative; background: var(--primary-2); }
-.playback-state i.running-dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: inherit; animation: ping 1.8s var(--ease) infinite; }
 .simulation-control-body, .controls-body { display: grid; gap: 1rem; padding: 1.125rem 1.5rem 1.5rem; }
 .world-clock { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; }
 .world-clock > span:first-child { display: grid; color: var(--muted); font-size: .8125rem; }
@@ -690,8 +701,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .log-line.rule b { color: #9ebfce; } .log-line.fault b { color: #f0a19b; } .log-line.system b { color: #e0b675; } .log-line.data b { color: #c5d1c2; }
 .terminal-prompt { display: flex; align-items: center; gap: .5rem; padding: .875rem 0 1rem; border-top: 1px solid var(--console-line); color: var(--console-muted); font-family: var(--font-mono); font-size: .75rem; }
 .terminal-prompt svg { width: 1rem; height: 1rem; }
-.terminal-prompt i { width: .5rem; height: 1rem; background: #b5d688; animation: caret 1.1s steps(1) infinite; }
-@keyframes caret { 50% { opacity: 0; } }
+.terminal-prompt i { width: .5rem; height: 1rem; background: #b5d688; }
 .terminal-content pre { height: 24rem; overflow: auto; margin: .875rem 0 1rem; padding: 1rem; border-radius: var(--r-tile); background: var(--console-2); color: var(--console-ink); font: .75rem/1.6 var(--font-mono); }
 .copy-button { display: inline-flex; align-items: center; gap: .375rem; min-height: 2.25rem; padding: 0 .875rem; border-radius: 999px; border: 1px solid var(--console-line); background: var(--console-2); color: var(--console-ink); font: 500 .75rem var(--font-ui); }
 .copy-button svg { width: .875rem; height: .875rem; }
@@ -878,11 +888,10 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .mascot-line.is-thin { stroke-width: 2; }
 .mascot-mouth { fill: var(--m-eye); stroke: var(--m-eye); stroke-width: 1.5; stroke-linejoin: round; }
 @media (prefers-reduced-motion: no-preference) {
-  .mascot-blink { transform-box: fill-box; transform-origin: center; animation: mascot-blink 5s infinite; }
-  .mascot-sprout { transform-box: view-box; transform-origin: 80px 72px; animation: mascot-sway 3.6s ease-in-out infinite alternate; }
+  /* Only a slow, small sway of the sprout: no blinking eyes (2026-11-24, motion comfort). */
+  .mascot-sprout { transform-box: view-box; transform-origin: 80px 72px; animation: mascot-sway 6s ease-in-out infinite alternate; }
 }
-@keyframes mascot-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.08); } }
-@keyframes mascot-sway { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+@keyframes mascot-sway { from { transform: rotate(-1.5deg); } to { transform: rotate(1.5deg); } }
 .signin-fields > p { color: var(--muted); font-size: .875rem; overflow-wrap: anywhere; }
 /* Email code step: the six digits are the whole point of the screen. */
 .name-editor { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; min-width: 0; }
@@ -1156,16 +1165,23 @@ html[data-theme-transition] * { transition: none !important; }
 @keyframes theme-icon-out { to { opacity: 0; transform: rotate(45deg) scale(.5); } }
 @keyframes theme-icon-in { from { opacity: 0; transform: rotate(-45deg) scale(.5); } to { opacity: 1; transform: none; } }
 
-/* ─── Page change: at once; only a plant card travels into its stage ─────────
- * Pages swap without a fade (the lens in the capsule shows where you went), so quick back-and-forth never dims the
- * screen. Opening a plant from Ringkasan is the one morph: the card and the stage share `plant-stage`, the old
- * picture disappears at once and the new one does not fade, so nothing is drawn twice. Clicks pass through, and a
- * second change finishes the first instead of queueing (startViewTransition skips the running one). */
-html[data-morph]::view-transition { pointer-events: none; }
-html[data-morph]::view-transition-old(*) { animation: none; opacity: 0; }
-html[data-morph]::view-transition-new(*) { animation: none; }
-html[data-morph]::view-transition-group(plant-stage) { animation-duration: .34s; animation-timing-function: cubic-bezier(.2, .7, .2, 1); overflow: clip; border-radius: var(--r-card); }
-html[data-morph] .theme-symbol { view-transition-name: none; }
+/* ─── Page change: the new page eases in over the old one ──────────────────
+ * A swap in one frame read as a blink (2026-11-24), and a cross-fade dims the screen halfway through. So the old
+ * picture stays fully opaque underneath while the new one fades in and rises a quarter rem in 240 ms: the screen goes
+ * from one page to the other with no darker frame between. The page is one picture (the stage and the theme icon drop
+ * their names), so nothing is drawn twice. Opening a plant from Ringkasan is the one morph: the card and the stage
+ * share `plant-stage`, the old picture disappears at once and the new one does not fade. Clicks pass through, and a
+ * second change finishes the first instead of queueing (startViewTransition skips the running one). App.tsx skips all
+ * of this for reduced motion. */
+html[data-page-transition]::view-transition { pointer-events: none; }
+html[data-page-transition] .theme-symbol { view-transition-name: none; }
+html[data-page-transition=page] .stage-scene { view-transition-name: none !important; }
+html[data-page-transition=page]::view-transition-group(root) { animation: none; }
+html[data-page-transition=page]::view-transition-new(root) { animation: page-in .24s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(.25rem); } }
+html[data-page-transition=morph]::view-transition-old(*) { animation: none; opacity: 0; }
+html[data-page-transition=morph]::view-transition-new(*) { animation: none; }
+html[data-page-transition=morph]::view-transition-group(plant-stage) { animation-duration: .34s; animation-timing-function: cubic-bezier(.2, .7, .2, 1); overflow: clip; border-radius: var(--r-card); }
 
 /* ─── Route states shared with the landing ───────────────────────────────── */
 .site-page { min-height: 100dvh; }

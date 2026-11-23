@@ -24,7 +24,7 @@ export default function TerminalSimulator({ clock, data, decision, logs }: { clo
     <Tabs.Root value={tab} onValueChange={setTab} className="terminal-tabs">
       <Tabs.List className="tab-list" aria-label="Tampilan konsol">
         {[['serial', 'Log sesi'], ['json', 'JSON'], ['trace', 'Jejak aturan']].map(([value, label]) => <Tabs.Trigger key={value} value={value}>
-          {tab === value && <motion.span className="segment-selection" layoutId={`${tabId}-tab`} initial={false} transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 40 }} aria-hidden="true" />}<span className="segment-label">{label}</span>
+          {tab === value && <motion.span className="segment-selection" layoutId={`${tabId}-tab`} initial={false} transition={reduced ? { duration: 0 } : { type: 'tween', duration: .26, ease: [.2, .7, .2, 1] }} aria-hidden="true" />}<span className="segment-label">{label}</span>
         </Tabs.Trigger>)}
       </Tabs.List>
       <Tabs.Content value="serial" className="terminal-content">

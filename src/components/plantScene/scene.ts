@@ -22,11 +22,11 @@ export class Scene {
   private ctx: Ctx
   private slots = new Map<SceneSpecies, Slot>()
   private current: SceneSpecies
-  private moist = new Spring(58, .8, .9)
+  private moist = new Spring(58, .8, 1)
   private settle = new Spring(1, 2.6, 1)
-  private hour = new Spring(10, 1.1, .92)
-  private canIn = new Spring(0, .65, .72)
-  private tilt = new Spring(0, .7, .78)
+  private hour = new Spring(10, 1.1, 1)
+  private canIn = new Spring(0, .65, 1)
+  private tilt = new Spring(0, .7, 1)
   private stream = new Spring(0, .35, 1)
   private boost = 0
   private wantMoist = 58
@@ -123,7 +123,7 @@ export class Scene {
     const part = MAKERS[id](this.ctx), ty = 506 - part.baseY * part.scale
     part.g.setAttribute('transform', `translate(400 ${f1(ty)}) scale(${part.scale})`)
     this.layers.appendChild(part.g)
-    s = { part, ty, day: new Spring(-1, 1.1, .9), alpha: new Spring(id === this.current ? 1 : 0, .55, 1) }
+    s = { part, ty, day: new Spring(-1, 1.1, 1), alpha: new Spring(id === this.current ? 1 : 0, .55, 1) }
     if (this.readingsOn) this.buildReadings(s)
     this.slots.set(id, s)
     return s
