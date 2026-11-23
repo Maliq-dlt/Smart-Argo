@@ -244,12 +244,15 @@ Urutan prioritas pita: profil per pot → profil spesies terkalibrasi → pola p
 - `data class Notice(val key: String, val title: String, val body: String)`.
 - `class CareCheckWorker : CoroutineWorker`: periodik 1 jam. Ia memanggil `my_overview` dan `my_alert_preferences` dengan sesi tersimpan; bila refresh token ditolak, worker berhenti tanpa notifikasi.
 
-- [ ] **Langkah 1: tulis tes yang gagal:**
+- [x] **Langkah 1: tulis tes yang gagal:**
   - keadaan sama dua kali → notifikasi kedua kosong;
   - tanaman pulih lalu kering lagi → notifikasi muncul lagi;
   - jenis yang dimatikan di preferensi → tanpa notifikasi.
-- [ ] **Langkah 2:** implementasi; kanal "Perawatan tanaman"; izin diminta saat pengguna menyalakan sakelar "Notifikasi" (Tugas 17), bukan saat app dibuka.
-- [ ] **Langkah 3:** `./gradlew.bat testDebugUnitTest lintDebug assembleDebug` → PASS; uji di emulator `sa-api35` dengan backend lokal.
+- [x] **Langkah 2:** implementasi; kanal "Perawatan tanaman"; izin diminta saat pengguna menyalakan sakelar "Notifikasi" (Tugas 17), bukan saat app dibuka.
+- [x] **Langkah 3a:** `./gradlew.bat testDebugUnitTest lintDebug assembleDebug` → PASS (115 tes).
+- [ ] **Langkah 3b:** uji di emulator `sa-api35` dengan backend lokal, digabung dengan tur emulator akhir Fase 3. Picu worker dengan `adb shell cmd jobscheduler run -f id.smartagro.app <job-id>` atau tunggu satu jam.
+- **Temuan keamanan sesi (diperbaiki, tes merah lalu hijau):** dua instans `AgroApi` (app + worker) memegang salinan sesi masing-masing. Refresh token yang diputar oleh satu instans membuat instans lain mengirim ulang token lama, dan GoTrue dapat mencabut seluruh sesi. `refresh()` kini memakai satu `Mutex` per proses (`companion object`) dan mengambil sesi lebih baru dari `SessionStore` sebelum menyegarkan (`AgroApiTest.backgroundWorkerAndAppShareARotatedRefreshTokenInsteadOfReplayingIt`).
+- Sakelar "Notifikasi di HP" sudah ada di Akun → "Keamanan & pengaturan" (bagian dari Tugas 17). Keluar akun mematikan pekerjaan per jam. Di cloud, worker diam sampai migrasi `20261123*` diterapkan (Tugas 4 langkah 5), karena `my_overview` belum ada di sana.
 
 FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk tanah yang mengering dalam hitungan jam.
 
@@ -442,5 +445,6 @@ Laporan crash tidak ditambahkan (ponytail: tambahkan saat rilis lewat Play Store
 | 7 | selesai | Merah: siang cerah <24 jam dianggap pulih, email bercap UTC. Hijau: `sensor-care` 16/16. Env baru `ALERT_APP_URL`. |
 | 8 | menunggu data | |
 | 13 | selesai | Firmware 60% flash tanpa peringatan sketsa (`DeviceConfig.example.h`; salinan `.cache/firmware/compile` memakai config lama dan gagal). Migrasi `20261123040000` (lokal saja). Penjelasan aturan menyebut pH harian. **pH harian tidak menghemat baterai tanpa sakelar MOSFET** (keputusan pengguna). |
-| 9–14 | belum | |
+| 9 | selesai kecuali uji emulator | 115 tes Android, lint tanpa galat. |
+| 10–12, 14 | belum | |
 | 15–20 | belum | |

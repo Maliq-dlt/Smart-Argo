@@ -72,6 +72,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
     // JVM UI verification without installing Android Studio or an emulator.

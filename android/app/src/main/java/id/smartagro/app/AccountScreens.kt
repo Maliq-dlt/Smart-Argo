@@ -47,6 +47,11 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
     val p = palette
     val uri = rememberSafeUriHandler()
     var confirmingLogout by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    var notify by remember { mutableStateOf(CareNotifications.enabled(context) && CareNotifications.allowed(context)) }
+    val askToNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        CareNotifications.setEnabled(context, granted); notify = granted
+    }
 
     TitledScreen("Akun", actions = { RefreshAction(state, model) }) {
         notices(state)
@@ -131,6 +136,18 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                         glyph = PhosphorPaths.ShieldCheck,
                         glyphColor = p.tint,
                         onClick = { model.navigate(Screen.Security) },
+                    )
+                    if (!state.demo) ToggleCell(
+                        "Notifikasi di HP",
+                        notify,
+                        { on ->
+                            // Android 13+ asks once; the switch follows the answer, never ahead of it.
+                            if (on && !CareNotifications.allowed(context)) askToNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            else { CareNotifications.setEnabled(context, on); notify = on }
+                        },
+                        subtitle = "Tanah kering dan perangkat bermasalah, dicek tiap jam",
+                        glyph = PhosphorPaths.Bell,
+                        glyphColor = p.tint,
                     )
                     Cell(
                         "Putar animasi masuk",

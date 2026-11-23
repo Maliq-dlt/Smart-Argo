@@ -857,6 +857,8 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         pendingCsv = null
         weatherJob?.cancel(); weatherGeneration++
         getApplication<Application>().getSharedPreferences("weather-cities", 0).edit().clear().apply()
+        // The hourly check belongs to this account; the next one turns it on again for theirs.
+        if (CareNotifications.enabled(getApplication())) CareNotifications.setEnabled(getApplication(), false)
         if (state.demo) { state = AppState(); return@run }
         try { androidx.credentials.CredentialManager.create(getApplication()).clearCredentialState(androidx.credentials.ClearCredentialStateRequest()) }
         catch (error: CancellationException) { throw error }

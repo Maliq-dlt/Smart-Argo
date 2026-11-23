@@ -254,6 +254,20 @@ class AgroApiTest {
         reply("/auth/v1/token?grant_type=refresh_token",JSONObject().put("code",400).put("error_code","validation_failed").put("msg","Refresh token is not valid"),status=400)
         try { api.rpc("my_products");fail("Expected expired session") } catch(error: ApiFailure) { assertTrue(error.expired);assertEquals("Sesi berakhir. Silakan masuk kembali.",error.message) }
     }
+    @Test fun backgroundWorkerAndAppShareARotatedRefreshTokenInsteadOfReplayingIt() = runBlocking {
+        // Auth rotates the refresh token on every use and may end the whole session when an old one comes back.
+        store.save(Session("old-access","refresh-1",Instant.now().epochSecond-1,"grower@example.test"))
+        val worker=AgroApi(config,store) { uri -> URI("http://127.0.0.1:${server.address.port}${uri.rawPath}${uri.rawQuery?.let { "?$it" }.orEmpty()}").toURL().openConnection() as HttpURLConnection }
+        assertTrue(api.resume());assertTrue(worker.resume())
+        reply("/auth/v1/token?grant_type=refresh_token",token("access-2").put("refresh_token","refresh-2")) { assertEquals("refresh-1",it.getString("refresh_token")) }
+        reply("/rest/v1/rpc/my_overview",JSONObject().put("ok",true).put("plants",JSONArray()))
+        worker.rpc("my_overview")
+        // The app still holds refresh-1 in memory. It must take refresh-2 from the store, not send refresh-1 again.
+        reply("/rest/v1/rpc/my_products",JSONObject().put("ok",true))
+        api.rpc("my_products")
+        assertEquals("access-2",api.session?.accessToken)
+        assertEquals("refresh-2",store.read()?.refreshToken)
+    }
     @Test fun refreshAndLoginResponsesCannotUndoLogoutOrCancelledLogin() = runBlocking {
         store.save(Session("old-contract","refresh-contract",Instant.now().epochSecond-1,"grower@example.test"))
         reply("/auth/v1/token?grant_type=refresh_token",token("late-refresh")) { runBlocking { api.clear() } }

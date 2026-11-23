@@ -14,12 +14,13 @@ class ApiFailure(message: String, val expired: Boolean = false, val code: String
 
 /** Same GoTrue and PostgREST contracts as the web. No service-role key or device-control writes. */
 class AgroApi(private val config: BackendConfig, private val store: SessionStore, private val connect: (URI)->HttpURLConnection = { it.toURL().openConnection() as HttpURLConnection }) {
+    // One lock for every instance in the process (WorkManager runs in the app process), so two refreshes never overlap.
+    private companion object { val refreshLock = Mutex() }
     @Volatile var session: Session? = null
         private set
     @Volatile private var pending: Session? = null
     internal val pendingSession: Session? get() = pending
     private var factorId: String? = null
-    private val refreshLock = Mutex()
     private val authLock = Any()
     private var authVersion = 0L
     internal fun authenticationVersion(): Long = synchronized(authLock) { authVersion }
@@ -96,6 +97,10 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
         save(verified, version)
         return true
     }
+    /** Loads the stored session without the network, for the background worker. refresh() and Auth then judge it. */
+    suspend fun resume(): Boolean = withContext(Dispatchers.IO) {
+        synchronized(authLock) { store.read()?.also { session = it; authVersion++ } != null }
+    }
     suspend fun login(email: String, password: String): Boolean {
         cancelMfa()
         require(Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$").matches(email) && email.length <= 320) { "Isi alamat email yang valid." }
@@ -151,8 +156,17 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
     }
     fun cancelMfa() = synchronized(authLock) { pending = null; factorId = null; authVersion++ }
     internal suspend fun refresh() = refreshLock.withLock {
-        val (value, version) = synchronized(authLock) { (session ?: throw ApiFailure("Silakan masuk kembali.", true)) to authVersion }
+        var (value, version) = synchronized(authLock) { (session ?: throw ApiFailure("Silakan masuk kembali.", true)) to authVersion }
         if (value.expiresAt > Instant.now().epochSecond + 60) return@withLock
+        // The app and the background worker each hold an AgroApi. Auth rotates the refresh token on every use and can
+        // end the whole session when a used one comes back, so take a newer token another instance already stored.
+        val stored = withContext(Dispatchers.IO) { store.read() }
+        if (stored != null && stored.email.equals(value.email, ignoreCase=true) && stored.refreshToken != value.refreshToken &&
+            stored.expiresAt > value.expiresAt) {
+            synchronized(authLock) { if (authVersion == version) session = stored else return@withLock }
+            if (stored.expiresAt > Instant.now().epochSecond + 60) return@withLock
+            value = stored
+        }
         try {
             val json = request("/auth/v1/token?grant_type=refresh_token", JSONObject().put("refresh_token", value.refreshToken))
             val refreshed = Session.parse(json).let { it.copy(email = it.email.ifBlank { value.email }, displayName = it.displayName.ifBlank { value.displayName }) }
@@ -166,7 +180,7 @@ class AgroApi(private val config: BackendConfig, private val store: SessionStore
         }
     }
     suspend fun rpc(name: String, body: JSONObject = JSONObject()): JSONObject {
-        require(name in setOf("ensure_my_account", "my_account_deletion", "request_account_deletion", "cancel_account_deletion", "my_avatar", "set_my_avatar", "clear_my_avatar", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "archive_my_unit", "restore_my_unit", "place_my_device", "my_unit_history", "product_public_status", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden", "my_device_units", "unit_explanations", "add_my_site", "plant_in_my_slot", "switch_my_plant", "append_my_care_journal", "read_my_care_journal", "read_my_measurement_history", "compare_my_measurement_history", "security_workspace", "create_my_recovery_codes", "my_recovery_codes_status", "issue_activation_nonce", "create_transfer_offer", "cancel_transfer_offer", "accept_transfer", "open_ownership_recovery", "withdraw_ownership_recovery", "my_ownership_recoveries", "open_reward_appeal", "my_reward_cases", "energy_workspace", "set_slot_sharing", "share_my_cycle", "unshare_my_cycle", "community_knowledge"))
+        require(name in setOf("ensure_my_account", "my_account_deletion", "request_account_deletion", "cancel_account_deletion", "my_avatar", "set_my_avatar", "clear_my_avatar", "my_products", "my_units", "my_unit_overview", "unit_measurements", "rename_my_unit", "archive_my_unit", "restore_my_unit", "place_my_device", "my_unit_history", "product_public_status", "reward_workspace", "reserve_my_reward", "cancel_my_redemption", "my_chain_proofs", "my_garden", "my_device_units", "unit_explanations", "add_my_site", "plant_in_my_slot", "switch_my_plant", "append_my_care_journal", "read_my_care_journal", "read_my_measurement_history", "compare_my_measurement_history", "security_workspace", "create_my_recovery_codes", "my_recovery_codes_status", "issue_activation_nonce", "create_transfer_offer", "cancel_transfer_offer", "accept_transfer", "open_ownership_recovery", "withdraw_ownership_recovery", "my_ownership_recoveries", "open_reward_appeal", "my_reward_cases", "energy_workspace", "set_slot_sharing", "share_my_cycle", "unshare_my_cycle", "community_knowledge", "my_overview", "my_alert_preferences"))
         refresh()
         return request("/rest/v1/rpc/$name", body, session!!.accessToken)
     }
