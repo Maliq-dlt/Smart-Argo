@@ -43,6 +43,14 @@ No host Node.js, Supabase account, or `.env` file is needed. Only port `8088` is
 
 Tests use generated keys and synthetic data. They do not prove calibration, field accuracy, physical-device integration, or energy savings. Points are internal program records, not money or tokens. Ownership and claim commitments sit in an outbox; no contract or worker sends them on-chain yet.
 
+### Feature status
+
+| Status | Features |
+| --- | --- |
+| Active | Simulator and dashboard, accounts, telemetry ingest, sensor care (overview, watering outlook, alerts), web and Android apps. |
+| Frozen | Energy rewards, on-chain record proof, community knowledge, operator and curator workspaces. They stay maintained and tested, but get no new features until a physical device passes the [bench test](firmware/UJI-BANGKU.md). |
+| Not yet proven | A physical ESP32 end to end, sensor calibration in real soil, and real email delivery from the alert function. |
+
 ![Smart Agro dashboard](docs/images/dashboard.png)
 
 ## Architecture

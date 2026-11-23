@@ -24,7 +24,7 @@ function nodes() {
 }
 async function tap(label, { scrolls = 6 } = {}) {
   for (let i = 0; i <= scrolls; i++) {
-    const hit = nodes().find(n => (n.text === label || n.desc === label || n.text.startsWith(label)) && (n.y < 1900 || ['Aktivitas', 'Akun', 'Coba mode latihan', 'Jelajahi mode latihan', 'Masuk dengan email'].includes(label)));
+    const hit = nodes().find(n => (n.text === label || n.desc === label || n.text.startsWith(label)) && (n.y < 1900 || ['Aktivitas', 'Akun', 'Coba mode latihan', 'Jelajahi mode latihan', 'Masuk dengan email', 'Simpan'].includes(label)));
     if (hit) { adb('shell', 'input', 'tap', hit.x, hit.y); await sleep(1200); return; }
     adb('shell', 'input', 'swipe', '540', '1700', '540', '900', '400'); await sleep(700);
   }
@@ -52,23 +52,31 @@ async function tour(tag) {
     await sleep(2800);
   }
   await shot(`${tag}-01-tanaman`);
-  await tap('Buka detail', { scrolls: 3 });
+  await scroll(); await shot(`${tag}-01b-tanaman-bawah`);
+  for (let i = 0; i < 3; i++) { adb('shell', 'input', 'swipe', '540', '700', '540', '1800', '400'); await sleep(500); } // back to the top
+  await tap('Kering terkonfirmasi', { scrolls: 10 }); // a dry practice pot, so the action card offers Catat siram
   await sleep(800);
   await shot(`${tag}-02-detail`);
+  await tap('Catat siram'); await shot(`${tag}-02a-siram`);
+  await tap('Simpan'); await shot(`${tag}-02b-dicatat`);
   await scroll(); await shot(`${tag}-03-detail-bawah`);
   await scroll(); await shot(`${tag}-04-detail-akhir`);
   adb('shell', 'input', 'keyevent', 'KEYCODE_BACK'); await sleep(1200);
   await tap('Aktivitas'); await shot(`${tag}-05-aktivitas`);
-  await tap('Jurnal'); await shot(`${tag}-06-aktivitas-jurnal`);
+  await tap('Indeks lembap'); await shot(`${tag}-05a-grafik`);
+  adb('shell', 'input', 'keyevent', 'KEYCODE_BACK'); await sleep(1200);
+  await scroll(); await shot(`${tag}-06-aktivitas-jurnal`);
   await tap('Akun'); await shot(`${tag}-07-akun`);
 }
 
 const theme = mode => adb('shell', 'cmd', 'uimode', 'night', mode);
+// SHOTS_ONLY=360-teks200 (or another tag) reruns one pass after a fix.
+const only = process.env.SHOTS_ONLY, want = tag => !only || only === tag
 try {
-  for (const [mode, name] of [['no', 'terang'], ['yes', 'gelap']]) { theme(mode); await tour(`412-${name}`); }
+  for (const [mode, name] of [['no', 'terang'], ['yes', 'gelap']]) if (want(`412-${name}`)) { theme(mode); await tour(`412-${name}`); }
   adb('shell', 'wm', 'size', '1080x2400'); adb('shell', 'wm', 'density', '480'); // 360 dp wide
-  theme('no'); await tour('360-terang');
-  adb('shell', 'settings', 'put', 'system', 'font_scale', '2.0'); await tour('360-teks200');
+  theme('no'); if (want('360-terang')) await tour('360-terang');
+  adb('shell', 'settings', 'put', 'system', 'font_scale', '2.0'); if (want('360-teks200')) await tour('360-teks200');
 } finally {
   adb('shell', 'settings', 'put', 'system', 'font_scale', '1.0');
   adb('shell', 'wm', 'size', 'reset'); adb('shell', 'wm', 'density', 'reset'); theme('no');

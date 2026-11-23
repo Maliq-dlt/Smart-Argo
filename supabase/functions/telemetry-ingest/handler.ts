@@ -53,7 +53,7 @@ export function createTelemetryIngestHandler(config: { url: string; serviceKey: 
       if (!device.ok || typeof device.public_key !== 'string') return reply(403, { ok: false, code: 'device_unavailable', message: 'Device unavailable.' })
       if (!await verifyDeviceSignature(device.public_key, envelope.signature, envelope.payload)) return reply(403, { ok: false, code: 'invalid_signature', message: 'Device signature invalid.' })
       const result = await rpc('ingest_verified_telemetry', { p_payload: envelope.payload, p_public_key: device.public_key, p_signature: envelope.signature })
-      const status = result.ok ? 200 : result.code === 'sequence_conflict' || result.code === 'sequence_out_of_order' ? 409 : result.code === 'rate_limited' ? 429 : result.code === 'device_unavailable' || result.code === 'unit_unavailable' || result.code === 'unit_mismatch' ? 403 : 400
+      const status = result.ok ? 200 : result.code === 'sequence_conflict' || result.code === 'sequence_out_of_order' || result.code === 'unit_archived' ? 409 : result.code === 'rate_limited' ? 429 : result.code === 'device_unavailable' || result.code === 'unit_unavailable' || result.code === 'unit_mismatch' ? 403 : 400
       return reply(status, result)
     } catch { return reply(503, { ok: false, code: 'service_unavailable', message: 'Telemetry temporarily unavailable. Retry the same signed packet.' }) }
   }

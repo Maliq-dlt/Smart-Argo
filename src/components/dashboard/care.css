@@ -1,0 +1,15 @@
+.live-care, .care-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; min-width: 0; }
+.care-top, .care-actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.care-top { justify-content: space-between; }
+.care-panel { padding: clamp(1rem, 3vw, 2rem); overflow-wrap: anywhere; }
+.care-fields { border: 0; padding: 0; display: grid; gap: 1rem; min-width: 0; }
+.care-fields label { display: flex; align-items: baseline; gap: .75rem; }
+.care-fields input { flex: 0 0 auto; accent-color: var(--primary); }
+.care-picker { display: grid; gap: .5rem; max-width: 100%; }
+.care-picker :is(input, select) { padding: .65rem; max-width: 100%; min-width: 0; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: .5rem; font: inherit; }
+.care-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+.care-facts dd { margin: .35rem 0 0; font-weight: 600; }
+.care-rise { border-top: 1px solid var(--line-strong); padding-top: 1rem; }
+
+.live-care .button, .care-panel .button { white-space: normal; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
+.care-panel h2 { font-family: var(--font-display); font-size: min(1.5rem, 10vw); line-height: 1.2; }  /* whole words at 320 px, 200 % text */

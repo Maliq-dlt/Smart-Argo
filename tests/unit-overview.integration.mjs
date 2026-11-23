@@ -13,7 +13,7 @@ const rpc=(name,token,body={})=>api('/rest/v1/rpc/'+name,token,body)
 const run=randomUUID().slice(0,8),password=randomBytes(20).toString('base64url')
 async function account(label){const r=await api('/auth/v1/signup',null,{email:`overview-${run}-${label}@example.test`,password});assert.equal(r.status,200);const a=await rpc('ensure_my_account',r.data.access_token);assert.equal(a.data.ok,true);return{token:r.data.access_token,id:a.data.account.id}}
 function product(owner){const id=randomUUID(),device=randomUUID(),keys=generateKeyPairSync('ed25519'),publicKey=Buffer.from(keys.publicKey.export({format:'jwk'}).x,'base64url').toString('base64');sql(`INSERT INTO product(id,serial_public,variant,issuer_signature) VALUES(${q(id)},${q('OVR-'+id.slice(0,8).toUpperCase())},'garden','synthetic DB test'); INSERT INTO device(id,product_id,public_key) VALUES(${q(device)},${q(id)},${q(publicKey)}); INSERT INTO ownership(product_id,account_id,start_at) VALUES(${q(id)},${q(owner.id)},clock_timestamp()-interval '2 days')`);return{id,device,keys,publicKey}}
-async function ingest(p,unit,sensors){const payload=JSON.stringify({domain:'smart-agro.telemetry.v2',schema_version:2,source:'device',device_id:p.device,unit_id:unit,boot_id:randomUUID(),sequence:1,measured_at:new Date().toISOString(),clock_status:'synced',sensors});const r=await rpc('ingest_verified_telemetry',config.service,{p_payload:payload,p_public_key:p.publicKey,p_signature:sign(null,Buffer.from(payload),p.keys.privateKey).toString('base64')});assert.equal(r.data.ok,true,JSON.stringify(r.data))}
+async function ingest(p,unit,sensors,extra={}){const payload=JSON.stringify({domain:'smart-agro.telemetry.v2',schema_version:2,source:'device',device_id:p.device,unit_id:unit,boot_id:randomUUID(),sequence:1,measured_at:new Date().toISOString(),clock_status:'synced',sensors,...extra});const r=await rpc('ingest_verified_telemetry',config.service,{p_payload:payload,p_public_key:p.publicKey,p_signature:sign(null,Buffer.from(payload),p.keys.privateKey).toString('base64')});assert.equal(r.data.ok,true,JSON.stringify(r.data))}
 const fixture=sqlText=>sql(`SET session_replication_role=replica; ${sqlText}; SET session_replication_role=origin;`)
 const overview=async owner=>Object.fromEntries((await rpc('my_unit_overview',owner.token)).data.units.map(u=>[u.location_label,u]))
 
@@ -40,6 +40,37 @@ await test('APP-03: unit overview and alerts',async t=>{
   assert.deepEqual(units.Usang.alerts,['stale'])
   assert.deepEqual(units.Kosong.alerts,['no_data'])
   assert.equal(units.Segar.devices[0].status,'active')
+ })
+ await t.test('battery voltage comes from the latest packet and a low cell raises battery_low',async()=>{
+  const cell=await create(garden,'Baterai',alice),ago=s=>new Date(Date.now()-s*1000).toISOString()
+  const soil={moisture:{status:'ok',value:50},soil_temperature:{status:'ok',value:26},soil_ph:{status:'not_measured',value:null}}
+  await ingest(garden,cell,soil,{measured_at:ago(120),battery:{status:'ok',value:3.92}})
+  let u=(await overview(alice)).Baterai
+  assert.deepEqual([u.battery.voltage,u.alerts],[3.92,[]])
+  await ingest(garden,cell,soil,{measured_at:ago(60),battery:{status:'ok',value:3.31}})
+  u=(await overview(alice)).Baterai
+  assert.deepEqual([u.battery.voltage,u.alerts],[3.31,['battery_low']])
+  await ingest(garden,cell,soil,{measured_at:ago(1),battery:{status:'not_measured',value:null}})
+  u=(await overview(alice)).Baterai
+  assert.deepEqual([u.battery,u.alerts],[null,[]],'a newer packet without a reading clears the voltage')
+  assert.equal((await overview(alice)).Segar.battery,null,'packets without the object report nothing')
+ })
+ await t.test('soil pH, read once a day, shows the last measured value with its own time',async()=>{
+  const daily=await create(garden,'pH harian',alice)
+  const soil=(ph,moisture={status:'ok',value:48})=>({moisture,soil_temperature:{status:'ok',value:25},soil_ph:ph})
+  await ingest(garden,daily,soil({status:'ok',value:6.4}))
+  // SINTETIS. The morning reading is 20 hours old; the device has sent pH as not_measured since.
+  fixture(`UPDATE telemetry_packet SET received_at=received_at-interval '20 hours', measured_at=measured_at-interval '20 hours' WHERE unit_id=${q(daily)}; UPDATE measurement SET received_at=received_at-interval '20 hours', measured_at=measured_at-interval '20 hours' WHERE unit_id=${q(daily)}`)
+  await ingest(garden,daily,soil({status:'not_measured',value:null}))
+  let s=Object.fromEntries((await overview(alice))['pH harian'].sensors.map(x=>[x.sensor_id,x]))
+  assert.equal(s.soil_ph.quality_status,'ok')
+  assert.equal(Number(s.soil_ph.value_nullable),6.4)
+  assert.ok(Date.now()-Date.parse(s.soil_ph.measured_at)>19*3600000,'the pH keeps its own measurement time')
+  assert.ok(Date.now()-Date.parse(s.moisture.measured_at)<600000,'moisture is the newest packet')
+  // Only pH falls back: a moisture probe that stops measuring is never covered by an older value.
+  await ingest(garden,daily,soil({status:'not_measured',value:null},{status:'not_measured',value:null}),{measured_at:new Date(Date.now()+1000).toISOString()})
+  s=Object.fromEntries((await overview(alice))['pH harian'].sensors.map(x=>[x.sensor_id,x]))
+  assert.equal(s.moisture.quality_status,'not_measured')
  })
  await t.test('energy, battery and device alerts',async()=>{
   const meter=randomUUID(),now=Date.now(),start=new Date(Math.floor(now/900000)*900000-900000*4).toISOString(),end=new Date(Math.floor(now/900000)*900000-900000*3).toISOString()

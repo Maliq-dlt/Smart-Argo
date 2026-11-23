@@ -53,6 +53,10 @@ val Water = Color(0xFF4A7888)
     val tint: Color, val onTint: Color, val soft: Color, val onSoft: Color,
     val warn: Color, val water: Color, val sun: Color,
     val bar: Color, val barEdge: Color, val shadow: Color,
+    /* Measuring language ("garis ukur"): one color per meaning. Ochre = dry or hot, earth = within range, blue = wet or cold;
+     * green stays for actions and selection. Status inks are >= 4.5:1 on cell in both appearances. */
+    val dryInk: Color, val okInk: Color, val wetInk: Color, val band: Color, val onTint2: Color,
+    val pot: Color, val potRim: Color, val soilDry: Color, val soilWet: Color, val leaf: Color, val leaf2: Color, val fruit: Color,
 )
 private val LightPalette = Palette(false,
     canvas = Color(0xFFECEFE7), cell = Color(0xFFFBFCF9), raised = Color(0xFFFFFFFF),
@@ -60,14 +64,20 @@ private val LightPalette = Palette(false,
     separator = Color(0x2418211B), fill = Color(0x1418211B), pressed = Color(0x0F18211B),
     tint = Color(0xFF2F5A3C), onTint = Color(0xFFF6F7F2), soft = Color(0xFFDDEBC6), onSoft = Color(0xFF1C2F12),
     warn = Color(0xFFB84A33), water = Color(0xFF2E6E84), sun = Color(0xFFB8860B),
-    bar = Color(0xB8FBFCF9), barEdge = Color(0x66FFFFFF), shadow = Color(0x2E18211B))
+    bar = Color(0xB8FBFCF9), barEdge = Color(0x66FFFFFF), shadow = Color(0x2E18211B),
+    dryInk = Color(0xFF8A5A12), okInk = Color(0xFF5E4631), wetInk = Color(0xFF2E6E84), band = Color(0x212F5A3C), onTint2 = Color(0xD6F6F7F2),
+    pot = Color(0xFFC4866A), potRim = Color(0xFFA86C52), soilDry = Color(0xFFDBC69E), soilWet = Color(0xFF4E3B2C),
+    leaf = Color(0xFF4D7A3E), leaf2 = Color(0xFF6E9A52), fruit = Color(0xFFC2412F))
 private val DarkPalette = Palette(true,
     canvas = Color(0xFF111713), cell = Color(0xFF1F2823), raised = Color(0xFF25302A),
     ink = Color(0xFFE8EDE6), secondary = Color(0xFFA5AFA7), tertiary = Color(0xFF6F7A72),
     separator = Color(0x29E8EDE6), fill = Color(0x1FE8EDE6), pressed = Color(0x14E8EDE6),
     tint = Color(0xFFA6CF8F), onTint = Color(0xFF132016), soft = Color(0xFF2B3823), onSoft = Color(0xFFE4EFCF),
     warn = Color(0xFFE3876C), water = Color(0xFF8CC3D6), sun = Color(0xFFE9C46A),
-    bar = Color(0xB31F2823), barEdge = Color(0x1FFFFFFF), shadow = Color(0x66000000))
+    bar = Color(0xB31F2823), barEdge = Color(0x1FFFFFFF), shadow = Color(0x66000000),
+    dryInk = Color(0xFFE2B467), okInk = Color(0xFFCDB49A), wetInk = Color(0xFF8CC3D6), band = Color(0x26A6CF8F), onTint2 = Color(0xD1132016),
+    pot = Color(0xFF9C6A54), potRim = Color(0xFF7E5442), soilDry = Color(0xFFA9946F), soilWet = Color(0xFF3A2C21),
+    leaf = Color(0xFF7FAE63), leaf2 = Color(0xFF98C57C), fruit = Color(0xFFE0634E))
 
 /** The HIG text styles (iOS default sizes), in General Sans; Fraunces only for the large and screen titles. */
 object T {

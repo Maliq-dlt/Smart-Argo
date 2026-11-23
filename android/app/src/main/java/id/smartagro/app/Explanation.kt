@@ -45,7 +45,7 @@ internal fun parseExplanationSnapshot(json: JSONObject): UnitExplanation {
         val model=value.text("model",80)
         require(Regex("[A-Za-z0-9][A-Za-z0-9./:_-]{0,79}").matches(model))
         ExplanationAi(model,value.bounded("prompt_version",64),value.text("explanation",2000),
-            if(value.has("answer") && value.isNull("answer")) null else value.bounded("answer",1000))
+            if(value.isNull("answer")) null else value.bounded("answer",1000))
     } else { require(status!="ok" && !d.has("ai")); null }
     val hash=json.text("context_sha256",64)
     require(Regex("[0-9a-f]{64}").matches(hash))

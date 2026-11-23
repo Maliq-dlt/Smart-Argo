@@ -1,5 +1,8 @@
 package id.smartagro.app
 
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,10 +19,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
+internal fun ProductsManageScreen(state: AppState, model: AgroViewModel, initialSerial: String? = null, onSerialUsed: () -> Unit = {}) {
+    var deviceSetupOpen by remember { mutableStateOf(false) }
+    if (deviceSetupOpen) DeviceSetupSheet { deviceSetupOpen = false }
     val p = palette
     val context = LocalContext.current
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val now = rememberNow()
+    var tab by rememberSaveable { mutableIntStateOf(if (state.products.isEmpty()) 1 else 0) }
+    var setupDeviceId by rememberSaveable { mutableStateOf<String?>(null) }
     var serialInput by rememberSaveable { mutableStateOf("") }
     var scanWarning by rememberSaveable { mutableStateOf<String?>(null) }
     var sealedCode by remember { mutableStateOf("") }
@@ -31,7 +38,8 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
     var recoveryEvidenceRef by rememberSaveable { mutableStateOf("") }
     var renamingUnit by remember { mutableStateOf<PlantUnit?>(null) }
     var archivingUnit by remember { mutableStateOf<PlantUnit?>(null) }
-    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var placing by remember { mutableStateOf<Pair<OwnedDevice, PlantUnit>?>(null) }
+    var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     fun handleQrString(raw: String) {
         val parsed = runCatching { parseProductScan(raw) }.getOrNull()
@@ -60,6 +68,35 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
             else scanWarning = "QR tidak ditemukan pada gambar tersebut."
         }
     }
+    fun photographQr() {
+        try {
+            val target = tempCameraQrUri(context)
+            pendingCameraUri = target
+            cameraLauncher.launch(target)
+        } catch (_: android.content.ActivityNotFoundException) {
+            pendingCameraUri = null
+            scanWarning = "Aplikasi kamera tidak tersedia. Pilih foto QR atau isi nomor seri."
+        } catch (_: SecurityException) {
+            pendingCameraUri = null
+            scanWarning = "Kamera tidak dapat dibuka. Pilih foto QR atau isi nomor seri."
+        }
+    }
+    // Google's scanner reads the code live and needs no camera permission. Without Google Play services or its scanner
+    // module (first use downloads it), the photo route below still works.
+    fun scanQr() {
+        val scanner = runCatching {
+            GmsBarcodeScanning.getClient(context, GmsBarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE).enableAutoZoom().build())
+        }.getOrNull() ?: return photographQr()
+        scanner.startScan()
+            .addOnSuccessListener { code -> code.rawValue?.let(::handleQrString) ?: run { scanWarning = "QR tidak memuat teks." } }
+            .addOnFailureListener { photographQr() }
+    }
+
+    LaunchedEffect(initialSerial) {
+        // A packaging link fills the form once; opening Produk later must not jump back to it.
+        initialSerial?.let { serialInput = it; tab = 1; if (!state.demo) model.checkPublicProduct(it); onSerialUsed() }
+    }
 
     LaunchedEffect(tab, state.demo, state.email, state.recoveriesLoaded, state.busy) {
         if (tab == 2 && !state.demo && state.email.isNotBlank() && !state.recoveriesLoaded && !state.busy) {
@@ -75,6 +112,9 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
         actions = { RefreshAction(state, model) },
     ) {
         notices(state)
+        if (!state.demo) item(key = "device-wifi-setup") {
+            Group { Cell("Siapkan Wi-Fi & kalibrasi", subtitle = "Sambung ke jaringan alat pada label", onClick = { deviceSetupOpen = true }) }
+        }
         item(key = "product-tabs") {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                 Segmented(listOf("Unit", "QR", "Transfer"), tab, { tab = it })
@@ -82,7 +122,12 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
         }
         when (tab) {
             0 -> {
-                item(key = "active-units-title") { SectionTitle("Unit aktif (${state.units.size})") }
+                item(key = "active-units-title") {
+                    SectionTitle("Unit aktif (${state.units.size})")
+                    if (!state.demo && state.units.isNotEmpty()) {
+                        Footnote("Pasang perangkat setelah bacaan pertamanya masuk. Untuk pindah pot, pasang di unit baru; perangkat tidak perlu di-flash ulang.")
+                    }
+                }
                 if (state.units.isEmpty()) {
                     item { Footnote("Belum ada unit aktif. Klaim produk terlebih dahulu atau pulihkan arsip.") }
                 } else {
@@ -98,18 +143,66 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                                     Cell("Ubah nama", glyph = PhosphorPaths.PencilSimple, glyphColor = p.tint, enabled = !state.busy, onClick = { renamingUnit = u })
                                     devs.forEach { d ->
                                         val placedHere = d.unitId == u.id
-                                        ToggleCell(
+                                        Cell(
                                             "Perangkat ${d.id.take(8)}",
-                                            placedHere,
-                                            { put -> model.placeDevice(d.id, if (put) u.id else null) },
-                                            subtitle = if (placedHere) "Terpasang pada unit ini" else if (d.unitId == null) "Dipasangkan fleksibel" else "Terpasang di unit lain",
+                                            subtitle = when {
+                                                placedHere -> "Terpasang pada unit ini"
+                                                d.unitId != null -> "Terpasang di unit lain"
+                                                else -> "Belum terpasang"
+                                            },
                                             glyph = PhosphorPaths.Package,
                                             glyphColor = p.secondary,
-                                            enabled = !state.busy && d.status == "active",
+                                            chevron = false,
                                         )
+                                        if (!placedHere && d.status == "active" && !state.demo) {
+                                            Cell(
+                                                if (d.unitId == null) "Verifikasi & pasang" else "Pindahkan ke sini",
+                                                subtitle = "Bacaan berikutnya tercatat di ${u.name}",
+                                                enabled = !state.busy,
+                                                onClick = { placing = d to u },
+                                            )
+                                        }
+                                        if (placedHere && d.status == "active" && !state.demo) {
+                                            val expanded = setupDeviceId == d.id
+                                            Cell(
+                                                if (expanded) "Tutup pemeriksaan" else "Periksa pemasangan",
+                                                subtitle = if (expanded) null else "Cek bacaan di ${u.name}",
+                                                glyph = PhosphorPaths.DropFill,
+                                                enabled = !state.busy,
+                                                onClick = {
+                                                    setupDeviceId = if (expanded) null else d.id
+                                                    if (!expanded) model.checkDeviceSetup(d)
+                                                },
+                                            )
+                                            if (expanded) {
+                                                val setup = state.deviceSetupReadings?.takeIf { it.device == d }
+                                                Sensor.entries.forEach { sensor ->
+                                                    val sample = setup?.readings?.firstOrNull { it.sensor == sensor }
+                                                    val status = sensorStatus(sample, now, stale = false, revoked = false)
+                                                    Cell(
+                                                        sensor.label,
+                                                        value = sample?.value?.takeIf { status == SensorStatus.Ready }?.let { reading(sensor, it) },
+                                                        subtitle = when {
+                                                            sample != null -> "${status.label} · Diukur ${time(sample.at)}"
+                                                            state.busy -> "Memeriksa…"
+                                                            setup == null -> "Belum diperiksa"
+                                                            else -> "Belum ada bacaan setelah penempatan dalam 24 jam terakhir"
+                                                        },
+                                                        chevron = false,
+                                                    )
+                                                }
+                                                Cell("Segarkan bacaan probe", enabled = !state.busy, onClick = { model.checkDeviceSetup(d) })
+                                            }
+                                        }
                                     }
                                     Cell("Riwayat aktivitas unit", glyph = PhosphorPaths.ClockCounterClockwise, glyphColor = p.secondary, enabled = !state.busy, onClick = { model.loadUnitLifecycleEvents(u.id) })
-                                    Cell("Arsipkan unit", glyph = PhosphorPaths.Archive, glyphColor = p.warn, destructive = true, enabled = !state.busy, onClick = { archivingUnit = u })
+                                    val hasPlacement = devs.any { it.unitId == u.id }
+                                    Cell(
+                                        "Arsipkan unit",
+                                        subtitle = if (hasPlacement) "Perangkat di unit ini ikut dilepas." else null,
+                                        glyph = PhosphorPaths.Archive, glyphColor = p.warn, destructive = true,
+                                        enabled = !state.busy, onClick = { archivingUnit = u },
+                                    )
                                 }
                                 evs?.let { events ->
                                     Spacer(Modifier.height(8.dp))
@@ -140,6 +233,7 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
             1 -> {
                 item(key = "qr-scan") {
                     SectionTitle("Pindai QR atau cek nomor seri")
+                    Footnote("Gunakan QR kemasan untuk klaim produk. Setelah diklaim, tempatkan perangkat di tab Unit.")
                     scanWarning?.let { Banner(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), error = true) }
                     Group {
                         FieldRow("Nomor seri", serialInput, { serialInput = it.take(120) }, "SA-...", keyboard = KeyboardType.Ascii, capitalize = true, ime = ImeAction.Search, onIme = { model.checkPublicProduct(serialInput) })
@@ -147,11 +241,7 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TintedButton(
                             "Kamera QR",
-                            {
-                                val target = tempCameraQrUri(context)
-                                pendingCameraUri = target
-                                cameraLauncher.launch(target)
-                            },
+                            { scanQr() },
                             Modifier.weight(1f),
                             enabled = !state.busy,
                             path = PhosphorPaths.Camera,
@@ -202,7 +292,7 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
                                 {
                                     val c = sealedCode; val s = signature
                                     sealedCode = ""; signature = ""
-                                    model.claimScannedProduct(ch.nonceId, c, s)
+                                    model.claimScannedProduct(ch.nonceId, c, s) { tab = 0 }
                                 },
                                 Modifier.padding(top = 8.dp).fillMaxWidth(),
                                 enabled = sealedCode.isNotBlank() && signature.isNotBlank() && !state.busy,
@@ -316,9 +406,24 @@ internal fun ProductsManageScreen(state: AppState, model: AgroViewModel) {
         }
     }
 
+    // A confirmation that says where the next readings go, not a gate: the device may be off while it is moved.
+    placing?.let { (device, target) ->
+        val from = device.unitId?.let { id -> state.units.find { it.id == id }?.name ?: "unit lain" }
+        AgroSheet(if (from == null) "Pasang di ${target.name}?" else "Pindahkan ke ${target.name}?", { placing = null }) {
+            Footnote(if (from == null) "Bacaan berikutnya dari perangkat ${device.id.take(8)} tercatat di ${target.name}. Pastikan probe sudah ditanam di pot ini."
+                else "Bacaan berikutnya tercatat di ${target.name}. Riwayat di $from tetap tersimpan. Pindahkan juga probe ke pot ini agar bacaannya sesuai.")
+            PrimaryButton(
+                if (from == null) "Pasang perangkat" else "Pindahkan perangkat",
+                { model.placeDevice(device.id, target.id); placing = null },
+                Modifier.padding(16.dp).fillMaxWidth(),
+                enabled = !state.busy,
+            )
+        }
+    }
+
     archivingUnit?.let { target ->
         AgroSheet("Arsipkan ${target.name}?", { archivingUnit = null }) {
-            Footnote("Data historis tetap tersimpan, namun paket data baru untuk unit ini akan ditolak sampai dipulihkan.")
+            Footnote("Data historis tetap tersimpan. Perangkat di unit ini dilepas, dan paket baru untuk unit ini ditolak sampai dipulihkan.")
             PrimaryButton(
                 "Ya, arsipkan unit",
                 { model.archiveUnit(target.id); archivingUnit = null },

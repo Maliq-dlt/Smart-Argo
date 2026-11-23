@@ -8,7 +8,7 @@ import { createRequire } from 'node:module'
 import { asGuest } from './entry-helpers.mjs'
 import { resolve } from 'node:path'
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
-const url = new URL('#statistik', process.env.TEST_URL || 'http://127.0.0.1:4173/').href
+const url = new URL('#tanaman', process.env.TEST_URL || 'http://127.0.0.1:4173/').href
 const output = resolve('.tmp/chain-proof-browser')
 await mkdir(output, { recursive: true })
 const errors = []

@@ -40,7 +40,7 @@ export default function StatisticsDashboard({ clock, data, decision, logs, await
     {awaitingPlant && onPlant && <button type="button" className="button primary observation-plant" onClick={onPlant}><Plant weight="fill" aria-hidden="true" />Tanam bibit</button>}
   </section>
   return <section className="analysis" aria-labelledby="analysis-title">
-    <div className="analysis-toolbar"><div><h2 id="analysis-title">Pengamatan sesi</h2><p>{rows.length} sampel · {windowHours ? `${windowHours} jam terakhir` : 'seluruh sesi'}</p></div>
+    <div className="analysis-toolbar"><div><h3 id="analysis-title">Pengamatan sesi</h3><p>{rows.length} sampel · {windowHours ? `${windowHours} jam terakhir` : 'seluruh sesi'}</p></div>
       <div className="analysis-filters"><label><span>Parameter</span><SelectField label="Parameter statistik" value={metric} onValueChange={value => { setMetric(value as Metric); setBin(null) }} options={Object.entries(METRICS).map(([value, item]) => ({ value, label: item.label }))} /></label>
       <div className="range-filter"><span>Rentang</span><SegmentedControl label="Rentang statistik" value={String(windowHours)} onValueChange={value => setWindowHours(Number(value))} options={[{ value: '0', label: 'Semua' }, { value: '24', label: '24 jam' }, { value: '72', label: '72 jam' }]} /></div></div>
     </div>

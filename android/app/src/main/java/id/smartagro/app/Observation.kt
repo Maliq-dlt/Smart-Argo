@@ -4,11 +4,13 @@ import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.pow
 import kotlin.math.round
+import kotlin.math.roundToLong
 
 enum class InspectionState(val key: String, val label: String) {
     Sehat("sehat", "Sehat"),
@@ -62,10 +64,8 @@ internal object ObservationEngine {
     private const val DAY_TO = 16
     private const val MAX_GAP_H = 1.5
     private const val MIN_PAIRS = 2
-    private const val RISE_TOLERANCE = 0.5
     private val ID_FORMAT = DecimalFormat("#.##", DecimalFormatSymbols(Locale.forLanguageTag("id-ID")))
 
-    private fun defaultHourOf(tH: Double): Double = ((6.0 + tH) % 24.0 + 24.0) % 24.0
     private fun usable(samples: List<ReadingPoint>) = samples.filter { it.valid && it.tH.isFinite() && it.moisture.isFinite() }.sortedBy { it.tH }
     private fun roundTo(x: Double, places: Int): Double {
         val factor = 10.0.pow(places)
@@ -83,23 +83,24 @@ internal object ObservationEngine {
 
     fun waterResponse(samples: List<ReadingPoint>, wateringAt: List<Double>): Double? {
         val measured = measuredWaterings(samples, wateringAt)
-        return if (measured.isEmpty()) null else roundTo(measured.map { it.second }.average(), 1)
+        val rises = measured.map { it.second }.filter { it > 0 }
+        return if (rises.isEmpty()) null else roundTo(rises.average(), 1).takeIf { it > 0 }
     }
 
-    fun dryingRate(samples: List<ReadingPoint>, hourOf: (Double) -> Double = ::defaultHourOf): Double? {
+    fun dryingRate(samples: List<ReadingPoint>, hourOf: (Double) -> Double): Double? {
         val points = usable(samples)
         val rates = mutableListOf<Double>()
         for (i in 1 until points.size) {
             val a = points[i - 1]
             val b = points[i]
             val dt = b.tH - a.tH
-            if (dt <= 0.0 || dt > MAX_GAP_H || b.moisture > a.moisture + RISE_TOLERANCE) continue
+            if (dt <= 0.0 || dt > MAX_GAP_H || b.moisture > a.moisture) continue
             val ha = hourOf(a.tH)
             val hb = hourOf(b.tH)
-            if (ha < DAY_FROM || ha > DAY_TO || hb < DAY_FROM || hb > DAY_TO) continue
+            if (ha !in DAY_FROM.toDouble()..DAY_TO.toDouble() || hb !in DAY_FROM.toDouble()..DAY_TO.toDouble()) continue
             rates.add((a.moisture - b.moisture) / dt)
         }
-        return if (rates.size >= MIN_PAIRS) roundTo(rates.average(), 2) else null
+        return if (rates.size >= MIN_PAIRS) roundTo(rates.average(), 2).takeIf { it > 0 } else null
     }
 
     fun healthyMoistureRange(samples: List<ReadingPoint>, inspections: List<Inspection>): Pair<Int, Int>? {
@@ -128,6 +129,7 @@ internal object ObservationEngine {
         inspections: List<Inspection>,
         wateringAt: List<Double>,
         th: ObservationThresholds = THRESHOLDS,
+        hourOf: (Double) -> Double = { Double.NaN },
     ): LearningSummary {
         val obs = observe(samples, inspections, wateringAt)
         val level = evidenceLevel(obs, th)
@@ -135,7 +137,7 @@ internal object ObservationEngine {
         val missInspections = maxOf(0, th.inspections - obs.inspections.size)
         val missWaterings = maxOf(0, th.waterings - obs.waterings)
         val healthy = healthyMoistureRange(samples, inspections)
-        val drying = dryingRate(samples)
+        val drying = dryingRate(samples, hourOf)
         val rise = waterResponse(samples, wateringAt)
         val ev = LearningEvidence(
             speciesName, level, obs.days, obs.readings, obs.waterings, obs.inspections.size,
@@ -151,7 +153,7 @@ internal object ObservationEngine {
             "Smart Agro belum punya acuan untuk $speciesName, jadi belum memberi saran siram. Ia merekam bacaan, siraman, dan pengecekan Anda: ${ev.days} hari, ${ev.readings} bacaan, ${ev.waterings} siraman terukur, ${ev.inspections} pengecekan.$tail"
         } else {
             val parts = listOfNotNull(
-                healthy?.let { "Pada saat Anda menilai tanaman sehat, kelembapan media berkisar ${it.first} sampai ${it.second}." },
+                healthy?.let { "Pada saat Anda menilai tanaman sehat, indeks lembap media berkisar ${it.first}–${it.second}/100." },
                 drying?.let { "Media mengering sekitar ${ID_FORMAT.format(it)} poin per jam pada siang hari." },
                 rise?.let { "Satu siraman menaikkannya sekitar ${ID_FORMAT.format(it)} poin." },
             )
@@ -168,7 +170,7 @@ internal object ObservationEngine {
 
     /** Projects unit sensor readings and care journal entries onto continuous hours from the first sample. */
     fun fromHistory(speciesName: String, readings: List<Reading>, journal: List<CareEntry>): Pair<LearningSummary, InspectionState?> {
-        val moisture = readings.filter { it.sensor == Sensor.Moisture && it.quality == "ok" && it.value != null }.sortedBy { it.at }
+        val moisture = readings.filter { it.sensor == Sensor.Moisture && it.quality == "ok" && it.synced && it.value != null }.sortedBy { it.at }
         val anchor = listOfNotNull(moisture.firstOrNull()?.at, journal.minOfOrNull { it.observedAt }).minOrNull() ?: Instant.now()
         fun hoursSince(at: Instant): Double = Duration.between(anchor, at).toMillis() / 3_600_000.0
         val points = moisture.map { ReadingPoint(hoursSince(it.at), it.value!!, true) }
@@ -176,6 +178,10 @@ internal object ObservationEngine {
             InspectionState.fromJournalNotes(entry.notes)?.let { st -> Inspection(hoursSince(entry.observedAt), st, entry.notes) }
         }
         val waterings = journal.filter { it.kind == "watering" }.map { hoursSince(it.observedAt) }.sorted()
-        return summarize(speciesName, points, inspections, waterings) to inspections.lastOrNull()?.state
+        val zone = ZoneId.systemDefault()
+        return summarize(speciesName, points, inspections, waterings) { hours ->
+            val time = anchor.plusMillis((hours * 3_600_000).roundToLong()).atZone(zone).toLocalTime()
+            time.toSecondOfDay() / 3600.0
+        } to inspections.maxByOrNull { it.tH }?.state
     }
 }

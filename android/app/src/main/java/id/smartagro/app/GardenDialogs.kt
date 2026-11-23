@@ -42,13 +42,13 @@ internal fun AddSiteSheet(state: AppState, model: AgroViewModel, dismiss: () -> 
     val placement = listOf("indoor", "outdoor", "rooftop")[placementIdx]
     val zones = remember(kind, zonesRaw) {
         if (kind == "pot") emptyList()
-        else zonesRaw.split('\n', ',').map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase(Locale.ROOT) }.take(12)
+        else zonesRaw.split('\n', ',').map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase(Locale.ROOT) }
     }
     val lat = latRaw.trim().replace(',', '.').toDoubleOrNull()
     val lon = lonRaw.trim().replace(',', '.').toDoubleOrNull()
     val coordsValid = placement == "indoor" || ((latRaw.isBlank() && lonRaw.isBlank()) ||
         (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0))
-    val siteValid = name.trim().length in 1..60 && (kind == "pot" || zones.isNotEmpty()) && coordsValid
+    val siteValid = name.trim().length in 1..60 && (kind == "pot" || zones.size in 1..12) && coordsValid
     val canSave = !state.busy && siteValid && (!plantNow || selectedSpecies in 1..3)
 
     AgroSheet("Tambah pot atau kebun", dismiss) {
@@ -65,6 +65,7 @@ internal fun AddSiteSheet(state: AppState, model: AgroViewModel, dismiss: () -> 
             Spacer(Modifier.height(12.dp))
             Group(footer = "Pisahkan nama zona per baris atau koma.") {
                 FieldRow("Zona", zonesRaw, { zonesRaw = it.take(400) }, "Bedeng A, Bedeng B", ime = ImeAction.Default, singleLine = false, enabled = !state.busy)
+                if (zones.size > 12) Text("Maksimal 12 zona.", style = T.footnote, color = palette.warn)
             }
         }
         if (placement != "indoor") {
@@ -176,8 +177,8 @@ internal fun ShareCycleSheet(cycle: GardenPlant, state: AppState, model: AgroVie
     AgroSheet("Bagikan siklus ${cycle.tag}", dismiss) {
         Group(footer = "Data diringkas secara anonim ke zona iklim Anda.") {
             FieldRow("Jeda siram (hari)", intervalRaw, { intervalRaw = it.take(8) }, "2.0", keyboard = KeyboardType.Decimal)
-            FieldRow("Kelembapan bawah", lowRaw, { lowRaw = it.take(6) }, "45", keyboard = KeyboardType.Number)
-            FieldRow("Kelembapan atas", highRaw, { highRaw = it.take(6) }, "75", keyboard = KeyboardType.Number, ime = ImeAction.Done)
+            FieldRow("Indeks lembap bawah", lowRaw, { lowRaw = it.take(6) }, "45", keyboard = KeyboardType.Number)
+            FieldRow("Indeks lembap atas", highRaw, { highRaw = it.take(6) }, "75", keyboard = KeyboardType.Number, ime = ImeAction.Done)
         }
         PrimaryButton(
             if (state.busy) "Mengirim…" else "Bagikan ke komunitas",
@@ -194,7 +195,7 @@ internal fun CommunityKnowledgeSheet(speciesId: Int, state: AppState, model: Agr
     val p = palette
     val data = state.community.takeIf { state.communitySpeciesId == speciesId }
     LaunchedEffect(speciesId, state.demo) {
-        if (!state.demo && state.communitySpeciesId != speciesId && !state.busy) model.loadCommunityKnowledge(speciesId)
+        if (!state.demo && data == null) model.loadCommunityKnowledge(speciesId)
     }
     AgroSheet("Pengetahuan komunitas", dismiss) {
         Banner("Label komunitas: belum dikurasi · ringkasan rata-rata pola pemilik zona lain.", Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
@@ -203,13 +204,17 @@ internal fun CommunityKnowledgeSheet(speciesId: Int, state: AppState, model: Agr
             data == null && state.busy -> Row(Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 ActivityIndicator(); Text("Memuat data komunitas…", style = T.body, color = p.secondary)
             }
-            data == null || data.zones.isEmpty() -> Footnote("Belum cukup siklus anonim (minimal 3 pemilik & 5 siklus di zona sama) untuk spesies ini.")
+            data == null -> {
+                state.communityError?.let { Banner(it, Modifier.padding(horizontal = 16.dp), error = true) }
+                PlainButton("Coba lagi", { model.loadCommunityKnowledge(speciesId) }, enabled = !state.busy)
+            }
+            data.zones.isEmpty() -> Footnote("Belum cukup siklus anonim (minimal 3 pemilik & 5 siklus di zona sama) untuk spesies ini.")
             else -> Group(footer = "Sumber: ${data.source} (${data.label})") {
                 data.zones.forEach { z ->
                     Cell(
                         z.zone.replace('_', ' ').replaceFirstChar { it.uppercase() },
                         subtitle = "${z.owners} pemilik · ${z.cycles} siklus",
-                        value = "Siram ${z.wateringMedianDays}h\n${z.moistureLow}–${z.moistureHigh}%",
+                        value = "Siram ${z.wateringMedianDays}h\n${z.moistureLow}–${z.moistureHigh}/100",
                         chevron = false,
                     )
                 }

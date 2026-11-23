@@ -25,8 +25,8 @@ android {
         applicationId = "id.smartagro.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", quoted(publicSetting("GOOGLE_WEB_CLIENT_ID")))
         buildConfigField("String", "SUPABASE_URL", quoted(publicSetting("SUPABASE_URL")))
         buildConfigField("String", "SUPABASE_ANON_KEY", quoted(publicSetting("SUPABASE_ANON_KEY")))
@@ -72,6 +72,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
     // JVM UI verification without installing Android Studio or an emulator.
@@ -79,7 +81,26 @@ dependencies {
     testImplementation("androidx.compose.ui:ui-test-junit4")
 }
 
+// Robolectric's own fetcher is refused by Maven Central on GitHub runners (every CI run since 19 Nov failed with an
+// IOException in MavenArtifactFetcher). Gradle downloads the same framework jars reliably, so it fetches them and
+// Robolectric runs offline from that folder. One jar per SDK the tests use (34 and 35).
+// One configuration per jar: in a shared one Gradle resolves the two versions of the same module to the newest only.
+val robolectricJars = listOf("14-robolectric-10818077-i7", "15-robolectric-13954326-i7").map { version ->
+    configurations.create("robolectricSdk${version.substringBefore('-')}") {
+        isTransitive = false
+        dependencies.add(project.dependencies.create("org.robolectric:android-all-instrumented:$version"))
+    }
+}
+val robolectricJarDir = layout.buildDirectory.dir("robolectric-jars")
+val copyRobolectricJars by tasks.registering(Copy::class) {
+    from(robolectricJars)
+    into(robolectricJarDir)
+}
+
 tasks.withType<Test>().configureEach {
+    dependsOn(copyRobolectricJars)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", robolectricJarDir.get().asFile.absolutePath)
     // .tmp too: it is the tests' java.io.tmpdir and is ignored by Git, so a fresh checkout (CI) does not have it.
     doFirst { rootProject.file(".cache/test-home").mkdirs(); rootProject.file(".cache/robolectric").mkdirs(); rootProject.file(".tmp").mkdirs() }
     systemProperty("user.home", rootProject.file(".cache/test-home").absolutePath)

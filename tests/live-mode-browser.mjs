@@ -26,6 +26,8 @@ try {
   await mockAuth(page, {
     'POST /auth/v1/token?grant_type=password': () => mockSession({ pot: POT }),
     'POST /auth/v1/token?grant_type=refresh_token': () => mockSession({ pot: POT }),
+    'POST /rest/v1/rpc/my_units': () => ({ ok: true, units: [], devices: [] }),
+    'POST /rest/v1/rpc/my_overview': () => ({ ok: true, plants: [{ slot_id: 'slot', unit_id: null, name: 'Pot teras', species_id: 1, moisture: null, band_source: null, state: 'no_device', outlook: null }], devices: { total: 0, issues: [] } }),
   })
   await page.goto(new URL('#masuk', base).href); await curtainOpen(page)
   await gate(page).waitFor()
@@ -38,27 +40,27 @@ try {
   await page.locator('.app-shell').waitFor({ timeout: 20000 })
   await page.locator('.plant-scene svg').waitFor()
 
-  const rail = await page.locator('.rail-nav a').evaluateAll(links => links.map(a => a.getAttribute('aria-label')))
-  ok(rail.includes('Dashboard') && rail.includes('Bandingkan sesi') && rail.includes('Ekosistem'), `The rest of the app is there: ${rail}`)
-  ok(!rail.includes('Simulasi') && !rail.some(name => /Ruang tanam/i.test(name ?? '')), `There is no Ruang tanam in the rail: ${rail}`)
-  ok(await page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true }).count() === 1, 'The app opens on the dashboard')
+  const tabs = await page.locator('.nav-tab').evaluateAll(links => links.map(a => a.textContent.trim()))
+  ok(tabs.includes('Ringkasan') && tabs.includes('Tanaman') && tabs.includes('Akun'), `The rest of the app is there: ${tabs}`)
+  ok(!tabs.some(name => /Ruang tanam|Simulasi/i.test(name)), `There is no Ruang tanam in the capsule: ${tabs}`)
+  ok(await page.locator('.ov-title').count() === 1, 'The app opens on Ringkasan')
 
   // Its old address and the care link lead to the dashboard, not to a room that does not exist.
   const settled = () => page.waitForFunction(() => !document.documentElement.hasAttribute('data-site-transition'))
   await settled()
   await page.evaluate(() => { location.hash = '#simulasi' })
   await page.waitForTimeout(500); await settled()
-  ok(await page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true }).count() === 1, '#simulasi shows the dashboard')
+  ok(await page.locator('.ov-title').count() === 1, '#simulasi shows Ringkasan')
   ok(await page.getByRole('heading', { level: 1, name: 'Ruang tanam', exact: true }).count() === 0 && await page.locator('.studio').count() === 0, 'Ruang tanam is not rendered')
 
+  // The weather lives on the plant page's stage.
+  await page.evaluate(() => { location.hash = '#tanaman' }); await page.locator('.care-picker').first().waitFor()
   ok(await page.locator('.stage-weather').count() === 0, 'No simulated weather control')
   ok(await page.locator('.stage-weather-note').count() === 0, 'No weather note')
-  ok(await page.locator('.plant-scene svg').getAttribute('data-weather') !== 'hujan', 'The sky is not one the visitor picked')
-  await page.locator('.session-pill .pill-trigger').click()
-  await page.locator('.slot-picker').waitFor()
-  ok(await page.locator('.slot-picker').getByRole('button', { name: 'Muat contoh kebun' }).count() === 0, 'No demo garden to load')
-  ok(await page.locator('.slot-picker').getByRole('button', { name: 'Tambah pot atau kebun' }).count() === 1, 'A person can still add their own pot or garden')
-  await page.keyboard.press('Escape')
+  ok(await page.locator('.stage-scene .plant-scene svg').count() === 0, 'A real plant does not display a synthetic stage')
+  ok(await page.locator('.session-pill').count() === 0, 'A real plant has no simulator session controls')
+  ok((await page.locator('.live-care').innerText()).includes('Belum ada perangkat'), 'Unassigned pot reports missing hardware')
+  ok(await page.getByRole('button', { name: 'Catat', exact: true }).count() === 0, 'No simulated watering is offered as real care')
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal overflow')
 
   assert.deepEqual(errors, [], `Console errors: ${errors.join(' | ')}`)

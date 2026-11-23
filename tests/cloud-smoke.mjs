@@ -67,4 +67,8 @@ for (const name of ['product-claim', 'unit-explanation', 'history-export', 'mfa-
 // A well-formed bearer that is not a session must not reach the weather provider either.
 const stranger = await fetch(new URL('/functions/v1/weather-forecast', backend), { method: 'POST', headers: { apikey: env.VITE_SUPABASE_ANON_KEY, Authorization: 'Bearer not.a.session', Origin: origin, 'Content-Type': 'application/json' }, body: '{"lat":-6.9,"lon":107.6}', signal: AbortSignal.timeout(20000) })
 assert.equal(stranger.status, 401, 'weather-forecast: only a live session may ask')
+// The scheduled mail and purge worker is server to server: a browser or a guessed bearer never runs it.
+// 403 with its secret set, 503 maintenance_unconfigured before it is set; never 200.
+const dispatch = await fetch(new URL('/functions/v1/alert-dispatch', backend), { method: 'POST', headers: { Authorization: 'Bearer not-the-dispatch-secret', 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(20000) })
+assert.ok([403, 503].includes(dispatch.status), `alert-dispatch: a wrong bearer got ${dispatch.status}`)
 console.log(`Cloud smoke passed for ${origin}: current assets, fonts, hosted Auth, the real Google client, ${functions.length} CORS policies, and unauthenticated access rejection.`)

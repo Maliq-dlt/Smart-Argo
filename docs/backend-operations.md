@@ -36,3 +36,15 @@ These are structured access logs, not a durable security audit ledger, tracing s
 ## Continuous checks
 
 The `backend` job in `.github/workflows/checks.yml` starts the isolated local stack, runs the backend integration suite, then creates/verifies a binary archive and restores it into `ci_restore_drill`. This exercises the restore mechanism on each CI run. It does not compare every restored row or prove hosted recovery. The manual 14 November 2026 drill additionally compared all 56 `auth`/`public` table row fingerprints; see the stage-2 audit. CI does not upload archives or logs, because the database may contain authentication data. This workflow must be pushed and executed before reporting a GitHub Actions result.
+
+## Single points of failure
+
+Each item below exists in one place only, or depends on a free service with known limits. The owner acts on them; agents must never print, copy or commit the secrets.
+
+| Item | Risk | Action |
+| --- | --- | --- |
+| Issuer private key `.tmp/cloud/issuer/smart-agro-2026.pem` | Lost key: no new product manifest can be signed, and the pinned public key in `ISSUER_PUBLIC_KEYS` must be rotated. | Copy to two offline places (for example an encrypted USB drive and a password manager). Never commit it. |
+| APK release keystore `android/.private/release.p12` and `release.properties` | Lost keystore: installed apps cannot be updated with the same signature. The App Links fingerprint also comes from it. | Same as above, keeping the keystore and its password apart. |
+| Supabase CLI token in `.tmp/cloud/supabase.env` | Expired (HTTP 401 since 21 November 2026), so `db push`, `db dump` and function deploys from the CLI fail. | Create a new personal access token in the Supabase dashboard, scoped to the project, and replace the file. |
+| Email through Gmail SMTP (`.tmp/cloud/smtp.env`) | Daily sending limit, mail lands in Spam, and the sender is a personal mailbox. | A transactional email provider with its own domain and SPF, DKIM and DMARC (paid; see `docs/panduan-smtp.md`). |
+| Supabase free plan | A project can be paused after a week without activity. | After the alert release, `.github/workflows/care-alerts.yml` (cron `7,37 * * * *`) calls the project every half hour. Until then, open the app at least weekly. |

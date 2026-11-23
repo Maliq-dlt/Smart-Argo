@@ -66,6 +66,7 @@ internal fun parseProductPublicStatus(json: JSONObject): ProductPublicStatus {
 
 suspend fun AgroApi.ownedUnitsWorkspace(): OwnedUnitsWorkspace = parseOwnedUnitsWorkspace(rpc("my_units"))
 
+// archive_my_unit ends the unit's placements itself (unit_event 'archived' records devices_removed).
 suspend fun AgroApi.archiveUnit(unitId: String) {
     val cleanId = JSONObject().put("id", unitId).id("id")
     require(rpc("archive_my_unit", JSONObject().put("p_unit_id", cleanId)).opt("ok") == true) { "Unit tidak dapat diarsipkan." }
@@ -76,12 +77,42 @@ suspend fun AgroApi.restoreUnit(unitId: String) {
     require(rpc("restore_my_unit", JSONObject().put("p_unit_id", cleanId)).opt("ok") == true) { "Unit tidak dapat dipulihkan." }
 }
 
-suspend fun AgroApi.placeDevice(deviceId: String, unitId: String?) {
+/**
+ * Places the device in [unitId]. Returns false when no fresh synced reading shows the device reporting yet: a warning
+ * for the owner, not a refusal, because a device is often switched off while it is being moved.
+ */
+suspend fun AgroApi.placeDevice(deviceId: String, unitId: String): Boolean {
     val dId = JSONObject().put("id", deviceId).id("id")
-    val uId: Any = unitId?.let { JSONObject().put("id", it).id("id") } ?: JSONObject.NULL
+    val uId = JSONObject().put("id", unitId).id("id")
+    val owned = ownedUnitsWorkspace()
+    val device = owned.devices.find { it.id == dId }
+    require(device != null && device.status == "active" && owned.active.any { it.id == uId && it.productId == device.productId }) {
+        "Perangkat atau unit tujuan sudah tidak tersedia."
+    }
+    if (device.unitId == uId) return true
+
+    // Since 20261121000000 the server files packets under the current placement, or under the unit the device was
+    // flashed with while unplaced, so moving needs no reflash. Look for a fresh synced reading in every active unit of
+    // the product, the current placement first.
+    val now = Instant.now()
+    val window = HistoryWindow(now.minusSeconds(READING_FRESH_SECONDS), now.plusSeconds(300))
+    var evidenceAt: Instant? = null
+    for (unit in owned.active.filter { it.productId == device.productId }.sortedByDescending { it.id == device.unitId }) {
+        var snapshot: Instant? = null
+        var cursor: HistoryCursor? = null
+        do {
+            val page = readMeasurementHistory(unit.id, window, snapshot, cursor, limit = 500)
+            evidenceAt = page.readings.firstOrNull { it.deviceId == dId && it.reading.synced }?.reading?.at
+            snapshot = page.snapshot
+            cursor = page.next
+        } while (evidenceAt == null && cursor != null)
+        if (evidenceAt != null) break
+    }
+    val reporting = evidenceAt?.let { fresh(it, Instant.now()) } == true
     require(rpc("place_my_device", JSONObject().put("p_device_id", dId).put("p_unit_id", uId)).opt("ok") == true) {
         "Penempatan perangkat tidak dapat disimpan."
     }
+    return reporting
 }
 
 suspend fun AgroApi.unitHistory(unitId: String): List<UnitLifecycleEvent> {

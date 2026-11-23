@@ -14,6 +14,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN mkdir -p /run/smart-agro && chown node:node /run/smart-agro
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules/nodemailer ./node_modules/nodemailer
 COPY scripts/backend-gateway.mjs scripts/docker-config.mjs ./scripts/
 COPY supabase/functions ./supabase/functions
 COPY src/lib ./src/lib

@@ -1,4 +1,4 @@
-export const isSimulatorHash = (hash: string) => ['#statistik', '#simulasi', '#bandingkan', '#perangkat', '#terminal', '#ekosistem', '#masuk', '#profil'].includes(hash)
+export const isSimulatorHash = (hash: string) => ['#statistik', '#tanaman', '#simulasi', '#bandingkan', '#perangkat', '#terminal', '#ekosistem', '#masuk', '#profil', '#hapus-akun', '#pengaturan-peringatan'].includes(hash)
 
 export interface EntryState {
   configured: boolean; ready: boolean; signedIn: boolean; guest: boolean; hash: string

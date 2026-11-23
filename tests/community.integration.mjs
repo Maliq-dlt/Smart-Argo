@@ -15,7 +15,7 @@ const base = 'http://127.0.0.1:54321', config = JSON.parse(await readFile('.tmp/
 const q = v => "'" + String(v).replaceAll("'", "''") + "'"
 const sql = input => execFileSync('docker', ['exec', '-i', 'smart-agro-phase1-db-1', 'psql', '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres'], { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 const sqlFails = (input, pattern) => { try { sql(input) } catch (error) { assert.match(String(error.stderr), pattern); return } assert.fail(`The statement was accepted: ${input}`) }
-async function api(path, token, body, method = 'POST') { const r = await fetch(base + path, { method, headers: { apikey: config.anon, 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(30000) }); return { status: r.status, data: await r.json().catch(() => null) } }
+async function api(path, token, body, method = 'POST') { const r = await fetch(base + path, { method, headers: { Connection: 'close', apikey: config.anon, 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(30000) }); return { status: r.status, data: await r.json().catch(() => null) } }
 const rpc = (name, token, body = {}) => api('/rest/v1/rpc/' + name, token, body).then(r => r.data)
 const run = randomUUID().slice(0, 8), password = randomBytes(20).toString('base64url')
 const seen = { accounts: [], slots: [], cycles: [] }

@@ -2,10 +2,16 @@ package id.smartagro.app
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
 import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -31,21 +37,29 @@ internal fun copySensitiveText(context: Context, label: String, text: String) {
         clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
     }
     cm.setPrimaryClip(clip)
+    if (Build.VERSION.SDK_INT < 33) {
+        Toast.makeText(context, "Gunakan clipboard di aplikasi tepercaya, lalu kosongkan.", Toast.LENGTH_SHORT).show()
+    }
 }
 
 @Composable
 internal fun AccountScreen(state: AppState, model: AgroViewModel) {
     val p = palette
     val uri = rememberSafeUriHandler()
-    var editingName by rememberSaveable { mutableStateOf(false) }
     var confirmingLogout by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(state.demo, state.email, state.rewardLoaded, state.busy) {
-        if (!state.demo && state.email.isNotBlank() && !state.rewardLoaded && !state.busy) {
-            model.loadRewards()
-        }
+    val context = LocalContext.current
+    var notify by remember { mutableStateOf(CareNotifications.enabled(context) && CareNotifications.allowed(context)) }
+    val askToNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        CareNotifications.setEnabled(context, granted); notify = granted
     }
 
+    var alertsRequested by remember(state.email) { mutableStateOf(false) }
+    LaunchedEffect(state.demo, state.email, state.busy) {
+        if (!state.demo && !state.busy && state.email.isNotBlank() && !alertsRequested && state.alertPreferences == null && !state.alertsUnavailable) {
+            alertsRequested = true
+            model.loadAlertPreferences()
+        }
+    }
     TitledScreen("Akun", actions = { RefreshAction(state, model) }) {
         notices(state)
         if (state.demo) {
@@ -58,7 +72,6 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                         color = p.secondary,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    PrimaryButton("Akhiri latihan", model::logout, Modifier.padding(top = 14.dp).fillMaxWidth(), destructive = true, path = PhosphorPaths.SignOut)
                 }
             }
             item(key = "demo-intro") {
@@ -73,20 +86,23 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                     )
                 }
             }
+            // Ending practice is a destructive row at the end, like Sign Out in Settings, not a full-width red button.
+            item(key = "demo-end") {
+                Spacer(Modifier.height(20.dp))
+                Group { Cell("Akhiri latihan", destructive = true, onClick = model::logout) }
+            }
         } else {
             item(key = "profile") {
                 val shownName = state.displayName.ifBlank { state.email.substringBefore('@') }.ifBlank { "Pemilik Smart Agro" }
-                val initials = shownName.trim().split(Regex("\\s+")).take(2).mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").ifEmpty { "SA" }
                 Group {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Box(Modifier.size(56.dp).clip(CircleShape).background(p.soft), contentAlignment = Alignment.Center) {
-                            Text(initials, style = T.title2, color = p.onSoft)
-                        }
+                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Buka profil") { model.navigate(Screen.Profile) }.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        AvatarImage(state.avatar, shownName, 56.dp)
                         Column(Modifier.weight(1f)) {
                             Text(shownName, style = T.title3, color = p.ink)
                             Text(state.email, style = T.subhead, color = p.secondary)
                         }
-                        PlainButton("Ubah", { editingName = true }, enabled = !state.busy)
+                        Icon(icon(PhosphorPaths.CaretRightBold), null, Modifier.size(14.dp), tint = p.tertiary)
                     }
                 }
             }
@@ -117,6 +133,22 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                     )
                 }
             }
+            item(key = "apk-update") { UpdateAvailableRow() }
+            item(key = "alert-preferences") {
+                SectionTitle("Peringatan")
+                val alerts = state.alertPreferences
+                Group(footer = "Jenis berlaku untuk email dan notifikasi di HP. Email hanya dikirim ke alamat terkonfirmasi.") {
+                    if (alerts == null) {
+                        Cell("Muat pengaturan peringatan", subtitle = if (state.alertsUnavailable) "Belum tersedia di server ini" else null,
+                            enabled = !state.busy, onClick = model::loadAlertPreferences)
+                    } else {
+                        ToggleCell("Peringatan email", alerts.emailEnabled, { on -> model.setAlertPreferences(on, alerts.kinds) }, enabled = !state.busy)
+                        careKinds.forEach { (kind, label) ->
+                            ToggleCell(label, kind in alerts.kinds, { on -> model.setAlertPreferences(alerts.emailEnabled, if(on) alerts.kinds + kind else alerts.kinds - kind) }, enabled = !state.busy)
+                        }
+                    }
+                }
+            }
             item(key = "security-group") {
                 SectionTitle("Keamanan & pengaturan")
                 val mfaLabel = state.security?.let { if (it.mfaEnabled) "2FA aktif" else "2FA nonaktif" }
@@ -127,6 +159,18 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                         glyph = PhosphorPaths.ShieldCheck,
                         glyphColor = p.tint,
                         onClick = { model.navigate(Screen.Security) },
+                    )
+                    if (!state.demo) ToggleCell(
+                        "Notifikasi di HP",
+                        notify,
+                        { on ->
+                            // Android 13+ asks once; the switch follows the answer, never ahead of it.
+                            if (on && !CareNotifications.allowed(context)) askToNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            else { CareNotifications.setEnabled(context, on); notify = on }
+                        },
+                        subtitle = "Tanah kering dan perangkat bermasalah, dicek tiap jam",
+                        glyph = PhosphorPaths.Bell,
+                        glyphColor = p.tint,
                     )
                     Cell(
                         "Putar animasi masuk",
@@ -146,28 +190,19 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                     }
                 }
             }
+            item(key = "privacy") {
+                SectionTitle("Data & privasi")
+                Group(footer = "Penghapusan juga bisa diminta lewat web: live.smart-agro-demo.pages.dev/#hapus-akun") {
+                    Cell("Kebijakan privasi", onClick = { uri.openUri("https://live.smart-agro-demo.pages.dev/privasi.html") })
+                    Cell("Hapus akun", destructive = true, enabled = !state.busy, onClick = { model.navigate(Screen.DeleteAccount) })
+                }
+            }
             item(key = "signout") {
                 Spacer(Modifier.height(16.dp))
                 Group {
                     Cell("Keluar dari akun", glyph = PhosphorPaths.SignOut, glyphColor = p.warn, destructive = true, onClick = { confirmingLogout = true })
                 }
             }
-        }
-    }
-
-    if (editingName) {
-        var name by rememberSaveable(state.displayName) { mutableStateOf(state.displayName) }
-        AgroSheet("Nama profil", { editingName = false }) {
-            Group {
-                FieldRow("Nama", name, { name = it.take(40) }, "Nama panggilan Anda", ime = ImeAction.Done, enabled = !state.busy)
-            }
-            PrimaryButton(
-                if (state.busy) "Menyimpan…" else "Simpan nama",
-                { model.updateName(name); editingName = false },
-                Modifier.padding(16.dp).fillMaxWidth(),
-                enabled = !state.busy && name.trim().isNotEmpty(),
-                busy = state.busy,
-            )
         }
     }
 
@@ -191,12 +226,16 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
     val context = LocalContext.current
     val sec = state.security
     val rec = state.recoveryStatus
-    var otpCode by remember { mutableStateOf("") }
     var disablingMfa by rememberSaveable { mutableStateOf(false) }
     var generatingCodes by rememberSaveable { mutableStateOf(false) }
     var settingPassword by rememberSaveable { mutableStateOf(false) }
-    var newPassword by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
+    val saveCodes = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
+        if (uri != null) {
+            val codes = model.state.generatedRecoveryCodes
+            if (codes == null) model.reportDocumentError("Buka kembali kode pemulihan sebelum menyimpan.")
+            else model.writeDocument(uri, codes.joinToString("\n"))
+        }
+    }
 
     LaunchedEffect(state.demo, state.email, state.securityLoaded, state.busy) {
         if (!state.demo && state.email.isNotBlank() && !state.securityLoaded && !state.busy) {
@@ -250,6 +289,7 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
     }
 
     state.totpEnrollment?.let { enrollment ->
+        var otpCode by remember(enrollment.id) { mutableStateOf("") }
         AgroSheet("Aktifkan autentikator", model::dismissTotpSetup) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Pindai QR ini di aplikasi autentikator (Google Authenticator / 1Password / Apple Passwords).", style = T.subhead, color = p.secondary, textAlign = TextAlign.Center)
@@ -312,7 +352,7 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
 
     state.generatedRecoveryCodes?.let { codes ->
         AgroSheet("Simpan kode pemulihan", model::clearGeneratedRecoveryCodes) {
-            Banner("Setiap kode hanya berlaku satu kali dan tidak ditampilkan ulang setelah ditutup.", Modifier.padding(horizontal = 16.dp))
+            Banner("Setiap kode hanya berlaku satu kali. File .txt berisi kode tanpa enkripsi. Pilih lokasi pribadi dan jauhkan dari folder bersama.", Modifier.padding(horizontal = 16.dp))
             Spacer(Modifier.height(10.dp))
             Panel {
                 codes.chunked(2).forEach { pair ->
@@ -325,7 +365,7 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
                 TintedButton("Salin semua", { copySensitiveText(context, "Kode pemulihan Smart Agro", codes.joinToString("\n")) }, Modifier.weight(1f), path = PhosphorPaths.Copy)
                 PrimaryButton(
                     "Simpan .txt",
-                    { shareTextFile(context, "smart-agro-recovery-codes.txt", "text/plain", "Kode pemulihan Smart Agro", codes.joinToString("\n")) },
+                    { saveCodes.launch("smart-agro-recovery-codes.txt") },
                     Modifier.weight(1f),
                     path = PhosphorPaths.DownloadSimple,
                 )
@@ -334,6 +374,8 @@ internal fun SecurityScreen(state: AppState, model: AgroViewModel) {
     }
 
     if (settingPassword) {
+        var newPassword by remember { mutableStateOf("") }
+        var confirmPassword by remember { mutableStateOf("") }
         val ok = newPassword.length >= 10 && newPassword == confirmPassword && !state.busy
         AgroSheet("Atur kata sandi", { settingPassword = false }) {
             Group(footer = "Minimal 10 karakter.") {

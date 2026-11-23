@@ -3,7 +3,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID, randomBytes, generateKeyPairSync, sign } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
+import { promisify } from 'node:util'
+import { setTimeout as delay } from 'node:timers/promises'
 import { enableTotp } from './totp.mjs'
 const base='http://127.0.0.1:54321',config=JSON.parse(await readFile('.tmp/phase1/settings.json','utf8'))
 const q=v=>"'"+String(v).replaceAll("'","''")+"'"
@@ -21,9 +23,15 @@ async function hold(statement){
  })
  return async(finish='ROLLBACK;')=>{child.stdin.end(finish+'\n');await done}
 }
+const runFile=promisify(execFile)
 async function waitBlocked(name){
  const deadline=Date.now()+15000
- while(Date.now()<deadline){if(sql(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid<>pg_backend_pid() AND wait_event_type='Lock' AND query LIKE ${q('%'+name+'%')})`)==='t')return;await new Promise(resolve=>setImmediate(resolve))}
+ const query=`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid<>pg_backend_pid() AND wait_event_type='Lock' AND query LIKE ${q('%'+name+'%')})`
+ while(Date.now()<deadline){
+  const {stdout}=await runFile('docker',['exec','smart-agro-phase1-db-1','psql','-XqAt','-U','postgres','-c',query],{timeout:Math.max(1,deadline-Date.now())})
+  if(stdout.trim()==='t')return
+  await delay(100)
+ }
  throw new Error('Lifecycle request did not reach the controlled lock')
 }
 const run=randomUUID().slice(0,8),password=randomBytes(20).toString('base64url')

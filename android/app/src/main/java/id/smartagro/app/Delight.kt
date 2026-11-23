@@ -58,6 +58,8 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import java.time.LocalTime
+import kotlin.math.PI
+import kotlin.math.sin
 
 /* The moments that make the app feel alive, each with a job: the zoom shows where a screen came from, the sky shows the
  * weather the pot is under, rolling digits show that a reading changed, and the context menu offers shortcuts in place. */
@@ -291,13 +293,19 @@ internal fun timePhaseFor(hour: Int = LocalTime.now().hour): TimePhase = when (h
     else -> TimePhase.Malam
 }
 
+internal fun daylightSunPosition(time: LocalTime): Offset {
+    val progress = ((time.hour * 60 + time.minute - 300) / 840f).coerceIn(0f, 1f)
+    return Offset(.12f + .76f * progress, .28f - .20f * sin(PI * progress).toFloat())
+}
+
 internal fun reducedMotionEnabled(context: Context): Boolean = runCatching {
     Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 }.getOrDefault(false)
 
 /** Full-bleed 4-phase local-time sky + layered botanical terasering hills (no sun at night, zero blink). */
 @Composable
-internal fun BotanicalSkyBackdrop(phase: TimePhase, modifier: Modifier = Modifier) {
+internal fun BotanicalSkyBackdrop(localTime: LocalTime, modifier: Modifier = Modifier) {
+    val phase = timePhaseFor(localTime.hour)
     Canvas(modifier) {
         val w = size.width
         val h = size.height
@@ -317,7 +325,8 @@ internal fun BotanicalSkyBackdrop(phase: TimePhase, modifier: Modifier = Modifie
             drawCircle(Color(0xFFF3F6E4), mr, mc)
             drawCircle(phase.skyColors[0], mr * .88f, Offset(mc.x + mr * .38f, mc.y - mr * .18f))
         } else {
-            val sc = Offset(w * .86f, h * .11f)
+            val sunPosition = daylightSunPosition(localTime)
+            val sc = Offset(w * sunPosition.x, h * sunPosition.y)
             val sr = size.minDimension * .064f
             val sun = phase.sunColor ?: Color(0xFFFFF4C2)
             drawCircle(Brush.radialGradient(listOf(sun.copy(alpha = .42f), Color.Transparent), sc, sr * 4.8f), sr * 4.8f, sc)
@@ -391,7 +400,7 @@ internal fun LiquidGlassRevealOverlay(
     onFinished: () -> Unit,
 ) {
     val context = LocalContext.current
-    val phase = remember(visible) { timePhaseFor() }
+    val localTime = remember(visible) { LocalTime.now() }
     val reduced = remember(context) { reducedMotionEnabled(context) }
     val progress = remember { Animatable(0f) }
 
@@ -427,7 +436,7 @@ internal fun LiquidGlassRevealOverlay(
                 .semantics { contentDescription = "Memuat Smart Agro. Ketuk untuk lewati." },
             contentAlignment = Alignment.Center,
         ) {
-            BotanicalSkyBackdrop(phase, Modifier.fillMaxSize())
+            BotanicalSkyBackdrop(localTime, Modifier.fillMaxSize())
             Box(Modifier.fillMaxSize().background(Color(0x3D0B1D16)))
             Column(
                 Modifier.fillMaxWidth().padding(horizontal = 32.dp),

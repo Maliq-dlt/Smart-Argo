@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget (RemoteViews, so no app theme is drawn behind it: the Overdraw lint does not apply).
+     Colours are the Sage palette: primary #2F5A3C, accent #C3DF95 (contrast 8:1 and 5.5:1). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" tools:ignore="Overdraw" android:id="@+id/care_widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp" android:background="#2F5A3C">
+<TextView android:id="@+id/care_widget_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="18sp" />
+<TextView android:id="@+id/care_widget_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#C3DF95" android:textSize="12sp" android:layout_marginTop="8dp" />
+</LinearLayout>

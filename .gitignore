@@ -38,3 +38,4 @@ HANDOFF.md
 media-src/
 .playwright-mcp/
 supabase/.temp/
+tsconfig.tsbuildinfo

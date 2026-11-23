@@ -27,7 +27,7 @@ The payload has exactly these fields:
 | `load_start_wh`, `load_end_wh` | Cumulative useful-load Wh with the same bounds |
 | `battery_soc_pct` | NULL when unmeasured, otherwise finite 0 through 100 |
 
-Use a new `boot_id` when counters restart. Within a boot, time and counters cannot move backward. The server derives deltas; neither Wh eligibility nor points are client assertions. Each delta must fit the registered power ceiling times 0.25 hours. SOC/battery discharge never adds new solar harvest. Canonical nonoverlapping windows are checked across all boots and replacement meters for the same device.
+The ESP32 firmware (`firmware/smart_agro`, since 2026-11-21) implements this with two INA228 meters and a separate meter key; see `firmware/README.md`. Use a new `boot_id` when counters restart. Within a boot, time and counters cannot move backward. The server derives deltas; neither Wh eligibility nor points are client assertions. Each delta must fit the registered power ceiling times 0.25 hours. SOC/battery discharge never adds new solar harvest. Canonical nonoverlapping windows are checked across all boots and replacement meters for the same device.
 
 New evidence must be completed, at most seven days old, within the meter validity period, and wholly within the current owner's ownership. Product and device locks serialize competing submissions. At most 120 new windows per device per minute are accepted. The server records receipt time, original signed bytes, SHA256, signature, meter and ownership.
 

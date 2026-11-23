@@ -86,6 +86,45 @@ class GardenWorkflowsTest {
         assertTrue(parseMeasurementHistoryPage(response,id(2),effective).readings.isEmpty())
         rejects { HistoryWindow(at,at.plusNanos(1)) }
     }
+    @Test fun historyKeepsIdsAtEqualTimestampsAndReachesOwnershipStart() {
+        val first = parseMeasurementHistoryPage(
+            history(measurement().put("id", id(9))).put("next_cursor",
+                JSONObject().put("measured_at", at.toString()).put("id", id(9))),
+            id(2), window,
+        )
+        val second = parseMeasurementHistoryPage(history(measurement().put("id", id(8))), id(2), window)
+        assertEquals(HistoryCursor(at, id(9)), first.next)
+        assertEquals(listOf(id(9), id(8)), (first.readings + second.readings).map { it.reading.id })
+        assertEquals(first.readings.single().reading.at, second.readings.single().reading.at)
+
+        val ownershipStart = at.minusSeconds(45 * 86400L)
+        val recent = requireNotNull(historyWindowEndingAt(at, ownershipStart))
+        val previous = requireNotNull(historyWindowEndingAt(recent.from, ownershipStart))
+        assertEquals(at.minusSeconds(31 * 86400L), recent.from)
+        assertEquals(recent.from, previous.to)
+        assertEquals(ownershipStart, previous.from)
+        assertNull(historyWindowEndingAt(previous.from, ownershipStart))
+    }
+    @Test fun chartLoadsEveryPageInItsSelectedRangeWithTheSameSnapshot() = runBlocking {
+        val day = HistoryRange.Day.window(at)
+        val week = HistoryRange.Week.window(at)
+        assertEquals(at.minusSeconds(86_400), day.from)
+        assertEquals(at.minusSeconds(7 * 86_400L), week.from)
+        assertEquals(day.to, week.to)
+
+        val row = parseMeasurementHistoryPage(history(), id(2), window).readings.single()
+        val cursor = HistoryCursor(row.reading.at, row.id)
+        val older = row.reading.copy(id = id(1))
+        val requests = mutableListOf<Pair<Instant?, HistoryCursor?>>()
+        val (readings, snapshot) = collectHistoryReadings { cutoff, before ->
+            requests += cutoff to before
+            if (before == null) MeasurementHistoryPage(listOf(row), at, cursor)
+            else MeasurementHistoryPage(listOf(row.copy(id = id(1), reading = older)), at, null)
+        }
+        assertEquals(listOf(null to null, at to cursor), requests)
+        assertEquals(at, snapshot)
+        assertEquals(listOf(row.reading, older), readings)
+    }
     @Test fun measurementHistoryRejectsIdentityInvalidDataAndUnrelatedCursor() {
         assertEquals(0.0,parseMeasurementHistoryPage(history(),id(2),window).readings.single().reading.value!!,0.0)
         rejects { parseMeasurementHistoryPage(history(),id(3),window) }

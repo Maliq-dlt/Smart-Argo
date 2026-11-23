@@ -62,6 +62,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import java.time.LocalTime
 import kotlin.math.min
 
 /* Signed-out screens (A4a). The web's sign-in card, rebuilt as an iOS form: labelled fields in one grouped cell, a
@@ -91,10 +92,16 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
 /** Brand-first welcome cover: live local-time sky, layered terasering, Smart Agro mark, separate access actions, zero mascot. */
 @Composable private fun AuthWelcome(state: AppState, model: AgroViewModel, google: (() -> Unit)?) {
     val p = palette
-    val phase = remember { timePhaseFor() }
+    val localTime by produceState(LocalTime.now()) {
+        while (true) {
+            value = LocalTime.now()
+            delay(60_000L - value.second * 1_000L - value.nano / 1_000_000L)
+        }
+    }
+    val phase = timePhaseFor(localTime.hour)
     val configured = model.config.valid
     Box(Modifier.fillMaxSize()) {
-        BotanicalSkyBackdrop(phase, Modifier.fillMaxSize())
+        BotanicalSkyBackdrop(localTime, Modifier.fillMaxSize())
         // Gentle readability veil so hero text stays crisp across all 4 local-time sky phases.
         Box(
             Modifier
@@ -266,7 +273,9 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
     val submit = {
         if (ready) {
             focus.clearFocus()
-            if (signUp) model.signup(name, email, password) else { model.login(email, password); password = "" }
+            if (signUp) model.signup(name, email, password) else model.login(email, password)
+            password = ""
+            confirm = ""
         }
     }
     Column(Modifier.fillMaxSize().background(p.canvas)) {
@@ -355,6 +364,9 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
         Message(state)
         PrimaryButton(if (state.busy) "Mengirim…" else "Kirim kode", { model.requestReset(email) },
             Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp).fillMaxWidth(), enabled = ok || state.busy, busy = state.busy)
+        if (state.resetCodeRequested) {
+            PlainButton("Saya sudah punya kode", { model.authStep(AuthStep.ResetCode) }, enabled = !state.busy)
+        }
         WebsiteResetFallback(!state.busy)
     }
 }
@@ -366,7 +378,14 @@ private val SPARE_CODE = Regex("[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}")
     var password by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     val ready = !state.busy && code.length == 6 && password.length >= 10 && confirm == password
-    val save = { if (ready) { focus.clearFocus(); model.finishReset(code, password) } }
+    val save = {
+        if (ready) {
+            focus.clearFocus()
+            model.finishReset(code, password)
+            password = ""
+            confirm = ""
+        }
+    }
     StepPage("Email", model::back, PhosphorPaths.LockSimple, "Buat kata sandi baru",
         sentTo("Masukkan kode yang dikirim ke ", state.authEmail, ", lalu kata sandi baru."), state.busy) {
         CodeBoxes(code, { code = it; if (it.length == 6) focus.moveFocus(FocusDirection.Down) }, enabled = !state.busy)

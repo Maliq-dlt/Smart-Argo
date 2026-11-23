@@ -78,6 +78,8 @@ export interface UnitOverview {
   sensors: { sensor_id: Sensor; quality_status: ReadingStatus; value_nullable: number | null; measured_at: string }[]
   energy: { windows: number; solar_wh: number | null; load_wh: number | null; battery_soc_pct: number | null }
   assessment: { state: string; at: string } | null
+  /** Latest packet's cell voltage (firmware battery object, migration 20261121010000). */
+  battery: { voltage: number; measured_at: string } | null
 }
 const ALERTS = ['no_data','stale','sensor_error','device_revoked','energy_deficit','battery_low']
 const num = (v: unknown) => v === null || v === undefined ? null : typeof v === 'number' && Number.isFinite(v) ? v : (() => { throw new Error('Angka tidak valid.') })()
@@ -89,10 +91,11 @@ export function parseOverview(value: Record<string, unknown>): UnitOverview[] {
       if (!['moisture','soil_temperature','soil_ph'].includes(String(s.sensor_id)) || !['ok','error','not_measured'].includes(String(s.quality_status)) || !date(s.measured_at)) throw new Error('Ringkasan sensor tidak valid.')
       return { sensor_id: s.sensor_id as Sensor, quality_status: s.quality_status as ReadingStatus, value_nullable: num(s.value_nullable), measured_at: s.measured_at as string }
     })
-    const e = (u.energy ?? {}) as Record<string, unknown>, a = u.assessment as Record<string, unknown> | null
+    const e = (u.energy ?? {}) as Record<string, unknown>, a = u.assessment as Record<string, unknown> | null, b = u.battery as Record<string, unknown> | null | undefined
     return { unit_id: u.unit_id, location_label: u.location_label, serial_public: u.serial_public, last_packet_at: u.last_packet_at as string | null, alerts: u.alerts as UnitAlert[], sensors,
       energy: { windows: Number(e.windows) || 0, solar_wh: num(e.solar_wh), load_wh: num(e.load_wh), battery_soc_pct: num(e.battery_soc_pct) },
-      assessment: a && typeof a.state === 'string' && date(a.at) ? { state: a.state, at: a.at } : null }
+      assessment: a && typeof a.state === 'string' && date(a.at) ? { state: a.state, at: a.at } : null,
+      battery: b && typeof b.voltage === 'number' && b.voltage >= 2.5 && b.voltage <= 4.5 && date(b.measured_at) ? { voltage: b.voltage, measured_at: b.measured_at } : null }
   })
 }
 export interface OwnedUnit { unit_id: string; product_id: string; serial_public: string; variant: 'single_pot' | 'garden'; location_label: string; species_variety: string; archived_at: string | null }

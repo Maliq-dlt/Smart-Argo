@@ -71,12 +71,18 @@ import kotlin.math.min
 
 /** Room the floating tab bar takes at the bottom, so lists can scroll their last row above it. */
 val LocalBottomClearance = staticCompositionLocalOf { 0.dp }
+/** Set by a screen whose top is an image (the plant stage) so the shell draws light status bar icons over it. */
+val LocalStatusOverMedia = staticCompositionLocalOf<MutableState<Boolean>> { mutableStateOf(false) }
 /** The shell's blur source; bars sample the content behind them. Null in tests and previews: bars fall back to a tint. */
 val LocalShellHaze = staticCompositionLocalOf<HazeState?> { null }
 
 private fun glass(p: Palette) = HazeStyle(backgroundColor = p.canvas, tints = listOf(HazeTint(p.bar)), blurRadius = 24.dp, noiseFactor = 0f)
 private fun Modifier.glassOver(state: HazeState?, p: Palette): Modifier =
     if (state == null) background(p.bar.copy(alpha = .96f)) else hazeEffect(state, glass(p))
+/** A control floating over media: the bar tint is drawn under the blur too, because the plant stage is not a blur source
+ *  of the shell and the effect alone would leave the green label on the dark green sky. */
+private fun Modifier.floatingGlass(state: HazeState?, p: Palette, shape: androidx.compose.ui.graphics.Shape): Modifier =
+    background(p.bar, shape).glassOver(state, p).border(.75.dp, p.barEdge, shape)
 
 /** Text that grows with the system size up to [cap]; for bar labels that cannot reflow, like iOS (HIG large content). */
 @Composable private fun capped(size: Int, cap: Float = 1.35f) = with(LocalDensity.current) { (size * min(fontScale, cap) / fontScale).sp }
@@ -98,7 +104,7 @@ fun <S> AnimatedContentTransitionScope<S>.stack(forward: Boolean): ContentTransf
  * has scrolled away, and trailing actions. Glass only when content is under it (HIG materials: navigation layer only).
  */
 @Composable fun NavBar(title: String, glass: Float, modifier: Modifier = Modifier, titleAlpha: Float = glass, back: String? = null,
-                       onBack: (() -> Unit)? = null, haze: HazeState? = null, actions: @Composable RowScope.() -> Unit = {}) {
+                       onBack: (() -> Unit)? = null, haze: HazeState? = null, floating: Boolean = false, actions: @Composable RowScope.() -> Unit = {}) {
     val p = palette
     val progress = titleAlpha
     Box(modifier.fillMaxWidth()) {
@@ -108,7 +114,7 @@ fun <S> AnimatedContentTransitionScope<S>.stack(forward: Boolean): ContentTransf
             if (progress > .01f) Text(title, Modifier.padding(start = if (back != null) 128.dp else 64.dp, end = 64.dp).graphicsLayer { alpha = progress },
                 style = T.headline.copy(fontSize = capped(17)), color = p.ink, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                if (back != null && onBack != null) BackButton(back, onBack)
+                if (back != null && onBack != null) BackButton(back, onBack, floating)
                 Spacer(Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically, content = actions)
             }
@@ -116,26 +122,38 @@ fun <S> AnimatedContentTransitionScope<S>.stack(forward: Boolean): ContentTransf
     }
 }
 
-@Composable fun BackButton(label: String, onClick: () -> Unit) {
+/**
+ * Back with the previous screen's name. [floating] puts it on a glass capsule so it stays readable over the plant stage
+ * (HIG Liquid Glass: controls float above content); at large text sizes the label gives way to the chevron alone.
+ */
+@Composable fun BackButton(label: String, onClick: () -> Unit, floating: Boolean = false) {
     val p = palette
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    Row(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).clickable(source, null, role = Role.Button, onClick = onClick)
-        .graphicsLayer { alpha = if (pressed) .45f else 1f }.padding(end = 10.dp).semantics(mergeDescendants = true) { contentDescription = "Kembali ke $label" },
+    val haze = LocalShellHaze.current
+    val roomy = LocalDensity.current.fontScale <= 1.6f
+    Row(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(50)).clickable(source, null, role = Role.Button, onClick = onClick)
+        .graphicsLayer { alpha = if (pressed) .45f else 1f }.semantics(mergeDescendants = true) { contentDescription = "Kembali ke $label" },
         verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon(PhosphorPaths.CaretLeftBold), null, Modifier.padding(start = 6.dp).size(22.dp), tint = p.tint)
-        Text(label, style = T.body.copy(fontSize = capped(17)), color = p.tint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.padding(start = 4.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(50))
+            .then(if (floating) Modifier.floatingGlass(haze, p, RoundedCornerShape(50)) else Modifier)
+            .padding(start = 4.dp, end = if (roomy) 12.dp else 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon(PhosphorPaths.CaretLeftBold), null, Modifier.padding(start = 2.dp).size(22.dp), tint = p.tint)
+            if (roomy) Text(label, style = T.body.copy(fontSize = capped(17)), color = p.tint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
 /** A round toolbar button (icon only) with a spoken label and a 48 dp target. */
-@Composable fun BarButton(path: String, label: String, onClick: () -> Unit, enabled: Boolean = true) {
+@Composable fun BarButton(path: String, label: String, onClick: () -> Unit, enabled: Boolean = true, floating: Boolean = false) {
     val p = palette
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
+    val haze = LocalShellHaze.current
     Box(Modifier.size(48.dp).clip(CircleShape).clickable(source, null, enabled = enabled, role = Role.Button, onClick = onClick)
         .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
-        Box(Modifier.size(34.dp).clip(CircleShape).background(if (pressed) p.separator else p.fill), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(if (floating) 38.dp else 34.dp).clip(CircleShape).then(if (floating) Modifier.floatingGlass(haze, p, CircleShape) else Modifier)
+            .background(if (pressed) p.separator else if (floating) Color.Transparent else p.fill), contentAlignment = Alignment.Center) {
             Icon(icon(path), null, Modifier.size(19.dp), tint = if (enabled) p.tint else p.tertiary)
         }
     }
@@ -148,6 +166,7 @@ fun <S> AnimatedContentTransitionScope<S>.stack(forward: Boolean): ContentTransf
  */
 @Composable fun TitledScreen(title: String, modifier: Modifier = Modifier, subtitle: String? = null, large: Boolean = true,
                              back: String? = null, onBack: (() -> Unit)? = null, state: LazyListState = rememberLazyListState(),
+                             accessory: (@Composable () -> Unit)? = null,
                              actions: @Composable RowScope.() -> Unit = {}, content: LazyListScope.() -> Unit) {
     val p = palette
     val haze = remember { HazeState() }
@@ -162,14 +181,20 @@ fun <S> AnimatedContentTransitionScope<S>.stack(forward: Boolean): ContentTransf
             contentPadding = PaddingValues(top = top + 52.dp, bottom = LocalBottomClearance.current + 24.dp)) {
             if (large) item(key = "large-title") {
                 Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 14.dp).onSizeChanged { titleHeight = it.height }) {
-                    Text(title, style = T.largeTitle, color = p.ink, modifier = Modifier.semantics { heading() })
+                    // A flow, not a row: at large text sizes the accessory moves under the title instead of squeezing it
+                    // until a word breaks in the middle ("Tanama / n saya").
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(title, style = T.largeTitle, color = p.ink, modifier = Modifier.align(Alignment.CenterVertically).semantics { heading() })
+                        accessory?.let { Box(Modifier.align(Alignment.CenterVertically)) { it() } }
+                    }
                     subtitle?.let { Text(it, style = T.subhead, color = p.secondary, modifier = Modifier.padding(top = 4.dp)) }
                 }
             }
             content()
         }
         // The glass follows any scroll; the inline title waits until the large title has gone.
-        NavBar(title, glassIn, Modifier.align(Alignment.TopCenter), titleIn, back, onBack, haze, actions)
+        NavBar(title, glassIn, Modifier.align(Alignment.TopCenter), titleIn, back, onBack, haze, actions = actions)
     }
 }
 
@@ -229,22 +254,21 @@ data class TabItem(val label: String, val path: String, val selectedPath: String
 @Composable fun Group(modifier: Modifier = Modifier, footer: String? = null, inset: Dp = 16.dp, content: @Composable () -> Unit) {
     val p = palette
     // Filled during placement and read while drawing, which always follows layout; not state, so layout never recomposes.
-    val edges = remember { IntArray(64) }
-    val drawn = remember { IntArray(1) }
+    val edges = remember { arrayListOf<Int>() }
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Layout(content, Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.cell).drawBehind {
             val x = inset.toPx()
-            for (i in 0 until drawn[0]) drawLine(p.separator, Offset(x, edges[i].toFloat()), Offset(size.width, edges[i].toFloat()), 1f)
+            for (edge in edges) drawLine(p.separator, Offset(x, edge.toFloat()), Offset(size.width, edge.toFloat()), 1f)
         }) { measurables, constraints ->
             val placeables = measurables.map { it.measure(constraints.copy(minHeight = 0)) }
             val height = placeables.sumOf { it.height }
             layout(constraints.maxWidth, height) {
+                edges.clear()
                 var y = 0
                 placeables.forEachIndexed { i, placeable ->
-                    if (i > 0 && i - 1 < edges.size) edges[i - 1] = y
+                    if (i > 0) edges.add(y)
                     placeable.placeRelative(0, y); y += placeable.height
                 }
-                drawn[0] = (placeables.size - 1).coerceIn(0, edges.size)
             }
         }
         footer?.let { Text(it, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp), style = T.footnote, color = p.secondary) }

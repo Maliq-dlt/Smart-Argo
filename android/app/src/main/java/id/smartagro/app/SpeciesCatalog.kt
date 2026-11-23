@@ -111,7 +111,8 @@ internal object SpeciesCatalog {
             "bawang" in text -> all[1]
             "anggrek" in text -> all[2]
             "peoni" in text -> all[3]
-            else -> all[0]
+            "cabai" in text || "cabe" in text || "lombok" in text || "capsicum" in text -> all[0]
+            else -> SpeciesSpec("unknown", 0, "", crop, "", "", "belajar", emptyList(), "", null, 62, 90, LEARNING_PHASES)
         }
     }
 

@@ -4,11 +4,12 @@ Aplikasi Android native Kotlin + Jetpack Compose, terpisah dari website React. S
 
 ## Status UI Apple-native & Konsep Kebun — 19 November 2026
 
-Porting desain `konsep-kebun` ke aplikasi Android native Kotlin + Jetpack Compose telah selesai tanpa dependency baru dan tanpa `bounce`/`blink`:
+Porting desain `konsep-kebun` (mock HTML 18 November, tidak dilacak git; salinan lokal di `android/.tmp/`) ke aplikasi Android native Kotlin + Jetpack Compose telah selesai tanpa dependency baru dan tanpa `bounce`/`blink`:
 - **Adaptive Launcher Icon (`res/mipmap-anydpi-v26/ic_agro.xml`, `res/drawable/ic_agro_bg.xml`, `ic_agro_fg.xml`, `ic_agro_mono.xml`, `ic_agro.xml`):** Emblem daun tunggal bergaris terasering (`ikon.svg`) terpisah menjadi layer background gradien zamrud, foreground terpusat di safe zone 66dp, dan monochrome untuk Android 13+ Themed Icons.
 - **Welcome Cover & Akses Terpisah (`AuthScreens.kt`, `Delight.kt`, `GoogleSignIn.kt`):** Layar `AuthStep.Welcome` menampilkan langit 4 fase waktu lokal (`Pagi`, `Siang`, `Sore`, `Malam` tanpa matahari + bintang statis) + bukit terasering berlapis + emblem & wordmark `Smart Agro` (**tanpa maskot**) + tombol terpisah (`Lanjutkan dengan Google`, `Masuk dengan email`, `Buat akun`, `Jelajahi mode latihan`). Penanganan `NoCredentialException` dan `GoogleIdTokenParsingException` dipisahkan dari kegagalan umum.
 - **Liquid Glass Logo Reveal (`Delight.kt`, `MainActivity.kt`, `AccountScreens.kt`):** Transisi masuk kebun memakai AGSL `RuntimeShader` refraksi kaca cair pada Android 13+ (API 33+) dan fallback Canvas kaca pada API 26–32, dengan tipografi kinetik `Smart Agro`, tap-to-skip, penghormatan `ANIMATOR_DURATION_SCALE == 0f`, serta tombol **Akun → Putar animasi masuk**.
-- **Tumpukan Kartu Tanaman Vertikal Gaya Apple Wallet + 3 Metrik Sensor Atas (`PlantScreens.kt`):** Baris 3 metrik sensor (`Kelembapan | Suhu tanah | pH tanah`) yang langsung membuka `ActivityScreen` pada sensor terkait, diikuti tumpukan kartu tanaman bertingkat vertikal (2 kartu belakang menyembul di atas kartu aktif depan, geser/ketuk untuk ganti tanaman, sakelar `Putar otomatis` 8 detik, dan tahap 2D interaktif `PlantScene`).
+- **Tumpukan Kartu Tanaman Vertikal Gaya Apple Wallet + 3 Metrik Sensor Atas (`PlantScreens.kt`):** Baris 3 metrik sensor (`Kelembapan | Suhu tanah | pH tanah`) yang langsung membuka `ActivityScreen` pada sensor terkait, diikuti tumpukan kartu tanaman bertingkat vertikal (2 kartu belakang menyembul di atas kartu aktif depan, geser/ketuk untuk ganti tanaman, dan tahap 2D interaktif `PlantScene`). Kartu hanya bergerak oleh sentuhan pengguna; putar otomatis 8 detik dihapus 2026-11-21 (gerak tanpa aksi pengguna dan muat ulang riwayat tiap pergantian).
+- **Pindah pot dan baterai (2026-11-21):** Kelola produk memakai "Pindahkan ke sini" untuk perangkat yang terpasang di unit lain dan bisa mengarsipkan unit yang masih berisi perangkat (server melepasnya). Sejak migrasi `20261121000000` server mencatat paket ke unit penempatan, jadi firmware tidak perlu di-flash ulang. Diagnostik sensor menampilkan tegangan baterai dari `my_unit_overview` (`20261121010000`) dan petunjuk Baterai lemah di bawah 3,4 V. Keduanya butuh migrasi yang sama di cloud sebelum APK ini dirilis.
 - **Maskot Interaktif 6 Keadaan (`Illustrations.kt`, `AuthScreens.kt`, `PlantScreens.kt`):** `MascotMood` (`Smile`/Tenang, `Reading`/Mengamati, `Working`/Merawat, `Happy`/Optimal berbunga, `Care`/Perlu air dengan alis khawatir + tetes air, `Shy`/Menjaga sandi menutup mata dengan tangan daun), `MascotPill`, kartu perawatan di bawah tumpukan tanaman, dan `MascotStage` dengan pemilih 4 ekspresi di lembar saran.
 - **Peak Chart (`PlantScreens.kt`, `ActivityScreen.kt`):** Kurva monotone cubic Bezier halus tanpa overshoot, gradien kartu sage terang/gelap, badge `Puncak …`, titik halo konsentris tenang (tanpa kedip/pulse), scrub sentuh dengan haptics, dan sinkronisasi dua arah dengan baris daftar bacaan di `ActivityScreen`.
 - **Liquid Glass Floating Tab Bar (`Kit.kt`, `Theme.kt`):** Semua pegas memakai `dampingRatio = 1f` (critically damped, nol pantulan); lensa tab kaca meluncur mulus dengan regangan horizontal proporsional saat berpindah tab.
@@ -39,9 +40,9 @@ Sesuai arahan pemilik, pekerjaan desain/UI berikutnya diserahkan kepada Claude. 
 
 Alur ini mengikuti endpoint Auth/RPC/Edge yang sudah ada. Tidak menambah dependency, endpoint backend, layar, izin kamera, ataupun integrasi lembar berbagi Android. Request ID untuk tindakan baru harus disimpan pemanggil bersama payload dan dipakai ulang bila hasil jaringan belum pasti. ID permintaan penjelasan kini disimpan otomatis di no-backup storage, termasuk setelah proses berhenti; isi pertanyaan tidak ditulis ke berkas identitas.
 
-Reset sandi mengikuti tautan PKCE pada template server yang tersedia, bukan kode reset email. `AccountWorkflows` yang sama harus menerima tautan kembali; verifier hanya berada di memori. Claude perlu memasang app link yang sesuai allowlist Supabase dan memeriksa origin/path sebelum meneruskan kode. Jika proses mati, minta tautan baru. Setelah sandi berubah, hasil `PasswordChangedLogoutUnconfirmed` berarti pergantian sudah berhasil tetapi logout server belum dapat dikonfirmasi; jangan tampilkan sebagai kegagalan mengganti sandi. Pengguna tetap masuk ulang melalui login/MFA biasa.
+Reset sandi Android menggunakan kode 6 digit dari template `recovery.html`. `AccountWorkflows` mengirim permintaan reset, memverifikasi kode, lalu memakai sesi pemulihan sementara di memori untuk menyimpan sandi baru. Jika proses mati, minta kode baru. Setelah sandi berubah, `PasswordChangedLogoutUnconfirmed` berarti sandi sudah tersimpan dan logout sesi pemulihan belum terkonfirmasi. Pengguna masuk ulang melalui login dan MFA biasa. Layar reset juga menyediakan tautan ke alur web.
 
-CSV dibuat di memori dari RPC terautentikasi, dengan snapshot/cursor tetap, 14 kolom, BOM/CRLF dan pelindung formula. Batasnya 5.000 baris/4 MiB/10 halaman dan timeout coroutine 15 detik; pembacaan HTTP yang blocking dapat baru berhenti setelah timeout koneksi/bacanya. Tidak mengembalikan CSV parsial atau hasil setelah akun berubah. Detail pemanggilan dan pekerjaan layar yang tersisa ada di [HANDOFF.md](HANDOFF.md).
+CSV dibuat di memori dari RPC terautentikasi, dengan snapshot/cursor tetap, 14 kolom, BOM/CRLF dan pelindung formula. Batasnya 5.000 baris/4 MiB/10 halaman dan timeout coroutine 60 detik; pembacaan HTTP yang blocking dapat baru berhenti setelah timeout koneksi/bacanya. Tidak mengembalikan CSV parsial atau hasil setelah akun berubah. Detail pemanggilan dan pekerjaan layar yang tersisa ada di [HANDOFF.md](HANDOFF.md).
 
 Verifikasi non-UI terakhir: `./android/build.ps1 -Tasks @('testDebugUnitTest','lintDebug','assembleDebug','assembleRelease','lintRelease')` **berhasil**; XML mencatat **80 tes, 0 gagal/error**, lint debug **0 error/12 warning** dan release **0 error/13 warning**. APK debug dan release berhasil dibuat. Release 2.029.333 byte memakai tanda tangan v2 RSA 3072-bit yang valid; SHA-256 `51433b1aa68d8e8ff24df239bed72300785804f29897b43ccc5a0144b4326364`. Log: `.tmp/non-ui-verified-build.log`; rincian: `.tmp/non-ui-verification.json`. Tes kontrak memakai HTTP loopback/fixture; tidak membuktikan SMTP, Google login, cloud terautentikasi, akun pemilik atau sensor fisik. Lint masih memberi saran versi, penanganan khusus `NoCredentialException` (saat ini lewat exception umum), resource dan KTX.
 
@@ -57,10 +58,11 @@ Tombol **Coba mode latihan** memakai 10 skenario sintetis dari `src/lib/scenario
 
 ## Yang sudah diadaptasi
 
-- Palet Sage dan lumut, font General Sans / Fraunces dari aset web, mode terang/gelap mengikuti sistem pada awal penggunaan; pilihan manual disimpan di HP.
+- Palet Sage dan lumut, font General Sans / Fraunces dari aset web, mode terang/gelap mengikuti tema sistem.
 - Maskot Canvas native mengikuti panjang email, menutup mata dengan tangan daun saat kata sandi/kode diisi, dan menunduk saat gagal.
 - Ilustrasi pot, akar, daun cabai/bawang menggunakan koordinat dan kurva dari `PlantIllustration.tsx`; sakelar zona akar memakai tween tanpa pantulan. Ripple lingkaran tombol dinonaktifkan; fokus dan semantik aksesibilitas tetap ada.
-- Login email/kata sandi atau Google melalui Credential Manager, lalu autentikator TOTP melalui Supabase Auth yang sama dengan web.
+- Login email/kata sandi atau Google melalui Credential Manager, lalu autentikator TOTP melalui Supabase Auth yang sama dengan web. Pendaftaran Android dikonfirmasi dengan kode email enam digit. Pengambilan foto QR mendelegasikan kamera ke aplikasi kamera sistem melalui intent.
+- Build release hanya menerima HTTPS dengan validasi CA Android. Trust store sistem dipakai agar rotasi sertifikat Supabase tidak mengunci pengguna. CI membuat kunci uji tersendiri dan tidak memublikasikan APK debug.
 - Sesi dienkripsi AES-GCM memakai kunci Android Keystore, tidak ikut backup; token diperbarui saat diperlukan. Password dan OTP tidak disimpan.
 - Produk milik akun dan daftar persona ringkas memakai LazyColumn; pencarian nama, jenis, kode atau serial, serta filter produk. Kelembapan/suhu/pH mempertahankan status galat/kosong/usang dan waktu pengukuran.
 - Grafik dengan rentang nilai adaptif, inspeksi sentuh, filter 24 jam/7 hari, dan pemuatan 120 bacaan sebelumnya per halaman. Data hilang, galat, jam tak sinkron dan jeda lebih dari satu jam memutus garis. Filter hanya memakai halaman yang sudah dimuat.
@@ -74,7 +76,7 @@ Tombol **Coba mode latihan** memakai 10 skenario sintetis dari `src/lib/scenario
 - Pot dan kebun akun dibaca dari `my_garden`: lokasi, zona, tanggal tanam, kode integer serta label CB/BM/AB/PN sama dengan web. Siklus tanaman dibedakan dari unit sensor; bacaan hanya tersedia bila zona benar-benar terhubung ke unit milik akun. Pengelolaan kebun tetap melalui website.
 - Transisi layar singkat, tarik-untuk-segarkan, kontrol Segarkan di header, dan umpan balik tekan pada kartu. Navigasi tetap tersedia saat memuat; operasi jaringan diserialkan dan perubahan nama terikat pada tanaman asal.
 - Tombol kembali Android dan keluar dari sesi aplikasi saja.
-- Preview Compose untuk login normal dan teks besar; layout scroll untuk layar kecil/keyboard.
+- Layar masuk dapat digulir pada layar kecil atau saat keyboard terbuka. Ukuran teks besar diperiksa melalui tes UI.
 
 Pendaftaran, pemulihan akun, aktivasi/QR, transfer, pengaturan unit, fitur operator, jurnal manual, bukti energi, dan pencatatan berkas lewat wallet tetap menggunakan website pada versi awal ini. Saldo poin sudah dapat dibaca di aplikasi; poin program tidak diasumsikan sebagai token atau koin kripto. Cuaca memakai fungsi `weather-forecast` melalui sesi akun yang sama dengan website, berdasarkan koordinat lokasi kebun tanaman terpilih. Koordinat dibulatkan oleh server sebelum dikirim ke Open-Meteo; aplikasi tidak meminta GPS atau memilih kota tersendiri. Lokasi indoor tidak meminta prakiraan luar; koordinat yang belum diatur diarahkan ke website. Kartu menampilkan waktu lokal lokasi, suhu/kelembapan udara, angin m/s, awan, curah hujan dan prakiraan hingga enam jam. Kondisi awan dapat mengubah ilustrasi. Kontrak server tidak menyediakan radiasi matahari, lux, atau siang/malam; aplikasi tidak membuat nilai pengganti. Kontrak backend perangkat hanya memiliki kelembapan, suhu tanah, dan pH; aplikasi tidak mengarang bacaan sensor cahaya. Tautan terkait membuka browser; sesi browser dan aplikasi terpisah. Menutup aplikasi pertama kali tidak meminta izin kamera, lokasi, notifikasi, atau Bluetooth.
 
@@ -178,7 +180,7 @@ Verifikasi penyelesaian fitur native (15 November 2026): `android/build.ps1` ber
 
 ## Keamanan aplikasi dan build release
 
-`FLAG_SECURE` (dan thumbnail Recents pada API 33+) hanya aktif di layar yang meminta atau menampilkan kode: langkah autentikator dan Reward. Layar lain boleh ditangkap layar agar pemilik bisa membagikannya untuk review (sejak 2026-11-16; sebelumnya seluruh window). Sesuai pilihan pengguna pada 16 November 2026, aplikasi tidak meminta kunci aplikasi tambahan atau konfirmasi PIN/pola/sandi HP. Berpindah ke browser lalu kembali tidak mengunci akun lagi. Login dan MFA server tetap berlaku; sesi dienkripsi melalui Android Keystore di no-backup storage. Perlindungan window dan enkripsi tidak menjamin keamanan sistem yang sudah disusupi.
+`FLAG_SECURE` (dan thumbnail Recents pada API 33+) hanya aktif di layar yang meminta atau menampilkan kode: langkah autentikator dan Reward. Layar lain boleh ditangkap layar agar pemilik bisa membagikannya untuk review (sejak 2026-11-16; sebelumnya seluruh window). Sesuai pilihan pengguna pada 16 November 2026, aplikasi tidak meminta kunci aplikasi tambahan atau konfirmasi PIN/pola/sandi HP. Berpindah ke browser lalu kembali tidak mengunci akun lagi. Login dan MFA server tetap berlaku; sesi dienkripsi melalui Android Keystore di no-backup storage. Kunci sesi dapat dipakai aplikasi tanpa autentikasi perangkat tambahan agar pengguna tanpa PIN atau biometrik tetap bisa masuk. Perlindungan window dan enkripsi tidak menjamin keamanan sistem yang sudah disusupi.
 
 Dari root repository:
 
@@ -188,9 +190,34 @@ $env:JAVA_HOME = 'C:/path/to/jdk'
 ./android/build.ps1 -Tasks @('testDebugUnitTest','lintDebug','assembleRelease','lintRelease')
 ```
 
-`prepare-release.ps1` membuat key RSA 3072-bit dan password acak lokal di `android/.private/` tanpa mencetak password atau menimpa pasangan yang sudah ada. Folder ini diabaikan Git. **Simpan backup terenkripsi kedua file** (`release.p12` dan `release.properties`) di tempat aman sebelum membagikan APK. File properties memuat password; jangan dikirim bersama source atau APK. Kunci ini merupakan kunci release lokal; proses Google Play App Signing, upload key, pemulihan, dan publikasi belum dilakukan.
+`prepare-release.ps1` membuat key RSA 3072-bit dan password acak lokal di `android/.private/` tanpa mencetak password atau menimpa pasangan yang sudah ada. Folder ini diabaikan Git. **Simpan backup terenkripsi kedua file** (`release.p12` dan `release.properties`) di tempat aman sebelum membagikan APK. File properties memuat password; jangan dikirim bersama source atau APK. Kunci ini merupakan kunci rilis untuk distribusi APK langsung. Google Play App Signing dan upload key belum disiapkan.
 
 Release mengaktifkan R8, resource shrinking, serta `debuggable=false`. Build release berhenti jika signing tidak lengkap; tidak beralih ke debug signing atau APK unsigned. APK: `android/app/build/outputs/apk/release/app-release.apk`. Debug dan release memiliki sertifikat berbeda sehingga pemasangan release di atas debug dengan package sama memerlukan uninstall debug (data lokal hilang); jangan uninstall aplikasi berisi data penting tanpa backup yang sesuai. Mapping R8 tersedia di `android/app/build/outputs/mapping/release/mapping.txt`; simpan bersama versi APK untuk membaca laporan crash.
+
+### Distribusi GitHub v0.1.1
+
+Rilis publik saat ini adalah [`android-v0.1.0`](https://github.com/Maliq-dlt/Smart-Argo/releases/tag/android-v0.1.0), dengan package `id.smartagro.app` dan `versionCode=1`. SHA-256 APK publik adalah `5e94be7acd76ab817281dde7c46188ef9ccc7d67d8ff98f4bf85ab080faec403`. Versi 0.1.1 memakai `versionCode=2` dan sertifikat rilis yang sama agar bisa dipasang sebagai pembaruan.
+
+1. Pakai pasangan signing rilis yang sudah ada dan jalankan build release di atas.
+2. Dari root repository, jalankan verifikasi berikut. Isi `$buildTools` dengan direktori Android SDK Build Tools yang memuat alat tersebut.
+
+   ```powershell
+   $buildTools = 'C:/path/to/Android/Sdk/build-tools/36.0.0'
+   $apk = 'android/app/build/outputs/apk/release/app-release.apk'
+   & "$buildTools/apksigner.bat" verify --verbose --print-certs $apk
+   & "$buildTools/zipalign.exe" -c -P 16 4 $apk
+   & "$buildTools/aapt.exe" dump badging $apk | Select-String '^package:'
+   Get-FileHash -Algorithm SHA256 $apk
+   ```
+
+   Pastikan signature v2 valid dan metadata menunjukkan `id.smartagro.app`, kode 2, versi 0.1.1. Sidik jari SHA-256 sertifikat rilis adalah `8dce31222fefddc34d10fadb091d22a75908c506a1cae3385559d91e45313d09`. SHA-1 sertifikat untuk OAuth Android adalah `747efcc666821c6183d95c2f4d61aba9f4478c21`. SHA-256 file APK berubah saat isi APK berubah.
+3. Uji pemasangan dari APK baru dan pembaruan dari APK GitHub v0.1.0. Setelah siap diterbitkan, buat GitHub Release `android-v0.1.1` dari commit yang dibangun, lampirkan APK yang diuji, dan catat SHA-256 file di catatan rilis. Unduh kembali aset publik dan cocokkan hash dengan hasil build.
+
+`apksigner` memeriksa tanda tangan dan integritas APK. Google Play Protect menilai keamanan aplikasi secara terpisah dan dapat menawarkan pemindaian APK yang diunduh di luar Google Play. Jalankan pemindaian dengan Play Protect tetap aktif. Jika Google menandai APK berbahaya, catat pesan persis, package name dan SHA-256 APK untuk pengajuan banding. [Panduan Play Protect](https://support.google.com/googleplay/answer/2812853?hl=en) · [Formulir banding](https://support.google.com/googleplay/android-developer/contact/protectappeals)
+
+Untuk distribusi di luar Google Play, daftarkan `id.smartagro.app` dan SHA-256 sertifikat rilis di Android Developer Console. Jika diminta, buktikan kepemilikan paket dengan APK yang ditandatangani memakai kunci rilis. [Verifikasi pengembang Android](https://developer.android.com/developer-verification/guides/android-developer-console)
+
+Login Google juga perlu registrasi package dan SHA-1 sertifikat distribusi di OAuth, sesuai konfigurasi di atas. Jika distribusi pindah ke Play dan pengguna perlu bisa memperbarui APK GitHub yang sudah terpasang, gunakan sertifikat distribusi yang sesuai saat mendaftarkan Play App Signing dan siapkan upload key terpisah. [Panduan Play App Signing](https://developer.android.com/studio/publish/app-signing)
 
 Uji isolasi akun dan reward pada backend lokal, setelah `node scripts/phase1-local.mjs` siap:
 
@@ -245,3 +272,14 @@ $env:JAVA_HOME = 'C:/path/to/full-jdk'
 Launcher menjalankan entry Node secara langsung agar argumen JVM seperti `<clinit>` tidak ditafsirkan oleh batch shell. `check-rea.ps1` memeriksa dekompilasi metode cap waktu dan penerusan nama khusus itu pada APK nyata. Launcher memeriksa checksum JAR, membatasi JVM ke 1536 MiB/dua CPU, dan menaruh temp di `android/.tmp/rea/`. Pada mesin ini konfigurasi `[mcp_servers.rea.env]` Codex dan environment REA Claude Code juga sudah diisi memakai JDK 21 yang tersedia; tool MCP memakai pengaturan baru setelah REA tersambung ulang. Launcher CLI langsung dapat digunakan tanpa menunggu koneksi MCP lama dimuat ulang.
 
 Verifikasi nyata 16 November: doctor JADX siap; package/class/metode APK debug berhasil dibaca. Dekompilasi `ModelsKt.instant` menghasilkan Java lengkap, tanpa fallback, dan memuat `OffsetDateTime.parse(...).toInstant()`. Bukti JSON berada di `android/.tmp/rea/`. Ini pemeriksaan statis, terpisah dari uji runtime emulator dan verifikasi tanda tangan APK.
+
+
+## Setup perangkat, tautan kemasan, dan pembaruan - 23 November 2026
+
+**Akun > Produk & kepemilikan > Siapkan Wi-Fi & kalibrasi** memakai koneksi Wi-Fi lokal terpisah pada Android 10+. Isi nama jaringan `SmartAgro-xxxx` dan sandi label; setujui dialog Android. Rekam titik kering, rekam titik basah sampai firmware mengonfirmasi `saved=true`, kemudian simpan Wi-Fi rumah 2,4 GHz. `/save` memulai ulang ESP32 sehingga kalibrasi harus dilakukan lebih dahulu. Android 8-9 memakai petunjuk sambung manual dan portal browser. Kalibrasi pH mengikuti prosedur buffer khusus lewat portal sesuai manual probe, bukan wizard kelembapan.
+
+Hanya request setup yang memakai `Network.openConnection` pada jaringan ESP32; proses aplikasi tidak dipindahkan ke jaringan tanpa internet. HTTP rilis dibatasi ke `192.168.4.1`; debug juga mengizinkan backend emulator `10.0.2.2`. Izin perangkat sekitar diminta saat pengguna menyambung pada Android 13+, izin lokasi pada Android 10-12. Sandi hanya di memori layar, tidak disimpan aplikasi. Konfirmasi Wi-Fi tersimpan belum membuktikan koneksi router atau pengiriman cloud; cek bacaan setelah HP kembali ke internet. Koneksi/pasangan sensor nyata masih memerlukan uji ESP32.
+
+App Links menangani `https://live.smart-agro-demo.pages.dev/?serial=...#ekosistem`. Nomor seri ditahan selama login/MFA, lalu layar QR dibuka dengan seri terisi; kode aktivasi/signature dari parameter tautan tidak diimpor. `public/.well-known/assetlinks.json` memakai sertifikat **rilis**, bukan sertifikat debug. Pada 23 November 2026, APK publik `android-v0.1.0` diunduh kembali ke `.tmp/setup-verification/` dan `apksigner verify --print-certs` berhasil: SHA-256 sertifikat `8D:CE:31:22:2F:EF:DD:C3:4D:10:FA:DB:09:1D:22:A7:59:08:C5:06:A1:CA:E3:38:55:59:D9:1E:45:31:3D:09`, hash file APK `5e94be7acd76ab817281dde7c46188ef9ccc7d67d8ff98f4bf85ab080faec403`. Tidak ada keystore yang dipindahkan atau dibaca. Setelah deploy situs yang disetujui, jalankan `adb shell pm verify-app-links --re-verify id.smartagro.app` lalu `adb shell pm get-app-links id.smartagro.app`; asosiasi domain belum terverifikasi live sebelum deploy. Jika memakai Play App Signing, tambahkan sertifikat distribusi Play setelah tersedia.
+
+Halaman Akun mengecek GitHub Releases paling sering sekali sehari dan menampilkan **Versi baru tersedia** untuk tag stabil `android-vX.Y.Z` yang lebih tinggi dari versi terpasang. API publik saat pemeriksaan mengembalikan `android-v0.1.0`; aplikasi `0.1.1` tidak menawarkan downgrade. Tombol membuka halaman rilis GitHub; tidak mengunduh atau memasang APK otomatis. Gangguan jaringan mempertahankan hasil sukses terakhir.

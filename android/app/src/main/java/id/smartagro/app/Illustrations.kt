@@ -442,11 +442,12 @@ fun PlantScene(
     onion: Boolean = false,
     moisture: Double? = null,
     cutaway: Boolean = true,
-    day: Int = 35,
+    day: Int? = 35,
     interactive: Boolean = false,
     daylight: Boolean? = null,
     cloudy: Boolean? = null,
     speciesId: Int = if (onion) 2 else 1,
+    arrival: Any? = null,
 ) {
     val haptics = rememberHaptics()
     var touch by remember { mutableIntStateOf(0) }
@@ -459,10 +460,29 @@ fun PlantScene(
     }
     val trailing by animateFloatAsState(response.value, tween(160), label = "Leaf follow through")
     val species by animateFloatAsState(if (onion) 1f else 0f, tween(560), label = "Plant species")
-    val dry by animateFloatAsState(((60f - (moisture?.toFloat() ?: 60f)) / 30f).coerceIn(0f, 1f), tween(600), label = "Moisture leaf pose")
+    val observedMoisture = moisture?.takeIf { it.isFinite() && it in 0.0..100.0 }
+    val hasMoisture by animateFloatAsState(if (observedMoisture != null) 1f else 0f, tween(440), label = "Soil reading visibility")
     val shell by animateFloatAsState(if (cutaway) 0f else 1f, tween(560), label = "Pot cutaway")
-    val growth by animateFloatAsState(min(1f, .12f + day / if (onion) 48f else 62f), tween(320), label = "Illustrative growth")
-    val wet by animateFloatAsState((moisture?.div(100)?.toFloat() ?: 0f).coerceIn(0f, 1f), tween(320), label = "Soil moisture")
+    val growth by animateFloatAsState(day?.let { min(1f, .12f + it / if (onion) 48f else 62f) } ?: .65f,
+        tween(320), label = "Illustrative growth")
+    // A new reading ([arrival] changed) that raised the index arrives as water: the wetter soil spreads down from the
+    // surface over 1.8 s. Drying and every other change settle in place. Without a reading the soil stays neutral.
+    val targetWet = observedMoisture?.div(100)?.toFloat() ?: .5f
+    var baseWet by remember { mutableFloatStateOf(targetWet) }
+    val front = remember { Animatable(1f) }
+    LaunchedEffect(targetWet, arrival) {
+        if (arrival != null && targetWet > baseWet + .02f) { front.snapTo(0f); front.animateTo(1f, tween(1800, easing = FastOutSlowInEasing)) }
+        baseWet = targetWet
+    }
+    val wet by animateFloatAsState(targetWet, tween(600), label = "Soil moisture")
+    val before by animateFloatAsState(baseWet, tween(600), label = "Soil before water")
+    val neutralSoil = Color(0xFF82766D)
+    fun soil(w: Float) = androidx.compose.ui.graphics.lerp(neutralSoil, androidx.compose.ui.graphics.lerp(Color(0xFFAB8B6C), Color(0xFF473B31), w), hasMoisture)
+    val media = soil(before)
+    val arriving = soil(wet)
+    // Leaves droop as the index falls below 40, the same rule as the web stage; they straighten after water arrives.
+    val dry by animateFloatAsState(observedMoisture?.let { ((40 - it) / 40).toFloat().coerceIn(0f, 1f) } ?: 0f,
+        tween(1400, easing = FastOutSlowInEasing), label = "Leaves droop when dry")
     val sky by animateFloatAsState(if (daylight == null) 0f else 1f, tween(600), label = "Weather scene visibility")
     val night by animateFloatAsState(if (daylight == false) 1f else 0f, tween(600), label = "Weather scene daylight")
     val cloud by animateFloatAsState(if (cloudy == true) 1f else 0f, tween(600), label = "Weather scene clouds")
@@ -487,7 +507,7 @@ fun PlantScene(
             if (orchid) {
                 val barkPath = "M118 316H336L314 435Q226 446 140 435Z"
                 svg(barkPath, Color(0xFF3B2F26))
-                svg(barkPath, Color(0xFF13202A).copy(alpha = wet * .5f))
+                svg(barkPath, Color(0xFF13202A).copy(alpha = wet * hasMoisture * .5f))
                 clipPath(illustrationPaths.get(barkPath)) {
                     repeat(28) { i ->
                         val cx = 132f + ((i * 53) % 192)
@@ -504,8 +524,8 @@ fun PlantScene(
             } else {
                 svg("M104 313H350L321 444Q226 459 133 444Z", Color(0xFFB99B87))
                 val mediaPath = "M114 316H340L314 435H140Z"
-                svg(mediaPath, Color(0xFF998169))
-                svg(mediaPath, Color(0xFF4A3B32).copy(alpha = wet))
+                svg(mediaPath, media)
+                clipRect(110f, 316f, 342f, 316f + 124f * front.value) { svg(mediaPath, arriving) }
                 // Soil & drainage gravel band when pot wall is cut open.
                 clipPath(illustrationPaths.get(mediaPath)) {
                     svg("M119 339Q181 334 231 341T335 337M127 372Q175 378 228 371T326 376", Color(0xFF8E745E), 1f)
@@ -530,17 +550,17 @@ fun PlantScene(
             }
 
             // Smart Agro cartoon device sitting cleanly on the right pot rim (y=252..310).
-            drawPotDevice(x = 278f, y = 258f, online = moisture != null)
+            drawPotDevice(x = 278f, y = 258f, online = observedMoisture != null)
 
             // Crown
             for (isOnion in if (speciesId in 1..2) listOf(false, true) else emptyList()) {
                 val opacity = if (isOnion) species else 1f - species
                 if (opacity > .001f) withTransform({ rotate(response.value * 1.4f, Offset(225f, 312f)) }) {
-                    plantCrown(isOnion, growth, day, opacity, dry, response.value, trailing)
+                    plantCrown(isOnion, growth, day ?: 0, opacity, dry, response.value, trailing)
                 }
             }
             if (speciesId !in 1..2) {
-                orchidOrGenericCrown(speciesId, growth, day, dry, response.value, trailing)
+                orchidOrGenericCrown(speciesId, growth, day ?: 0, dry, response.value, trailing)
             }
             if (!orchid && shell > .001f) {
                 drawPath(

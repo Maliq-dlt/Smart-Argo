@@ -25,7 +25,7 @@ export default function SimulationOverview({ data, decision }: { data: PotCase; 
         {rows.map(s => s.valid ? <circle key={s.t_h} cx={x(s.t_h)} cy={y(s.moisture)} r="2.5" fill="var(--primary)" /> : <path key={s.t_h} d={`M${x(s.t_h)-3} ${y(s.moisture)-3}l6 6m-6 0 6-6`} stroke="var(--danger)" strokeWidth="1.5" />)}
       </svg>
       <strong>{slope_per_h === null ? 'Tren belum tersedia' : `${slope_per_h > 0 ? '+' : ''}${slope_per_h} poin/jam`}</strong><p>{slope_per_h === null ? 'Perlu riwayat yang layak untuk proyeksi.' : `Tren keputusan sesi · R² ${r2}`} · {data.samples.length} sampel tersimpan</p>
-      <a href="#statistik">Statistik lengkap<ArrowUpRight /></a>
+      <a href="#tanaman">Rincian tanaman<ArrowUpRight /></a>
     </div></details>
   </aside>
 }

@@ -70,31 +70,42 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .agro-mark { width: 1.75rem; height: 1.75rem; }
 .display, .page-lead { font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100, 'WONK' 0; letter-spacing: -.02em; }
 
-/* ─── Shell: rail, top bar, main ─────────────────────────────────────────── */
+/* ─── Shell: floating capsule, page ──────────────────────────────────────── */
 .app-shell {
-  --rail: 5.75rem;
-  display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100dvh;
+  min-height: 100dvh;
   background: radial-gradient(56rem 36rem at 78% -12%, rgb(200 226 156 / .32), transparent 62%), radial-gradient(40rem 30rem at -10% 110%, rgb(200 226 156 / .16), transparent 60%), var(--bg);
 }
 :root[data-theme=dark] .app-shell { background: radial-gradient(56rem 36rem at 78% -12%, rgb(181 214 136 / .08), transparent 62%), var(--bg); }
-.app-rail { position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; align-items: center; gap: 1.25rem; padding: 1.5rem 0; z-index: 30; }
-.rail-brand, .topbar-brand { width: 3.25rem; height: 3.25rem; border-radius: 50%; display: grid; place-items: center; background: var(--raised); color: var(--primary); border: 1px solid var(--line); box-shadow: var(--shadow); transition: transform .3s var(--ease); }
-.rail-brand:hover, .topbar-brand:hover { transform: rotate(-8deg); }
-.rail-nav { margin-block: auto; display: flex; flex-direction: column; gap: .625rem; }
-.rail-link { position: relative; width: 4.5rem; padding: .625rem 0 .5rem; border-radius: 1.25rem; display: grid; justify-items: center; gap: .25rem; color: var(--muted); border: 1px solid transparent; background: transparent; transition: color .2s, background .2s, border-color .2s; }
-.rail-link > svg { position: relative; z-index: 1; width: 1.5rem; height: 1.5rem; }
-.rail-link:hover { color: var(--ink); background: var(--glass); }
-.rail-link[aria-current=page] { color: var(--primary); border-color: transparent; }
-.rail-active { position: absolute; inset: 0; border-radius: inherit; background: var(--raised); box-shadow: var(--shadow); }
-.rail-text { position: relative; z-index: 1; font-size: .6875rem; font-weight: 500; line-height: 1.1; letter-spacing: -.005em; white-space: nowrap; }
+/* The one glass element: a functional layer above the content (Liquid Glass belongs to controls, not to content).
+   Media queries, not container queries, place it: a size container would trap this sticky/fixed bar inside itself. */
+.nav-capsule { position: sticky; top: .75rem; z-index: 40; width: max-content; max-width: calc(100% - 1rem); margin: .75rem auto 0; display: flex; align-items: center; gap: .25rem;
+  padding: .3125rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); box-shadow: var(--shadow-pop); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); }
+.nav-mark { width: 2.75rem; height: 2.75rem; border-radius: 50%; display: grid; place-items: center; color: var(--primary); flex: none; }
+.nav-tabs { display: flex; flex-wrap: wrap; gap: .125rem; min-width: 0; }
+.nav-tab { position: relative; display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 1.125rem; border-radius: 999px; color: var(--muted); font-weight: 500; white-space: nowrap; text-decoration: none; transition: color .2s var(--ease-ui); }
+.nav-tab > svg, .nav-label { position: relative; z-index: 1; }
+.nav-tab > svg { width: 1.25rem; height: 1.25rem; }
+.nav-tab:hover { color: var(--ink); }
+.nav-tab[aria-current=page] { color: var(--ink); font-weight: 600; }
+.nav-lens { position: absolute; inset: 0; border-radius: inherit; background: var(--raised); box-shadow: var(--shadow-sm); }
+.nav-tools { display: flex; align-items: center; gap: .25rem; margin-left: .125rem; padding-left: .25rem; border-left: 1px solid var(--line); }
+.nav-tools .icon-button { width: 2.75rem; height: 2.75rem; border-color: transparent; background: none; box-shadow: none; }
+.nav-tools .account-trigger { width: 2.75rem; height: 2.75rem; }
 
 /* Inherited: a word that cannot fit (e.g. 200% text at 320 px) breaks instead of widening the page.
    `anywhere`, unlike `break-word`, also shrinks min-content, so flex/grid items can narrow. */
-.app-content { min-width: 0; padding: 1.5rem 2rem 2.5rem .5rem; overflow-wrap: anywhere; }
-.app-topbar { display: flex; align-items: center; gap: .625rem; min-height: 3.25rem; margin-bottom: 1.5rem; }
-.topbar-brand { display: none; }
-.page-title { display: inline-flex; align-items: center; gap: .625rem; height: 3.25rem; padding: 0 1.375rem 0 1.125rem; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); box-shadow: var(--shadow-sm); font: 500 1rem/1 var(--font-ui); letter-spacing: -.01em; white-space: nowrap; }
-.page-title i { width: .5rem; height: .5rem; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 0 .25rem rgb(169 205 111 / .25); }
+.app-content { min-width: 0; width: min(80rem, 100%); margin: 0 auto; padding: 1.5rem 2rem 2.5rem; overflow-wrap: anywhere; }
+/* Pages without a scene of their own open with their name, in the display face. */
+.page-heading { margin: .25rem 0 1.25rem; font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: clamp(min(1.875rem, 12vw), 3vw, 2.5rem); line-height: 1.08; letter-spacing: -.02em; }  /* 12vw: at 320 px and 200 % text "peringatan" stays whole */
+.page-sub { margin: -.75rem 0 1.5rem; max-width: 40rem; color: var(--muted); font-size: 1.0625rem; }
+.plant-more { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: .625rem; margin-top: 1.5rem; }
+.plant-more-link { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .875rem; min-height: 4rem; padding: .75rem 1rem; border-radius: var(--r-tile); border: 1px solid var(--line); background: var(--raised); color: inherit; text-decoration: none; transition: border-color .2s var(--ease-ui); }
+.plant-more-link:hover { border-color: var(--line-strong); }
+.plant-more-link > svg { width: 1.25rem; height: 1.25rem; color: var(--muted); }
+.plant-more-link span { display: grid; font-weight: 600; }
+.plant-more-link small { font-weight: 400; color: var(--muted); font-size: .875rem; }
+/* The plant pages' own tools: which plant (and its session), saved state, clock, files, guide. */
+.plant-toolbar { display: flex; align-items: center; gap: .625rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
 .session-pill { display: flex; align-items: center; gap: .75rem; height: 3.25rem; padding: 0 .375rem 0 1rem; border-radius: 999px; border: 1px solid var(--line-strong); min-width: 0; }
 .session-pill > svg { width: 1.25rem; height: 1.25rem; color: var(--primary); }
 .session-pill > span:not(.save-status) { display: grid; line-height: 1.25; min-width: 0; }
@@ -104,7 +115,6 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .save-status i { width: .4375rem; height: .4375rem; border-radius: 50%; background: var(--primary-2); }
 .save-status.save-failed { color: var(--warn); } .save-status.save-failed i { background: var(--warn); }
 .topbar-tools { margin-left: auto; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .5rem; }
-.topbar-guide { display: none; }
 .app-main { min-width: 0; outline: none; }
 .app-main:focus, .app-main:focus-visible, .simulation-controls:focus-visible, .controls-panel:focus-visible { outline: none; }
 .page-lead { max-width: 24ch; margin: .25rem 0 1.75rem; font-size: clamp(1.875rem, 3.2vw, 2.875rem); line-height: 1.06; }
@@ -337,9 +347,54 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .pending-water span { display: grid; } .pending-water small { color: var(--muted); font-size: .75rem; }
 
 /* Dashboard: analysis. */
-.analysis { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-top: 2.75rem; }
+.analysis { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
 .analysis-toolbar { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
-.analysis-toolbar h2 { font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100; font-size: 2rem; line-height: 1.1; letter-spacing: -.02em; }
+.analysis-toolbar h3 { font-size: 1.0625rem; font-weight: 600; line-height: 1.3; }
+/* Riwayat: one heading, three views (chart, calendar, journal) in the same place. */
+.history-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-top: 2.75rem; }
+.history-head { display: flex; justify-content: space-between; align-items: center; gap: .75rem 1rem; flex-wrap: wrap; }
+.history-head h2, .observation-empty h2 { font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100; font-size: 2rem; line-height: 1.1; letter-spacing: -.02em; }
+.history-calendar, .history-journal { display: grid; gap: .875rem; padding: 1.5rem 1.75rem; }
+.history-calendar h3, .history-journal h3 { font-size: 1.0625rem; font-weight: 600; }
+.history-note { color: var(--muted); }
+.history-note b { color: var(--ink); font-weight: 600; }
+/* Seven columns that shrink with the card; a cell is a square of whatever width a column gets. */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 2.75rem)); gap: .375rem; }
+.cal-dow { color: var(--muted); font-size: .75rem; text-align: center; overflow: hidden; }
+.cal-cell, .cal-legend i { aspect-ratio: 1; border-radius: .5rem; background: var(--heat, var(--line)); }
+.cal-cell[data-level=none] { background: none; box-shadow: inset 0 0 0 1px var(--line-strong); }
+:is(.cal-cell, .cal-legend i)[data-level="0"] { --heat: var(--line-strong); }
+:is(.cal-cell, .cal-legend i)[data-level="1"] { --heat: color-mix(in srgb, var(--primary-2) 28%, var(--raised)); }
+:is(.cal-cell, .cal-legend i)[data-level="2"] { --heat: color-mix(in srgb, var(--primary-2) 52%, var(--raised)); }
+:is(.cal-cell, .cal-legend i)[data-level="3"] { --heat: color-mix(in srgb, var(--primary-2) 76%, var(--raised)); }
+:is(.cal-cell, .cal-legend i)[data-level="4"] { --heat: var(--primary); }
+.cal-cell[data-today] { outline: 2px solid var(--ink); outline-offset: 1px; }
+.cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; color: var(--muted); font-size: .75rem; }
+.cal-legend i { width: .875rem; border-radius: .1875rem; }
+.journal-day { display: grid; gap: .375rem; }
+.journal-day + .journal-day { padding-top: .875rem; border-top: 1px solid var(--line); }
+.journal-day h4 { font-size: .8125rem; font-weight: 600; color: var(--muted); }
+.journal-day ul { display: grid; gap: .375rem; margin: 0; padding: 0; list-style: none; }
+.journal-day li { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: baseline; gap: .625rem; }
+.journal-day li > svg { width: 1.125rem; height: 1.125rem; align-self: center; color: var(--water); }
+.journal-day time { color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Tanaman lain: a ruler of plants. Each tick is labelled with its code; the current one is long and named. */
+.plant-head { display: flex; align-items: flex-end; gap: .75rem 1.25rem; flex-wrap: wrap; margin: -.25rem 0 1.25rem; }
+.plant-back { padding-inline: .875rem 1.125rem; }
+.plant-rail { position: relative; flex: 1 1 18rem; min-width: 0; display: grid; gap: .25rem; }
+.plant-rail-title { color: var(--muted); font-size: .8125rem; font-weight: 500; }
+.plant-rail-ticks { display: flex; align-items: flex-end; overflow-x: auto; scrollbar-width: thin; padding-bottom: .125rem; }
+.rail-tick { flex: none; display: grid; justify-items: start; align-content: end; gap: .3125rem; min-width: 3rem; min-height: 2.75rem; padding: 0 .75rem 0 0; border: 0; background: none; color: var(--muted); font: 500 .75rem/1.2 var(--font-ui); }
+.rail-tick i { display: block; width: 2px; height: .875rem; border-radius: 2px; background: var(--line-strong); transition: height .12s var(--ease-ui), background .12s var(--ease-ui); }
+.rail-tick span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 11rem; }
+.rail-tick:hover i, .rail-tick:focus-visible i { height: 1.375rem; background: var(--muted); }
+.rail-tick[data-tone=dry] i { background: var(--amber); }
+.rail-tick[data-tone=check] i, .rail-tick[data-tone=hot] i, .rail-tick[data-tone=wet] i { background: var(--warn); }
+.rail-tick[aria-current] { color: var(--ink); font-weight: 600; }
+.rail-tick[aria-current] i { width: 3px; height: 2rem; background: var(--ink); }
+.rail-tick:focus-visible { outline-offset: 0; border-radius: .375rem; }
+.plant-rail-peek { position: absolute; z-index: 5; top: calc(100% + .375rem); width: 15rem; max-width: 100%; display: grid; gap: .125rem; padding: .625rem .875rem; border-radius: 1rem; background: var(--raised); border: 1px solid var(--line); box-shadow: var(--shadow-pop); pointer-events: none; }
+.plant-rail-peek b { font-weight: 600; } .plant-rail-peek span { color: var(--muted); font-size: .8125rem; }
 .analysis-toolbar p { margin-top: .25rem; color: var(--muted); }
 .analysis-filters { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
 .analysis-filters > label, .range-filter { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; min-width: 0; max-width: 100%; }
@@ -347,13 +402,14 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .empty-chart { padding: 1.25rem 1.5rem; color: var(--muted); }
 .observation-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 1.25rem; margin-top: 2.75rem; padding: 1.5rem 1.75rem; }
 .observation-empty > div { flex: 1 1 12rem; }
-.observation-empty h2 { font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100; font-size: 1.5rem; letter-spacing: -.015em; }
+.observation-empty h2 { font-size: 1.5rem; letter-spacing: -.015em; }
 .observation-empty p { margin-top: .25rem; color: var(--muted); }
 .empty-mark { width: 4.5rem; height: 4.5rem; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--primary); }
 .empty-mark .mascot { width: 3.75rem; height: auto; margin-top: -.5rem; }
 /* First visit: the one card with something to do, so it carries the accent and the plant button. */
 .observation-empty[data-awaiting] { background: color-mix(in srgb, var(--accent-soft) 60%, var(--raised)); }
-.observation-plant { min-height: 3rem; padding-inline: 1.5rem; }
+/* May wrap: at 200% text on a 320px phone "Tanam bibit" is wider than the card. */
+.observation-plant { min-height: 3rem; max-width: 100%; padding-inline: 1.5rem; white-space: normal; text-align: center; }
 
 .history-panel { padding-bottom: .25rem; }
 .history-panel .panel-heading { flex-wrap: wrap; }
@@ -943,6 +999,29 @@ a.menu-item { text-decoration: none; }
 .profile-account dt { color: var(--muted); font-size: .8125rem; }
 .profile-account dd { margin: 0; display: flex; align-items: center; gap: .5rem; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
 .profile-account dd svg { width: 1.125rem; height: 1.125rem; flex: none; color: var(--primary); }
+/* Profile photo and account deletion (plan 2026-11-22). */
+.account-photo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.account-menu-head > .account-photo { flex: none; width: 2.5rem; height: 2.5rem; }
+.avatar-editor { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; min-width: 0; }
+.avatar-large { flex: none; width: 4.5rem; height: 4.5rem; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); font: 600 1.375rem/1 var(--font-ui); }
+.avatar-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; min-width: 0; }
+.avatar-actions > small { flex-basis: 100%; }
+.button.danger { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--warn-soft) 80%, var(--warn)); }
+.delete-account { display: grid; gap: 1rem; padding: 1.5rem; max-width: 40rem; }
+.delete-account h2 { margin: 0; font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100; font-size: 1.625rem; line-height: 1.15; letter-spacing: -.015em; }
+.delete-account h3 { margin: .5rem 0 0; font: 600 .8125rem/1.3 var(--font-ui); color: var(--muted); text-transform: none; }
+.delete-account p { margin: 0; }
+.delete-account .muted { color: var(--muted); }
+.delete-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.delete-list li { display: flex; align-items: flex-start; gap: .625rem; min-width: 0; }
+.delete-list svg { flex: none; width: 1.25rem; height: 1.25rem; margin-top: .0625rem; color: var(--primary); }
+.delete-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: .375rem; }
+.delete-steps li { width: 1.75rem; height: .25rem; border-radius: 1rem; background: var(--line-strong); transition: background .2s var(--ease); }
+.delete-steps li[aria-current], .delete-steps li:has(~ li[aria-current]) { background: var(--primary); }
+.delete-done { display: grid; gap: .75rem; justify-items: start; }
+.delete-done > svg { width: 2.5rem; height: 2.5rem; color: var(--primary); }
+.delete-account form { display: grid; gap: 1rem; }
 :is(.profile-account, .profile-empty) > .button { justify-self: start; }
 .profile-empty p { max-width: 52ch; color: var(--muted); }
 @media (max-width: 47.5rem) {
@@ -998,28 +1077,26 @@ a.menu-item { text-decoration: none; }
   .session-pill .save-status { display: none; }
 }
 @media (max-width: 900px) {
-  .app-shell { grid-template-columns: minmax(0, 1fr); }
-  /* The rail becomes a floating dock at the bottom of the screen. */
-  .app-rail { position: fixed; top: auto; bottom: .75rem; left: 50%; translate: -50% 0; height: auto; max-width: calc(100vw - 1rem); flex-direction: row; gap: 0; padding: .375rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); box-shadow: var(--shadow-pop); backdrop-filter: blur(16px); overflow-x: auto; scrollbar-width: none; }
-  .rail-brand, .rail-guide { display: none; }
-  .rail-nav { flex-direction: row; gap: .25rem; margin: 0; }
-  .rail-link { width: 3rem; height: 3rem; padding: 0; border-radius: 50%; place-items: center; border-color: transparent; }
-  .rail-text { display: none; }
-  .rail-active { background: var(--primary); box-shadow: none; }
-  .rail-link[aria-current=page] { color: var(--on-primary); }
-  .app-content { padding: 1rem 1rem 6.5rem; }
-  .topbar-brand { display: grid; }
-  .topbar-guide { display: inline-grid; }
-  .app-topbar { flex-wrap: wrap; row-gap: 1rem; }
-  .page-title { order: 3; flex-basis: 100%; height: auto; padding: 0; border: 0; background: none; box-shadow: none; font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100; font-size: 1.875rem; line-height: 1.05; letter-spacing: -.025em; white-space: normal; }
-  .page-title i { display: none; }
-  .session-pill { display: none; }
-  .toast { bottom: 5.5rem; }
+  .app-content { padding: 1rem 1.25rem 2.5rem; }
   .page-lead { font-size: 1.625rem; }
 }
+/* Phone: the capsule moves to the bottom edge, as on Android, and its tabs share the width equally. */
+@media (max-width: 47.99rem) {
+  .nav-capsule { position: fixed; top: auto; bottom: max(.75rem, env(safe-area-inset-bottom)); left: 50%; translate: -50% 0; margin: 0; width: calc(100% - 24px); max-width: 28rem; padding: 5px; gap: 4px; }
+  .nav-mark { display: none; }
+  .nav-tabs { flex: 1; display: grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .nav-tab { flex-direction: column; justify-content: center; gap: .125rem; min-height: 3.25rem; padding: .25rem; font-size: .75rem; container-type: inline-size; }
+  .nav-tab > svg { width: 20px; height: 20px; flex: none; }
+  .nav-tools { border-left: 0; padding-left: 0; margin-left: 0; gap: 4px; }
+  .nav-tools :is(.icon-button, .account-trigger) { width: 44px; height: 44px; flex: none; }
+  .app-content { padding: 1rem 1rem 6.5rem; }
+  .toast { bottom: 5.5rem; }
+  /* Ringkasan is one tap away in the capsule at the bottom; the plant page starts with its rail instead. */
+  .plant-back { display: none; }
+}
+/* A tab too narrow for its word (the largest text sizes) shows the icon alone; the word stays for screen readers. */
+@container (max-width: 3.5rem) { .nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 @media (max-width: 760px) {
-  /* The title has its own row here, so it may wrap (and grow) under large text instead of widening the page. */
-  .page-title { height: auto; min-height: 3.25rem; max-width: 100%; white-space: normal; line-height: 1.15; }
   .analytics-metrics, .comparison-selectors, .session-comparison-grid, .device-statuses, .miro-form-two, .miro-form-three, .miro-sizing-results, .form-grid { grid-template-columns: minmax(0, 1fr); }
   .miro-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .studio-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); padding-inline: 1rem; gap: .5rem; }
@@ -1032,7 +1109,7 @@ a.menu-item { text-decoration: none; }
   .point-detail { grid-template-columns: minmax(0, 1fr); }
   .log-line { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .topbar-tools { gap: .375rem; }
-  .icon-button, .clock-settings-trigger, .plant-mood, .topbar-brand { width: 2.75rem; height: 2.75rem; }
+  .icon-button, .clock-settings-trigger, .plant-mood { width: 2.75rem; height: 2.75rem; }
   .clock-settings-trigger { padding: 0; justify-content: center; }
   .clock-settings-trigger span, .clock-settings-trigger svg:last-child { display: none; }
   .panel-heading, .simulation-control-body, .controls-body, .comparison-body, .device-body, .miro-card-body, .miro-statusbar { padding-inline: 1.125rem; }
@@ -1064,8 +1141,8 @@ a.menu-item { text-decoration: none; }
   .spotlight-card::after { content: none; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .ui-overlay, .app-rail { backdrop-filter: none; }
-  .app-rail { background: var(--raised); }
+  .ui-overlay, .nav-capsule { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .nav-capsule { background: var(--raised); }
 }
 
 /* ─── Theme transition (circular reveal from the toggle) ─────────────────── */
@@ -1079,16 +1156,16 @@ html[data-theme-transition] * { transition: none !important; }
 @keyframes theme-icon-out { to { opacity: 0; transform: rotate(45deg) scale(.5); } }
 @keyframes theme-icon-in { from { opacity: 0; transform: rotate(-45deg) scale(.5); } to { opacity: 1; transform: none; } }
 
-/* ─── Page change: a short cross-fade of the whole view ──────────────────────
- * The old view stays on screen while the new one fades in over it, with no movement and no blank frame between them.
- * Both layers share one curve and plus-lighter, so their opacities always add up to 1: pixels that do not change (rail,
- * top bar) stay perfectly still. Clicks pass through, so a quick second click starts the next change at once. */
-html[data-page-transition]::view-transition { pointer-events: none; }
-html[data-page-transition]::view-transition-old(root) { animation: page-out .18s cubic-bezier(.2, 0, 0, 1) both; mix-blend-mode: plus-lighter; }
-html[data-page-transition]::view-transition-new(root) { animation: page-in .18s cubic-bezier(.2, 0, 0, 1) both; mix-blend-mode: plus-lighter; }
-html[data-page-transition] .theme-symbol { view-transition-name: none; }
-@keyframes page-out { to { opacity: 0; } }
-@keyframes page-in { from { opacity: 0; } }
+/* ─── Page change: at once; only a plant card travels into its stage ─────────
+ * Pages swap without a fade (the lens in the capsule shows where you went), so quick back-and-forth never dims the
+ * screen. Opening a plant from Ringkasan is the one morph: the card and the stage share `plant-stage`, the old
+ * picture disappears at once and the new one does not fade, so nothing is drawn twice. Clicks pass through, and a
+ * second change finishes the first instead of queueing (startViewTransition skips the running one). */
+html[data-morph]::view-transition { pointer-events: none; }
+html[data-morph]::view-transition-old(*) { animation: none; opacity: 0; }
+html[data-morph]::view-transition-new(*) { animation: none; }
+html[data-morph]::view-transition-group(plant-stage) { animation-duration: .34s; animation-timing-function: cubic-bezier(.2, .7, .2, 1); overflow: clip; border-radius: var(--r-card); }
+html[data-morph] .theme-symbol { view-transition-name: none; }
 
 /* ─── Route states shared with the landing ───────────────────────────────── */
 .site-page { min-height: 100dvh; }

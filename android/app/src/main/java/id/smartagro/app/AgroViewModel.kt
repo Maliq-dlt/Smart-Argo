@@ -13,16 +13,25 @@ import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 
-enum class Screen { Login, Mfa, Products, Dashboard, History, Account, Rewards, Proofs, Garden, Security, ManageProducts, Gallery }
+enum class Screen { Login, Mfa, Products, Dashboard, History, Account, Rewards, Proofs, Garden, Security, ManageProducts, Gallery, Profile, DeleteAccount, DeletionPending }
 /** Where the signed-out owner is: the welcome cover, Masuk/Daftar form, the emailed signup code, or the two reset steps. */
 enum class AuthStep { Welcome, SignIn, SignUp, SignupCode, ResetEmail, ResetCode }
+data class DeviceSetupReadings(val device: OwnedDevice, val readings: List<Reading>)
+/** A care note waiting out its undo window before it is sent. */
+data class PendingCare(val unitId: String, val kind: String, val at: Instant, val amountMl: Double?)
 data class AppState(
+    /** An account inside its 14-day deletion grace period (it may only cancel), and the result of asking to delete. */
+    val deletion: AccountDeletion? = null, val deletionScheduled: AccountDeletion? = null,
+    /** The profile photo's bytes (WebP, JPEG or PNG as stored); null shows initials. */
+    val avatar: ByteArray? = null,
     val screen: Screen = Screen.Login, val busy: Boolean = false, val message: String? = null, val messageIsError: Boolean = false,
     val auth: AuthStep = AuthStep.Welcome, val authEmail: String = "", val welcome: Boolean = false, val introPlaying: Boolean = false,
+    val resetCodeRequested: Boolean = false,
     val historySensor: Sensor = Sensor.Moisture,
+    val historyRange: HistoryRange = HistoryRange.Day, val historyChartWindow: HistoryWindow? = null,
     val products: List<Product> = emptyList(), val units: List<PlantUnit> = emptyList(),
     val overviews: List<Overview> = emptyList(), val selectedProduct: Product? = null,
-    val selectedUnit: PlantUnit? = null, val history: List<Reading> = emptyList(), val historyLoaded: Boolean = false, val historyBefore: java.time.Instant? = null, val historyHasMore: Boolean = false,
+    val selectedUnit: PlantUnit? = null, val history: List<Reading> = emptyList(), val historyLoaded: Boolean = false, val historyWindow: HistoryWindow? = null, val historySnapshot: Instant? = null, val historyCursor: HistoryCursor? = null,
     val displayName: String = "", val rewardBalance: RewardBalance? = null, val rewardLoaded: Boolean = false,
     val rewards: RewardWorkspace? = null, val proofs: List<ChainProof> = emptyList(), val proofsLoaded: Boolean = false,
     val weather: WeatherSnapshot? = null, val weatherSiteId: String? = null, val weatherBusy: Boolean = false, val weatherMessage: String? = null,
@@ -30,16 +39,25 @@ data class AppState(
     val explanationBusy: Boolean = false, val explanationMessage: String? = null,
     val garden: Garden? = null, val gardenPlant: GardenPlant? = null, val catalogLoaded: Boolean = false, val email: String = "", val demo: Boolean = false, val demoAdvice: Map<String, Pair<String, String>> = emptyMap(),
     val archivedUnits: List<PlantUnit> = emptyList(), val devices: List<OwnedDevice> = emptyList(), val unitEvents: Map<String, List<UnitLifecycleEvent>> = emptyMap(),
+    val deviceSetupReadings: DeviceSetupReadings? = null,
     val careJournal: List<CareEntry> = emptyList(), val careUnitId: String? = null, val careLoaded: Boolean = false,
+    val careSnapshot: Instant? = null, val careNext: HistoryCursor? = null,
     val historyComparison: MeasurementComparison? = null, val comparisonUnitId: String? = null,
     val community: CommunityKnowledge? = null, val communitySpeciesId: Int? = null,
+    val communityError: String? = null, val dashboardFromGarden: Boolean = false,
     val security: AccountSecurity? = null, val securityLoaded: Boolean = false, val recoveryStatus: RecoveryCodeStatus? = null,
     val totpEnrollment: TotpEnrollment? = null, val generatedRecoveryCodes: List<String>? = null,
     val publicStatus: ProductPublicStatus? = null, val publicStatusSerial: String = "",
     val activationChallenge: ActivationChallenge? = null, val activeTransfer: TransferOffer? = null, val activeTransferProductId: String? = null,
     val ownershipRecoveries: List<OwnershipRecovery> = emptyList(), val recoveriesLoaded: Boolean = false,
     val rewardCases: List<RewardCase> = emptyList(), val energyEvidence: EnergyEvidence? = null,
+    val pendingCare: PendingCare? = null, val pendingCareSending: Boolean = false,
+    val carePlants: List<CarePlant> = emptyList(), val cachedAt: Instant? = null,
+    val wateringOutlook: WateringOutlook? = null, val wateringRises: List<WateringRise> = emptyList(),
+    val unitHealth: UnitHealth? = null, val careDetailsUnit: String? = null,
+    val alertPreferences: AlertPreferences? = null, val alertsUnavailable: Boolean = false,
 ) {
+    val historyHasMore: Boolean get() = historyWindow != null
     fun plantCode(unit: PlantUnit): String = garden?.plants?.firstOrNull { it.unitId==unit.id && it.endedOn==null }?.tag ?: unitCode(unit,units)
     val weatherSite: GardenSite? get() {
         val plant=if(screen==Screen.Garden) gardenPlant else garden?.plants?.firstOrNull { it.unitId==selectedUnit?.id && it.endedOn==null && it.unitId!=null }
@@ -48,14 +66,37 @@ data class AppState(
 }
 class AgroViewModel(application: Application) : AndroidViewModel(application) {
     val config = BackendConfig(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY, allowEmulatorHost = BuildConfig.DEBUG)
+    private var pendingCsv: Pair<String, String>? = null
     private val api = AgroApi(config, SessionStore(application, config.url))
     private val accountFlows = AccountWorkflows(api)
+    private val overviewCache = OverviewCache(java.io.File(application.filesDir, "care-cache"))
+    private fun clearCareData(forgetSession: Boolean = false) = synchronized(SessionStore.lock) {
+        pendingJob?.cancel(); pendingJob = null
+        state = state.copy(pendingCare = null, pendingCareSending = false)
+        if (forgetSession) SessionStore(getApplication(), config.url).clear()
+        overviewCache.clear()
+        CareNotifications.setEnabled(getApplication(), false)
+        CareWidget.refresh(getApplication())
+    }
+    private fun restoreOverview() {
+        if (state.email.isBlank() || state.demo) return
+        val cached = overviewCache.load(config.url + ":" + state.email) ?: return
+        runCatching {
+            val data = JSONObject(cached.json)
+            val owned = parseOwnedUnitsWorkspace(data.getJSONObject("units"))
+            state = state.copy(products = parseProducts(data.getJSONObject("products")), units = owned.active,
+                archivedUnits = owned.archived, devices = owned.devices, overviews = parseOverviews(data.getJSONObject("readings")),
+                garden = data.optJSONObject("garden")?.let(::parseGarden), carePlants = data.optJSONObject("care")?.let(::parseCarePlants).orEmpty(),
+                cachedAt = cached.at, catalogLoaded = true)
+        }
+    }
     var state by mutableStateOf(AppState())
         private set
     private val operations = kotlinx.coroutines.sync.Mutex()
     private var weatherJob: kotlinx.coroutines.Job? = null
     private var weatherGeneration = 0
-    init { if (config.valid) run { if (api.restore()) { state = state.copy(screen = Screen.Products, email = api.session!!.email, displayName = api.session!!.displayName); load() } } }
+    private var historyGeneration = 0
+    init { if (config.valid) run { if (api.resume()) { state = state.copy(screen = Screen.Products, email = api.session!!.email, displayName = api.session!!.displayName); load() } } }
 
     private fun run(action: suspend () -> Unit) {
         val account=state.email;val demo=state.demo
@@ -66,7 +107,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
             try { action() }
             catch (error: CancellationException) { throw error }
             catch (error: Exception) {
-                if (error is ApiFailure && error.expired) { api.clear(); state = AppState(message = error.message, messageIsError = true) }
+                if (error is ApiFailure && error.expired) { clearCareData(true); api.clear(); state = AppState(message = error.message, messageIsError = true) }
                 else state = state.copy(messageIsError = true, message = when (error) {
                     is ApiFailure, is IllegalArgumentException -> error.message
                     else -> "Koneksi terputus atau data tidak dapat dimuat. Coba lagi."
@@ -89,6 +130,12 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     fun replayIntro() { state = state.copy(introPlaying = true) }
     fun finishIntro() { if (state.introPlaying) state = state.copy(introPlaying = false) }
     fun selectHistorySensor(sensor: Sensor) { state = state.copy(historySensor = sensor) }
+    fun selectHistoryRange(range: HistoryRange) {
+        if (range == state.historyRange) return
+        historyGeneration++
+        state = state.copy(historyRange = range, historyLoaded = state.demo, historyChartWindow = null, message = null,
+            history = if (state.demo) state.history else emptyList(), historySnapshot = null, historyCursor = null, historyWindow = null)
+    }
     fun login(email: String, password: String) = run { signedIn(api.login(email.trim(), password)) }
     fun googleLogin(context: android.content.Context) = run {
         val credential = googleCredential(context, BuildConfig.GOOGLE_WEB_CLIENT_ID)
@@ -104,8 +151,9 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     /** Moves between the sign-in steps; leaving the reset steps forgets the reset. */
     fun authStep(step: AuthStep, email: String = state.authEmail) {
         if (state.busy) return
-        if (step != AuthStep.ResetCode) accountFlows.cancelPasswordReset()
-        state = state.copy(auth = step, authEmail = email.trim(), message = null)
+        val keepReset = step == AuthStep.ResetCode || step == AuthStep.ResetEmail
+        if (!keepReset) accountFlows.cancelPasswordReset()
+        state = state.copy(auth = step, authEmail = email.trim(), message = null, resetCodeRequested = keepReset && state.resetCodeRequested)
     }
     fun signup(name: String, email: String, password: String) = run {
         try {
@@ -125,35 +173,68 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         state = state.copy(message = "Kode baru dikirim ke ${state.authEmail}.")
     }
     fun requestReset(email: String) = run {
+        val sameEmail = email.trim().equals(state.authEmail, ignoreCase = true)
+        if (!sameEmail) state = state.copy(authEmail = email.trim(), resetCodeRequested = false)
         accountFlows.requestPasswordReset(email)
-        state = state.copy(auth = AuthStep.ResetCode, authEmail = email.trim())
+        state = state.copy(auth = AuthStep.ResetCode, resetCodeRequested = true)
     }
     /** The code is spent on the first try; a retry after a failed password write reuses the accepted code. */
     fun finishReset(code: String, password: String) = run {
         if (!accountFlows.recovered) accountFlows.beginPasswordReset(code)
         val result = accountFlows.setRecoveredPassword(password)
-        state = state.copy(auth = AuthStep.SignIn, message = if (result == PasswordResetResult.PasswordChanged) "Kata sandi diganti. Masuk dengan sandi baru."
+        state = state.copy(auth = AuthStep.SignIn, resetCodeRequested = false, message = if (result == PasswordResetResult.PasswordChanged) "Kata sandi diganti. Masuk dengan sandi baru."
             else "Kata sandi diganti. Sesi reset di server akan berakhir sendiri. Masuk dengan sandi baru.")
     }
-    private suspend fun load() {
+    private suspend fun load(successMessage: String? = null) {
+        restoreOverview()
+        // Asked first: an account waiting to be deleted is refused everywhere else, which would read as an expired session.
+        // A backend without the deletion migration (404) has nothing pending; only an expired session stops loading.
+        val pendingDeletion = try { parseDeletion(api.rpc("my_account_deletion")) } catch (error: ApiFailure) { if (error.expired) throw error; null }
+        pendingDeletion?.let { waiting ->
+            clearCareData()
+            state = state.copy(deletion = waiting, screen = Screen.DeletionPending, catalogLoaded = true, message = null)
+            return
+        }
         api.rpc("ensure_my_account")
-        val products = parseProducts(api.rpc("my_products"))
-        // Commit all related data together; a failed load cannot mix users or product snapshots.
-        val owned = parseOwnedUnitsWorkspace(api.rpc("my_units"))
+        val avatar = try { parseAvatar(api.rpc("my_avatar")) } catch (error: ApiFailure) { if (error.expired) throw error; state.avatar }
+        val productsJson = api.rpc("my_products")
+        val products = parseProducts(productsJson)
+        // Core product data is committed together.
+        val unitsJson = api.rpc("my_units")
+        val owned = parseOwnedUnitsWorkspace(unitsJson)
         val units = owned.active
-        val overviews = parseOverviews(api.rpc("my_unit_overview"))
-        val garden = parseGarden(api.rpc("my_garden"))
+        val readingsJson = api.rpc("my_unit_overview")
+        val overviews = parseOverviews(readingsJson)
+        // Supplementary like the garden: a server without my_overview (cloud before the A-F release) still loads the account.
+        val careJson = fetchOptional { api.rpc("my_overview").also { parseCarePlants(it) } }.getOrNull()
+        val carePlants = careJson?.let(::parseCarePlants) ?: state.carePlants
+        var gardenJson: JSONObject? = null
+        val gardenResult = fetchOptional { parseGarden(api.rpc("my_garden").also { gardenJson = it }) }
+        val garden = gardenResult.getOrElse { state.garden }
+        val gardenWarning = if (gardenResult.isFailure) {
+            if (garden == null) "Data kebun belum dapat dimuat. Coba segarkan."
+            else "Data kebun belum dapat diperbarui. Menampilkan data sebelumnya."
+        } else null
         val selected = products.find { it.id == state.selectedProduct?.id }
         val unit = units.find { it.id == state.selectedUnit?.id && it.productId == selected?.id }
-        val nextScreen = if ((state.screen == Screen.Dashboard && selected == null) || (state.screen == Screen.Garden && garden.plants.none { it.id==state.gardenPlant?.id })) Screen.Products else state.screen
+        val nextScreen = if ((state.screen == Screen.Dashboard && selected == null) || (state.screen == Screen.Garden && garden?.plants?.none { it.id==state.gardenPlant?.id } != false)) Screen.Products else state.screen
         val activeUnit = unit ?: units.firstOrNull()
         val activeProduct = selected ?: activeUnit?.let { u -> products.find { it.id == u.productId } }
-        state = state.copy(catalogLoaded = true, garden = garden, gardenPlant = garden.plants.find { it.id==state.gardenPlant?.id }, products = products, units = units,
-            archivedUnits = owned.archived, devices = owned.devices, overviews = overviews,
+        historyGeneration++
+        state = state.copy(catalogLoaded = true, deletion = null, avatar = avatar, garden = garden, gardenPlant = garden?.plants?.find { it.id==state.gardenPlant?.id }, products = products, units = units,
+            archivedUnits = owned.archived, devices = owned.devices, overviews = overviews, carePlants = carePlants, cachedAt = null,
+            deviceSetupReadings = state.deviceSetupReadings?.takeIf { it.device in owned.devices },
             selectedProduct = activeProduct, selectedUnit = activeUnit, history = emptyList(), historyLoaded = false,
+            historyWindow = null, historySnapshot = null, historyCursor = null, historyChartWindow = null,
             careJournal = if (activeUnit?.id == state.careUnitId) state.careJournal else emptyList(), careLoaded = activeUnit?.id == state.careUnitId && state.careLoaded,
+            careSnapshot = state.careSnapshot.takeIf { activeUnit?.id == state.careUnitId },
+            careNext = state.careNext.takeIf { activeUnit?.id == state.careUnitId },
             historyComparison = if (activeUnit?.id == state.comparisonUnitId) state.historyComparison else null,
-            screen = nextScreen)
+            screen = nextScreen, message = listOfNotNull(successMessage, gardenWarning).joinToString(" ").ifEmpty { null },
+            messageIsError = gardenWarning != null)
+        overviewCache.save(config.url + ":" + state.email, JSONObject().put("products", productsJson).put("units", unitsJson)
+            .put("readings", readingsJson).put("care", careJson).put("garden", gardenJson).toString(), Instant.now())
+        CareWidget.refresh(getApplication())
     }
     fun demo() {
         if (state.busy) return
@@ -190,52 +271,73 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     } }
     fun select(product: Product) {
         val unit = state.units.firstOrNull { it.productId == product.id }
-        state = state.copy(screen = Screen.Dashboard, selectedProduct = product, selectedUnit = unit,
+        historyGeneration++
+        state = state.copy(screen = Screen.Dashboard, dashboardFromGarden = state.screen == Screen.Garden, selectedProduct = product, selectedUnit = unit,
             history = if (state.demo && unit != null) demoHistory(getApplication(), unit.id) else emptyList(),
-            historyLoaded = state.demo, historyBefore = null, historyHasMore = false,
-            careJournal = emptyList(), careUnitId = unit?.id, careLoaded = state.demo,
+            historyLoaded = state.demo, historyWindow = null, historySnapshot = null, historyCursor = null, historyChartWindow = null,
+            careJournal = emptyList(), careUnitId = unit?.id, careLoaded = state.demo, careSnapshot = null, careNext = null,
             historyComparison = null, comparisonUnitId = null, message = null)
     }
     fun selectUnit(unit: PlantUnit) {
         val product = state.products.find { it.id == unit.productId } ?: return
+        historyGeneration++
         state = state.copy(selectedProduct = product, selectedUnit = unit, history = if (state.demo) demoHistory(getApplication(), unit.id) else emptyList(),
-            historyLoaded = state.demo, historyBefore = null, historyHasMore = false,
-            careJournal = emptyList(), careUnitId = unit.id, careLoaded = state.demo,
+            historyLoaded = state.demo, historyWindow = null, historySnapshot = null, historyCursor = null, historyChartWindow = null,
+            careJournal = emptyList(), careUnitId = unit.id, careLoaded = state.demo, careSnapshot = null, careNext = null,
             historyComparison = null, comparisonUnitId = null, message = null)
     }
     fun openHistoryFor(unit: PlantUnit, sensor: Sensor) {
         if (state.units.none { it.id == unit.id }) return
-        selectUnit(unit)
+        if (state.selectedUnit?.id != unit.id) selectUnit(unit)
         state = state.copy(screen = Screen.History, historySensor = sensor, message = null)
     }
     fun loadHistory() = loadHistoryPage(false)
     fun loadOlderHistory() = loadHistoryPage(true)
     private fun loadHistoryPage(older: Boolean) {
-      val selectedId=state.selectedUnit?.id ?: return
-      run {
-        val unit = state.selectedUnit?.takeIf { it.id==selectedId } ?: return@run
-        if (state.demo) { state = state.copy(historyLoaded = true); return@run }
-        if(older && !state.historyHasMore) return@run
-        val before=if(older) state.historyBefore else null
-        val body=JSONObject().put("p_unit_id",unit.id)
-        if(before!=null) body.put("p_before",before.toString())
-        val json = api.rpc("unit_measurements",body)
-        val rows=json.array("readings").objects(120)
-        val readings=parseHistory(json)
-        val cursor=rows.minOfOrNull { it.instant("measured_at") }
-        if(state.selectedUnit?.id!=unit.id) return@run
-        val combined=if(older) state.history+readings else readings
-        state=state.copy(history=combined.distinctBy { it.id ?: "${it.sensor}:${it.at}" }.sortedByDescending { it.at },historyLoaded=true,
-            historyBefore=cursor,historyHasMore=rows.size==120 && cursor!=before)
-      }
+        val unit = state.selectedUnit ?: return
+        if (state.demo) return
+        val generation = if (older) historyGeneration else ++historyGeneration
+        val pendingWindow = state.historyWindow
+        val pendingCursor = state.historyCursor
+        fun current() = generation == historyGeneration && state.selectedUnit?.id == unit.id &&
+            (!older || pendingWindow == state.historyWindow && pendingCursor == state.historyCursor)
+        run {
+            if (!current()) return@run
+            val ownershipStart = state.products.find { it.id == unit.productId }?.ownershipStart
+            try {
+                if (!older) {
+                    val window = state.historyRange.window(Instant.now())
+                    val (readings, snapshot) = collectHistoryReadings { snapshot, cursor ->
+                        if (!current()) throw CancellationException()
+                        api.readMeasurementHistory(unit.id, window, snapshot, cursor, limit = 500)
+                    }
+                    if (!current()) return@run
+                    state = state.copy(history = readings, historyLoaded = true, historyChartWindow = window,
+                        historySnapshot = snapshot, historyCursor = null,
+                        historyWindow = historyWindowEndingAt(window.from, ownershipStart))
+                } else {
+                    val window = pendingWindow ?: return@run
+                    val page = api.readMeasurementHistory(unit.id, window, state.historySnapshot, pendingCursor, limit = 120)
+                    if (!current()) return@run
+                    state = state.copy(history = state.history + page.readings.map { it.reading },
+                        historySnapshot = page.snapshot, historyCursor = page.next,
+                        historyWindow = if (page.next != null) window else historyWindowEndingAt(window.from, ownershipStart))
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (current() || error is ApiFailure && error.expired) throw error
+            }
+        }
     }
     fun openGarden(plant: GardenPlant) {
         if(state.garden?.plants?.none { it.id==plant.id }!=false) return
-        state=state.copy(screen=Screen.Garden,gardenPlant=plant,community=null,communitySpeciesId=null,message=null)
+        state=state.copy(screen=Screen.Garden,gardenPlant=plant,community=null,communitySpeciesId=null,communityError=null,message=null)
     }
+    /** Detail and auth routes require the typed open/sign-in methods that initialize their data. */
     fun navigate(screen: Screen) {
-        if (screen in listOf(Screen.Products,Screen.History,Screen.Account,Screen.Rewards,Screen.Proofs,Screen.Security,Screen.ManageProducts) || screen==Screen.Gallery && BuildConfig.DEBUG)
-            state=state.copy(screen=screen,message=null)
+        require(screen in listOf(Screen.Products,Screen.History,Screen.Account,Screen.Rewards,Screen.Proofs,Screen.Security,Screen.ManageProducts,Screen.Profile,Screen.DeleteAccount) || screen==Screen.Gallery && BuildConfig.DEBUG)
+        state=state.copy(screen=screen,message=null)
     }
     fun openUnit(unit: PlantUnit) {
         if (state.units.none { it.id==unit.id }) return
@@ -258,6 +360,43 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         val cases = api.rewardCases()
         val energy = api.energyEvidence()
         state = state.copy(rewardBalance = rewards.balance, rewards = rewards, rewardCases = cases, energyEvidence = energy, rewardLoaded = true)
+    }
+    /** The photo is already cropped and encoded on the phone ([avatarBytes]); the server checks type and size again. */
+    fun setAvatar(bytes: ByteArray, mime: String) = run {
+        require(!state.demo) { "Masuk ke akun untuk mengubah profil." }
+        api.rpc("set_my_avatar", JSONObject().put("p_mime", mime).put("p_data", java.util.Base64.getEncoder().encodeToString(bytes)))
+        state = state.copy(avatar = bytes, message = "Foto profil disimpan.")
+    }
+    fun clearAvatar() = run {
+        api.rpc("clear_my_avatar")
+        state = state.copy(avatar = null, message = "Foto dihapus. Inisial dipakai lagi.")
+    }
+    /** Re-verification for deleting the account: a fresh authenticator code with 2FA, otherwise signing in again. */
+    fun reverifyForDeletion(password: String?, code: String?, onDone: () -> Unit) = run {
+        when {
+            code != null -> api.verifyMfa(code)
+            password != null -> require(api.login(state.email, password)) { "Akun ini memakai autentikator: masukkan kodenya." }
+            else -> error("Verifikasi belum diisi.")
+        }
+        onDone()
+    }
+    fun reverifyGoogleForDeletion(context: android.content.Context, onDone: () -> Unit) = run {
+        val credential = googleCredential(context, BuildConfig.GOOGLE_WEB_CLIENT_ID)
+        require(api.loginIdToken(credential.first, credential.second)) { "Akun ini memakai autentikator: masukkan kodenya." }
+        onDone()
+    }
+    /** Every session ends on the server when it accepts; this phone forgets its copy and shows when the purge is due. */
+    fun requestDeletion() = run {
+        val scheduled = parseDeletion(api.rpc("request_account_deletion").optJSONObject("deletion")) ?: throw IllegalArgumentException("Status penghapusan akun tidak valid.")
+        clearCareData(true)
+        api.clear()
+        state = state.copy(deletionScheduled = scheduled)
+    }
+    fun finishDeletion() { state = AppState() }
+    fun cancelDeletion() = run {
+        val back = api.rpc("cancel_account_deletion").optJSONArray("restored")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+        state = state.copy(deletion = null, screen = Screen.Products)
+        load(if (back.isEmpty()) "Penghapusan dibatalkan." else "Penghapusan dibatalkan. ${back.joinToString()} kembali ke akun Anda.")
     }
     fun updateName(raw: String) = run {
         require(!state.demo) { "Masuk ke akun untuk mengubah profil." }
@@ -315,14 +454,16 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         if(state.demo) return
         run {
             if(state.selectedUnit?.id!=unitId) return@run
-            state=state.copy(explanation=null,explanationUnitId=unitId,explanationDeviceId=null,explanationBusy=true,explanationMessage=null)
+            val sameUnit = state.explanationUnitId == unitId
+            state=state.copy(explanation=state.explanation.takeIf { sameUnit }, explanationUnitId=unitId,
+                explanationDeviceId=state.explanationDeviceId.takeIf { sameUnit }, explanationBusy=true, explanationMessage=null)
             try {
                 val devices=api.rpc("my_device_units").array("units").objects(300)
                 val candidates=devices.filter { it.id("unit_id")==unitId && it.optString("device_status")=="active" }
                 val placed=candidates.filter { it.optBoolean("placed") }
                 val device=(placed.ifEmpty { candidates }).singleOrNull()
                 if(device==null) {
-                    if(state.selectedUnit?.id==unitId) state=state.copy(explanationMessage=if(candidates.isEmpty()) "Belum ada perangkat aktif pada unit ini." else "Ada beberapa perangkat pada unit ini. Atur penempatannya di website sebelum meminta penjelasan.")
+                    if(state.selectedUnit?.id==unitId) state=state.copy(explanationDeviceId=null, explanationMessage=if(candidates.isEmpty()) "Belum ada perangkat aktif pada unit ini." else "Ada beberapa perangkat pada unit ini. Atur penempatannya di website sebelum meminta penjelasan.")
                     return@run
                 }
                 val deviceId=device.id("device_id")
@@ -370,9 +511,14 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
                 AuthStep.Welcome -> Unit
             }
             Screen.Mfa -> { api.cancelMfa(); state = AppState() }
-            Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery -> state = state.copy(screen = Screen.Account,
+            Screen.DeletionPending -> Unit
+            Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery, Screen.Profile, Screen.DeleteAccount -> state = state.copy(screen = Screen.Account,
                 totpEnrollment = null, generatedRecoveryCodes = null, activeTransfer = null, activationChallenge = null, message = null)
-            Screen.Dashboard, Screen.History, Screen.Account, Screen.Garden -> state = state.copy(screen = Screen.Products, message = null)
+            Screen.Dashboard -> state = state.copy(
+                screen = if (state.dashboardFromGarden && state.gardenPlant != null) Screen.Garden else Screen.Products,
+                dashboardFromGarden = false, message = null,
+            )
+            Screen.History, Screen.Account, Screen.Garden -> state = state.copy(screen = Screen.Products, message = null)
             else -> Unit
         }
     }
@@ -455,22 +601,34 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadCommunityKnowledge(speciesId: Int) = run {
         require(!state.demo) { "Pengetahuan komunitas tersedia setelah masuk." }
-        val knowledge = api.communityKnowledge(speciesId)
-        state = state.copy(community = knowledge, communitySpeciesId = speciesId)
+        state = state.copy(communityError = null)
+        try {
+            val knowledge = api.communityKnowledge(speciesId)
+            state = state.copy(community = knowledge, communitySpeciesId = speciesId)
+        } catch (error: CancellationException) { throw error }
+        catch (error: Exception) {
+            if (error is ApiFailure && error.expired) throw error
+            state = state.copy(communityError = "Data komunitas belum dapat dimuat.")
+        }
     }
 
     // -------------------------------------------------------- Jurnal, histori, perbandingan & CSV
 
-    fun loadCareJournal(unitId: String? = state.selectedUnit?.id) {
+    fun loadOlderCareJournal() = loadCareJournal(older = true)
+    fun loadCareJournal(unitId: String? = state.selectedUnit?.id, older: Boolean = false) {
         val target = unitId ?: return
         if (state.demo) {
             state = state.copy(careUnitId = target, careLoaded = true)
             return
         }
         run {
-            val page = api.readCareJournal(target, limit = 50)
+            if (state.selectedUnit?.id != target) return@run
+            val cursor = if (older) state.careNext.takeIf { state.careUnitId == target } ?: return@run else null
+            val page = api.readCareJournal(target, snapshot = state.careSnapshot.takeIf { older }, cursor = cursor)
             if (state.selectedUnit?.id == target) {
-                state = state.copy(careJournal = page.entries, careUnitId = target, careLoaded = true)
+                val entries = if (older) (state.careJournal + page.entries).distinctBy { it.id } else page.entries
+                state = state.copy(careJournal = entries, careUnitId = target, careLoaded = true,
+                    careSnapshot = page.snapshot, careNext = page.next)
             }
         }
     }
@@ -490,9 +648,41 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
             }
             val list = (listOf(entry) + state.careJournal.filter { it.unitId == unitId && it.id != entry.id })
                 .sortedByDescending { it.observedAt }
-            state = state.copy(careJournal = list, careUnitId = unitId, careLoaded = true, message = "Catatan perawatan disimpan.")
+            if (state.selectedUnit?.id == unitId) {
+                state = state.copy(careJournal = list, careUnitId = unitId, wateringRises = state.wateringRises.filter { it.to != observedAt }, message = "Catatan perawatan disimpan.")
+            }
             onDone()
         }
+    }
+
+    // ponytail: the pending note lives in memory only; if the process dies inside the 5-second undo window it is not sent.
+    private var pendingJob: kotlinx.coroutines.Job? = null
+    /** Care recorded with one tap, sent after five seconds in which [undoCare] can take it back (the journal has no delete). */
+    fun recordCareWithUndo(unitId: String, kind: String, amountMl: Double?, observedAt: Instant = Instant.now()) {
+        if (state.pendingCare != null) return
+        state = state.copy(pendingCare = PendingCare(unitId, kind, observedAt, amountMl), pendingCareSending = false)
+        pendingJob = viewModelScope.launch { kotlinx.coroutines.delay(5_000); pendingJob = null; commitPendingCare() }
+    }
+    fun undoCare() { if (state.pendingCareSending) return; pendingJob?.cancel(); pendingJob = null; state = state.copy(pendingCare = null) }
+    fun retryPendingCare() { if (!state.busy) commitPendingCare() }
+    private fun commitPendingCare() {
+        pendingJob?.cancel(); pendingJob = null
+        val pending = state.pendingCare ?: return
+        state = state.copy(pendingCareSending = true)
+        recordCare(pending.unitId, pending.kind, pending.at, pending.amountMl, "") {
+            state = state.copy(pendingCare = null, pendingCareSending = false)
+        }
+    }
+
+    /** Practice only: the next synthetic reading after a watering, so the stage can show the water arriving. */
+    fun simulateDemoReading(unitId: String) {
+        if (!state.demo) return
+        val now = Instant.now()
+        state = state.copy(overviews = state.overviews.map { o ->
+            if (o.id != unitId) o else o.copy(at = now, readings = o.readings.map { r ->
+                if (r.sensor == Sensor.Moisture && r.value != null) r.copy(value = minOf(92.0, r.value + 24.0), at = now) else r.copy(at = now)
+            })
+        })
     }
 
     fun compareMeasurements(unitId: String, first: HistoryWindow, second: HistoryWindow) = run {
@@ -506,6 +696,25 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         val csv = api.exportMeasurementHistoryCsv(unitId, window)
         state = state.copy(message = "CSV siap: ${csv.rows} baris bacaan.")
         onCsv(csv)
+    }
+
+    fun prepareCsvDocument(csv: HistoryCsv) { pendingCsv = state.email to csv.content }
+    fun finishCsvDocument(uri: android.net.Uri?) {
+        val content = pendingCsv?.takeIf { it.first == state.email }?.second
+        pendingCsv = null
+        if (uri != null && content != null) writeDocument(uri, content)
+        else if (uri != null) reportDocumentError("Ekspor sudah tidak tersedia. Buat CSV kembali.")
+    }
+    fun reportDocumentError(message: String) {
+        state = state.copy(message = message, messageIsError = true)
+    }
+    fun writeDocument(uri: android.net.Uri, text: String) = run {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val stream = getApplication<Application>().contentResolver.openOutputStream(uri)
+                ?: throw IllegalArgumentException("File tidak dapat dibuka untuk ditulis.")
+            stream.bufferedWriter(Charsets.UTF_8).use { it.write(text) }
+        }
+        state = state.copy(message = "File tersimpan.")
     }
 
     // -------------------------------------------------------- Keamanan akun
@@ -582,30 +791,40 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     fun claimScannedProduct(nonceId: String, sealedCode: String, signature: String, onDone: () -> Unit = {}) = run {
         api.claimProduct(nonceId, sealedCode, signature.trim())
         state = state.copy(activationChallenge = null, publicStatus = null)
-        load()
-        state = state.copy(message = "Produk berhasil diklaim ke akun Anda.")
+        load("Produk berhasil diklaim ke akun Anda.")
         onDone()
     }
 
     fun archiveUnit(unitId: String) = run {
         require(!state.demo)
         api.archiveUnit(unitId)
-        load()
-        state = state.copy(message = "Unit diarsipkan. Riwayat bacaan tetap tersimpan.")
+        load("Unit diarsipkan. Riwayat bacaan tetap tersimpan.")
     }
 
     fun restoreUnit(unitId: String) = run {
         require(!state.demo)
         api.restoreUnit(unitId)
-        load()
-        state = state.copy(message = "Unit dipulihkan ke daftar aktif.")
+        load("Unit dipulihkan ke daftar aktif.")
     }
 
-    fun placeDevice(deviceId: String, unitId: String?) = run {
+    fun placeDevice(deviceId: String, unitId: String) = run {
         require(!state.demo)
-        api.placeDevice(deviceId, unitId)
-        load()
-        state = state.copy(message = "Penempatan perangkat diperbarui.")
+        require(state.devices.any { it.id == deviceId && it.status == "active" }) { "Pemasangan hanya tersedia untuk perangkat aktif." }
+        load(if (api.placeDevice(deviceId, unitId)) "Perangkat terpasang. Bacaan berikutnya tercatat di unit ini."
+            else "Perangkat terpasang, tetapi belum ada bacaan terbaru darinya. Nyalakan perangkat dan pastikan tersambung ke Wi-Fi; data masuk pada kiriman berikutnya.")
+    }
+
+    fun checkDeviceSetup(device: OwnedDevice) = run {
+        val unitId = device.unitId ?: return@run
+        require(!state.demo && device.status == "active" && device in state.devices)
+        val now = Instant.now()
+        val from = maxOf(device.placedAt ?: now, now.minusSeconds(86_400))
+        val to = now.plusSeconds(60)
+        val rows = if (from < to) api.readMeasurementHistory(unitId, HistoryWindow(from, to), limit = 500).readings else emptyList()
+        if (device in state.devices) {
+            val readings = rows.filter { it.deviceId == device.id }.map { it.reading }
+            state = state.copy(deviceSetupReadings = DeviceSetupReadings(device, readings.distinctBy { it.sensor }))
+        }
     }
 
     fun loadUnitLifecycleEvents(unitId: String) = run {
@@ -632,8 +851,7 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     fun acceptProductTransfer(serial: String, code: String, onDone: () -> Unit = {}) = run {
         require(!state.demo)
         api.acceptTransfer(serial, code)
-        load()
-        state = state.copy(message = "Produk ${serial.trim().uppercase()} berhasil dipindahkan ke akun Anda.")
+        load("Produk ${serial.trim().uppercase()} berhasil dipindahkan ke akun Anda.")
         onDone()
     }
 
@@ -676,9 +894,42 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         onDone()
     }
 
+
+    fun loadCareDetails(unitId: String) = run {
+        val body = JSONObject().put("p_unit_id", unitId).put("p_timezone", careZone())
+        val outlook = missingRpcAsNull { parseOutlook(api.rpc("my_watering_outlook", body)) }
+        val rises = missingRpcAsNull { parseRises(api.rpc("my_unlogged_rises", JSONObject().put("p_unit_id", unitId))) }.orEmpty()
+        val health = missingRpcAsNull { parseUnitHealth(api.rpc("my_unit_health", body)) }
+        state = state.copy(careDetailsUnit = unitId, wateringOutlook = outlook, wateringRises = rises, unitHealth = health)
+    }
+    fun dismissRise(unitId: String, rise: WateringRise) = run {
+        careOk(api.rpc("dismiss_my_rise", JSONObject().put("p_unit_id", unitId).put("p_at", rise.to.toString())))
+        state = state.copy(wateringRises = state.wateringRises.filter { it != rise })
+    }
+    fun loadAlertPreferences() = run {
+        val saved = missingRpcAsNull { parseAlertPreferences(api.rpc("my_alert_preferences")) }
+        // Remembered for the session, so the Akun screen does not ask (and announce it) again on every visit.
+        state = if (saved != null) state.copy(alertPreferences = saved, alertsUnavailable = false)
+            else state.copy(alertsUnavailable = true, message = "Pengaturan peringatan belum tersedia di server ini.")
+    }
+    fun setAlertPreferences(email: Boolean, kinds: Set<String>) = run {
+        require(kinds.all { it in careKinds })
+        val saved = parseAlertPreferences(api.rpc("set_my_alert_preferences", JSONObject().put("p_email_enabled", email).put("p_kinds", org.json.JSONArray(kinds.toList()))))
+        state = state.copy(alertPreferences = saved)
+    }
+    fun assignSlotUnit(slotId: String, unitId: String?) = run {
+        careOk(api.rpc("set_my_slot_unit", JSONObject().put("p_slot_id", slotId).put("p_unit_id", unitId ?: JSONObject.NULL)))
+        load("Perangkat tanaman diperbarui.")
+    }
+
     fun logout() = run {
+        undoCare()
+        clearCareData(true)
+        pendingCsv = null
         weatherJob?.cancel(); weatherGeneration++
         getApplication<Application>().getSharedPreferences("weather-cities", 0).edit().clear().apply()
+        // The hourly check belongs to this account; the next one turns it on again for theirs.
+        if (CareNotifications.enabled(getApplication())) CareNotifications.setEnabled(getApplication(), false)
         if (state.demo) { state = AppState(); return@run }
         try { androidx.credentials.CredentialManager.create(getApplication()).clearCredentialState(androidx.credentials.ClearCredentialStateRequest()) }
         catch (error: CancellationException) { throw error }
@@ -688,4 +939,13 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
         catch (error: CancellationException) { throw error }
         catch (_: Exception) { state = AppState(messageIsError = true, message = "Sesi di HP sudah dihapus. Server tidak terhubung; sesi server akan kedaluwarsa sesuai waktunya.") }
     }
+}
+
+internal suspend fun <T> fetchOptional(fetch: suspend () -> T): Result<T> = try {
+    Result.success(fetch())
+} catch (error: CancellationException) {
+    throw error
+} catch (error: Exception) {
+    if (error is ApiFailure && error.expired) throw error
+    Result.failure(error)
 }

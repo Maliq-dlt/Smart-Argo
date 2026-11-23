@@ -63,6 +63,7 @@ export interface TelemetryPacketV2 {
   domain: 'smart-agro.telemetry.v2'; schema_version: 2; source: 'device'
   device_id: string; unit_id: string; boot_id: string; sequence: number
   measured_at: string; clock_status: 'synced' | 'unsynced'; sensors: TelemetryPacket['sensors']
+  calibration?: { moisture_at: string | null; ph_at: string | null }
 }
 export function parseTelemetryV2(input: unknown): TelemetryPacketV2 {
   object(input)
@@ -79,7 +80,23 @@ export function parseTelemetryV2(input: unknown): TelemetryPacketV2 {
   const parsed = parseTelemetry({ schema_version: 1, source: 'device', device_id: input.device_id,
     sample_id: `${input.boot_id}:${input.sequence}`, measured_at: input.measured_at, sensors: input.sensors,
     drip: { installed: false, command: 'unknown', feedback: 'unknown', flow_ml_min: null, fault: null } })
+  let calibration: TelemetryPacketV2['calibration']
+  if (input.calibration !== undefined) {
+    const c = input.calibration
+    object(c)
+    if (!Object.keys(c).length || Object.keys(c).some(k => k !== 'moisture_at' && k !== 'ph_at')) throw new Error('Kolom kalibrasi tidak valid.')
+    const stamp = (field: string) => {
+      const at = c[field]
+      if (at == null) return null
+      if (typeof at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(at)) throw new Error('Tanggal kalibrasi harus UTC.')
+      const ms = Date.parse(at)
+      if (!Number.isFinite(ms) || new Date(ms).toISOString().slice(0, 19) !== at.slice(0, 19) ||
+        ms > Date.parse(parsed.measured_at)) throw new Error('Tanggal kalibrasi tidak valid.')
+      return new Date(ms).toISOString()
+    }
+    calibration = { moisture_at: stamp('moisture_at'), ph_at: stamp('ph_at') }
+  }
   return { domain: 'smart-agro.telemetry.v2', schema_version: 2, source: 'device', device_id: input.device_id as string,
     unit_id: input.unit_id as string, boot_id: input.boot_id as string, sequence: input.sequence,
-    measured_at: parsed.measured_at, clock_status: input.clock_status, sensors: parsed.sensors }
+    measured_at: parsed.measured_at, clock_status: input.clock_status, sensors: parsed.sensors, ...(calibration ? { calibration } : {}) }
 }

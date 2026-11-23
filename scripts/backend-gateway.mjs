@@ -10,12 +10,13 @@ import { createTelemetryIngestHandler } from '../supabase/functions/telemetry-in
 import { createProductClaimHandler } from '../supabase/functions/product-claim/handler.ts'
 import { createProductProvisionHandler, issuerKeysFrom } from '../supabase/functions/product-provision/handler.ts'
 import { createMfaRecoveryHandler } from '../supabase/functions/mfa-recovery/handler.ts'
+import { createAlertDispatchHandler } from '../supabase/functions/alert-dispatch/handler.ts'
 import { createWeatherForecastHandler, signedInVia } from '../supabase/functions/weather-forecast/handler.ts'
 import { explainerFromEnv } from '../src/lib/aiExplanation.ts'
 
-export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:54324', restUrl='http://127.0.0.1:54325', host='127.0.0.1', extraOrigins=[], staticRoot='', port=54321, log=console.log, explainer=explainerFromEnv(name => process.env[name]), issuerKeys=issuerKeysFrom(process.env.ISSUER_PUBLIC_KEYS)}) {
+export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:54324', restUrl='http://127.0.0.1:54325', host='127.0.0.1', extraOrigins=[], staticRoot='', port=54321, log=console.log, alertEnv=name=>process.env[name], explainer=explainerFromEnv(name => process.env[name]), issuerKeys=issuerKeysFrom(process.env.ISSUER_PUBLIC_KEYS)}) {
   const config = {url:'http://127.0.0.1:54321', serviceKey:settings.service, appOrigin}
-  const handlers = {'/functions/v1/history-export':createHistoryExportHandler(config), '/functions/v1/product-claim':createProductClaimHandler(config), '/functions/v1/product-provision':createProductProvisionHandler({...config, issuerKeys}), '/functions/v1/mfa-recovery':createMfaRecoveryHandler(config), '/functions/v1/telemetry-ingest':createTelemetryIngestHandler(config), '/functions/v1/unit-explanation':createUnitExplanationHandler({...config, explainer}), '/functions/v1/energy-ingest':createEnergyIngestHandler(config), '/functions/v1/weather-forecast':createWeatherForecastHandler({appOrigin, signedIn:signedInVia(config.url, settings.service)})}
+  const handlers = {'/functions/v1/alert-dispatch':createAlertDispatchHandler({...config, env:alertEnv}), '/functions/v1/history-export':createHistoryExportHandler(config), '/functions/v1/product-claim':createProductClaimHandler(config), '/functions/v1/product-provision':createProductProvisionHandler({...config, issuerKeys}), '/functions/v1/mfa-recovery':createMfaRecoveryHandler(config), '/functions/v1/telemetry-ingest':createTelemetryIngestHandler(config), '/functions/v1/unit-explanation':createUnitExplanationHandler({...config, explainer}), '/functions/v1/energy-ingest':createEnergyIngestHandler(config), '/functions/v1/weather-forecast':createWeatherForecastHandler({appOrigin, signedIn:signedInVia(config.url, settings.service)})}
   const allowedOrigins = new Set([appOrigin, ...extraOrigins])
   const server = createServer(async (req,res) => {
     const started = performance.now(), requestId = canonicalRequestId(req.headers['x-request-id'])
@@ -65,7 +66,8 @@ export function startGateway({settings, appOrigin, authUrl='http://127.0.0.1:543
         res.writeHead(200, {'Content-Type':types[extname(file)] || 'application/octet-stream','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin'})
         res.end(req.method === 'HEAD' ? undefined : await readFile(resolved));return
       }
-      const maxBody = ['/rest/v1/rpc/save_unit_explanation','/rest/v1/rpc/finish_unit_explanation'].includes(path) ? 600000 : 16384
+      // A profile photo is at most 256 kB, which base64 makes about 350 kB.
+      const maxBody = ['/rest/v1/rpc/save_unit_explanation','/rest/v1/rpc/finish_unit_explanation'].includes(path) ? 600000 : path === '/rest/v1/rpc/set_my_avatar' ? 360000 : 16384
       const parts=[];let length=0
       for await (const part of req) {length+=part.length;if(length>maxBody){res.writeHead(413);res.end();return}parts.push(part)}
       const body=Buffer.concat(parts)

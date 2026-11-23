@@ -1,5 +1,10 @@
 package id.smartagro.app
 
+import android.content.Intent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -22,6 +27,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,7 +40,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -53,16 +63,42 @@ internal fun number(value: Double?) = value?.let { String.format(Locale.forLangu
 
 class MainActivity : ComponentActivity() {
     private val model: AgroViewModel by viewModels()
+    private var incomingSerial by mutableStateOf<String?>(null)
+    private var incomingLinkVersion by mutableIntStateOf(0)
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        incomingSerial = productLinkSerial(intent.dataString)
+        incomingLinkVersion++
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val legacyCodes = java.io.File(cacheDir, "shared/smart-agro-recovery-codes.txt")
+        if (legacyCodes.exists()) {
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", legacyCodes)
+            revokeUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            legacyCodes.delete()
+        }
+        incomingSerial = savedInstanceState?.getString("product-link-serial") ?: productLinkSerial(intent.dataString)
         enableEdgeToEdge()
-        setContent { SmartAgroApp(model) }
+        // Held through sign-in (and rotation) until handled, then dropped so a later rotation does not reopen Produk.
+        setContent { SmartAgroApp(model, incomingSerial, incomingLinkVersion) { incomingSerial = null } }
+    }
+    override fun onSaveInstanceState(outState: Bundle) {
+        incomingSerial?.let { outState.putString("product-link-serial", it) }
+        super.onSaveInstanceState(outState)
     }
 }
 
+internal fun productLinkSerial(raw: String?): String? = runCatching {
+    val uri = java.net.URI(raw ?: return null)
+    require(uri.scheme == "https" && uri.host == "live.smart-agro-demo.pages.dev" && uri.path == "/" && uri.port == -1 && uri.userInfo == null)
+    parseProductScan(raw).serial
+}.getOrNull()
+
 /** How deep a screen sits, so a push slides in from the trailing edge and a pop slides back (iOS navigation stack). */
 private fun depth(screen: Screen) = when (screen) {
-    Screen.Login -> 0
+    Screen.Login, Screen.DeletionPending -> 0
     Screen.Mfa, Screen.Products, Screen.History, Screen.Account -> 1
     else -> 2
 }
@@ -76,8 +112,19 @@ private val tabScreens = listOf(Screen.Products, Screen.History, Screen.Account)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
-private fun SmartAgroApp(model: AgroViewModel) {
+private fun SmartAgroApp(model: AgroViewModel, incomingSerial: String?, incomingLinkVersion: Int, onLinkHandled: () -> Unit) {
     val state = model.state
+    var handledLink by remember { mutableStateOf<String?>(null) }
+    var handledLinkVersion by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(incomingSerial, incomingLinkVersion, state.email, state.demo, state.screen) {
+        if (incomingSerial != null && incomingLinkVersion != handledLinkVersion && state.email.isNotBlank() && !state.demo &&
+            state.screen !in listOf(Screen.Login, Screen.Mfa, Screen.DeletionPending) && state.deletionScheduled == null) {
+            handledLink = incomingSerial
+            handledLinkVersion = incomingLinkVersion
+            model.navigate(Screen.ManageProducts)
+            onLinkHandled()
+        }
+    }
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
     // Screenshots, screen recording and Recents thumbnail are blocked whenever a one-time code,
@@ -95,7 +142,9 @@ private fun SmartAgroApp(model: AgroViewModel) {
         onDispose { }
     }
     val view = LocalView.current
-    val darkHeroTop = state.introPlaying || (state.screen == Screen.Login && state.auth == AuthStep.Welcome)
+    val overMedia = remember { androidx.compose.runtime.mutableStateOf(false) }
+    val darkHeroTop = state.introPlaying || (state.screen == Screen.Login && state.auth == AuthStep.Welcome) ||
+        (state.screen == Screen.Dashboard && overMedia.value)
     SideEffect {
         (view.context as? android.app.Activity)?.window?.let { window ->
             WindowCompat.getInsetsController(window, view).apply {
@@ -108,18 +157,20 @@ private fun SmartAgroApp(model: AgroViewModel) {
     val google = if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) null else ({ model.googleLogin(context) })
     AgroTheme(dark) {
         val shellHaze = remember { HazeState() }
-        val showTabs = state.screen !in listOf(Screen.Login, Screen.Mfa) && !state.introPlaying
+        val screenState = key(state.email, state.demo) { rememberSaveableStateHolder() }
+        val showTabs = state.screen !in listOf(Screen.Login, Screen.Mfa, Screen.DeletionPending) && state.deletionScheduled == null && !state.introPlaying
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         CompositionLocalProvider(
             LocalRippleConfiguration provides null,
             LocalShellHaze provides shellHaze,
+            LocalStatusOverMedia provides overMedia,
             LocalBottomClearance provides if (showTabs) navInset + 84.dp else navInset,
         ) {
             BackHandler(
                 state.screen in listOf(
                     Screen.Dashboard, Screen.Mfa, Screen.History, Screen.Account, Screen.Rewards,
-                    Screen.Proofs, Screen.Garden, Screen.Security, Screen.ManageProducts, Screen.Gallery,
-                ) || state.screen == Screen.Login && state.auth != AuthStep.Welcome,
+                    Screen.Proofs, Screen.Garden, Screen.Security, Screen.ManageProducts, Screen.Gallery, Screen.Profile,
+                ) || state.screen == Screen.DeleteAccount && state.deletionScheduled == null || state.screen == Screen.Login && state.auth != AuthStep.Welcome,
             ) { model.back() }
             Surface(Modifier.fillMaxSize(), color = palette.canvas, contentColor = palette.ink) {
                 Box(Modifier.fillMaxSize()) {
@@ -127,7 +178,7 @@ private fun SmartAgroApp(model: AgroViewModel) {
                         SharedTransitionLayout {
                             AnimatedContent(targetState = state.screen, transitionSpec = {
                                 val zooming = setOf(initialState, targetState) == setOf(Screen.Products, Screen.Dashboard)
-                                val signedOut = setOf(Screen.Login, Screen.Mfa)
+                                val signedOut = setOf(Screen.Login, Screen.Mfa, Screen.DeletionPending)
                                 when {
                                     zooming -> (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished).apply {
                                         if (targetState == Screen.Products) targetContentZIndex = -1f
@@ -137,40 +188,48 @@ private fun SmartAgroApp(model: AgroViewModel) {
                                     else -> fadeIn(tween(200)) togetherWith fadeOut(tween(1, delayMillis = 200))
                                 }
                             }, label = "Layar Smart Agro") { screen ->
-                                CompositionLocalProvider(LocalSharedScope provides this@SharedTransitionLayout, LocalNavScope provides this@AnimatedContent) {
-                                    when (screen) {
-                                        Screen.Login -> AuthFlow(state, model, google)
-                                        Screen.Mfa -> MfaPage(state, model)
-                                        Screen.Gallery -> ComponentGallery(model::back)
-                                        Screen.Products -> PlantsHome(state, model)
-                                        Screen.Dashboard -> PlantDetail(state, model)
-                                        Screen.Garden -> GardenPlantScreen(state, model)
-                                        Screen.History -> ActivityScreen(state, model)
-                                        Screen.Account -> AccountScreen(state, model)
-                                        Screen.Security -> SecurityScreen(state, model)
-                                        Screen.ManageProducts -> ProductsManageScreen(state, model)
-                                        Screen.Rewards -> RewardsScreen(
-                                            state,
-                                            model::loadRewards,
-                                            model::reserveReward,
-                                            model::cancelReward,
-                                            model::restartRewardRequest,
-                                            onBack = model::back,
-                                            onAppeal = { stmt, winId, redId -> model.submitRewardAppeal(stmt, winId, redId) },
-                                        )
-                                        Screen.Proofs -> ProofsScreen(state, model::loadProofs, onBack = model::back)
+                                screenState.SaveableStateProvider(screen.name) {
+                                    CompositionLocalProvider(LocalSharedScope provides this@SharedTransitionLayout, LocalNavScope provides this@AnimatedContent) {
+                                        when (screen) {
+                                            Screen.Login -> AuthFlow(state, model, google)
+                                            Screen.Mfa -> MfaPage(state, model)
+                                            Screen.Gallery -> ComponentGallery(model::back)
+                                            Screen.Products -> PlantsHome(state, model)
+                                            Screen.Dashboard -> PlantDetail(state, model)
+                                            Screen.Garden -> GardenPlantScreen(state, model)
+                                            Screen.History -> ActivityScreen(state, model)
+                                            Screen.Account -> AccountScreen(state, model)
+                                            Screen.Security -> SecurityScreen(state, model)
+                                            Screen.ManageProducts -> ProductsManageScreen(state, model, handledLink) { handledLink = null }
+                                            Screen.Rewards -> RewardsScreen(
+                                                state,
+                                                model::loadRewards,
+                                                model::reserveReward,
+                                                model::cancelReward,
+                                                model::restartRewardRequest,
+                                                onBack = model::back,
+                                                onAppeal = { stmt, winId, redId, done -> model.submitRewardAppeal(stmt, winId, redId, done) },
+                                            )
+                                            Screen.Proofs -> ProofsScreen(state, model::loadProofs, onBack = model::back)
+                                            Screen.Profile -> ProfileScreen(state, model)
+                                            Screen.DeleteAccount -> DeleteAccountScreen(state, model, google != null)
+                                            Screen.DeletionPending -> DeletionPendingScreen(state, model)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                     if (state.welcome && state.screen == Screen.Products && !state.demo && !state.introPlaying) WelcomeSheet(model::dismissWelcome)
+                    // Scroll edge effect (HIG Liquid Glass): content fades under the floating tab bar instead of running into it.
+                    if (showTabs) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(navInset + 96.dp).background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, palette.canvas.copy(alpha = .94f)))))
                     if (showTabs) GlassTabBar(
                         tabs,
                         when (state.screen) {
                             Screen.History -> 1
-                            Screen.Account, Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery -> 2
-                            else -> 0
+                            Screen.Account, Screen.Rewards, Screen.Proofs, Screen.Security, Screen.ManageProducts, Screen.Gallery, Screen.Profile, Screen.DeleteAccount -> 2
+                            Screen.Products, Screen.Dashboard, Screen.Garden, Screen.Login, Screen.Mfa, Screen.DeletionPending -> 0
                         },
                         { model.navigate(tabScreens[it]) },
                         Modifier.align(Alignment.BottomCenter),
@@ -186,9 +245,10 @@ private fun SmartAgroApp(model: AgroViewModel) {
                 if (state.screen in listOf(Screen.Dashboard, Screen.Garden) && (state.demo || state.email.isNotBlank())) model.loadWeather()
             }
             LaunchedEffect(state.selectedUnit?.id, state.screen) {
-                if (state.screen == Screen.Dashboard && !state.demo && state.email.isNotBlank()) model.loadExplanation()
+                if (state.screen == Screen.Dashboard && !state.demo && state.email.isNotBlank() &&
+                    (state.explanation == null || state.explanationUnitId != state.selectedUnit?.id)) model.loadExplanation()
             }
-            LaunchedEffect(state.selectedUnit?.id, state.screen, state.historyLoaded) {
+            LaunchedEffect(state.selectedUnit?.id, state.screen, state.historyRange, state.historyLoaded) {
                 if (state.screen in listOf(Screen.Dashboard, Screen.History) && state.selectedUnit != null && !state.historyLoaded && !state.demo && state.email.isNotBlank()) model.loadHistory()
                 if (state.screen in listOf(Screen.Account, Screen.Rewards) && !state.demo && state.email.isNotBlank() && !state.rewardLoaded) model.loadRewards()
                 if (state.screen == Screen.Proofs && !state.demo && state.email.isNotBlank() && !state.proofsLoaded) model.loadProofs()
