@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "id.smartagro.app",
+    "sha256_cert_fingerprints": ["8D:CE:31:22:2F:EF:DD:C3:4D:10:FA:DB:09:1D:22:A7:59:08:C5:06:A1:CA:E3:38:55:59:D9:1E:45:31:3D:09"]
+  }
+}]

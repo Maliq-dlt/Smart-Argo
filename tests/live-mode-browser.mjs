@@ -26,6 +26,8 @@ try {
   await mockAuth(page, {
     'POST /auth/v1/token?grant_type=password': () => mockSession({ pot: POT }),
     'POST /auth/v1/token?grant_type=refresh_token': () => mockSession({ pot: POT }),
+    'POST /rest/v1/rpc/my_units': () => ({ ok: true, units: [], devices: [] }),
+    'POST /rest/v1/rpc/my_overview': () => ({ ok: true, plants: [{ slot_id: 'slot', unit_id: null, name: 'Pot teras', species_id: 1, moisture: null, band_source: null, state: 'no_device', outlook: null }], devices: { total: 0, issues: [] } }),
   })
   await page.goto(new URL('#masuk', base).href); await curtainOpen(page)
   await gate(page).waitFor()
@@ -52,15 +54,13 @@ try {
   ok(await page.getByRole('heading', { level: 1, name: 'Ruang tanam', exact: true }).count() === 0 && await page.locator('.studio').count() === 0, 'Ruang tanam is not rendered')
 
   // The weather lives on the plant page's stage.
-  await page.evaluate(() => { location.hash = '#tanaman' }); await page.locator('.stage-scene .plant-scene svg').waitFor()
+  await page.evaluate(() => { location.hash = '#tanaman' }); await page.locator('.care-picker').first().waitFor()
   ok(await page.locator('.stage-weather').count() === 0, 'No simulated weather control')
   ok(await page.locator('.stage-weather-note').count() === 0, 'No weather note')
-  ok(await page.locator('.plant-scene svg').getAttribute('data-weather') !== 'hujan', 'The sky is not one the visitor picked')
-  await page.locator('.session-pill .pill-trigger').click()
-  await page.locator('.slot-picker').waitFor()
-  ok(await page.locator('.slot-picker').getByRole('button', { name: 'Muat contoh kebun' }).count() === 0, 'No demo garden to load')
-  ok(await page.locator('.slot-picker').getByRole('button', { name: 'Tambah pot atau kebun' }).count() === 1, 'A person can still add their own pot or garden')
-  await page.keyboard.press('Escape')
+  ok(await page.locator('.stage-scene .plant-scene svg').count() === 0, 'A real plant does not display a synthetic stage')
+  ok(await page.locator('.session-pill').count() === 0, 'A real plant has no simulator session controls')
+  ok((await page.locator('.live-care').innerText()).includes('Belum ada perangkat'), 'Unassigned pot reports missing hardware')
+  ok(await page.getByRole('button', { name: 'Catat', exact: true }).count() === 0, 'No simulated watering is offered as real care')
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal overflow')
 
   assert.deepEqual(errors, [], `Console errors: ${errors.join(' | ')}`)

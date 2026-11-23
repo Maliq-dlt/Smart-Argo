@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { arrange, headline, statusOf, summaryLine, wateringWindow, type OverviewPlant } from '../src/lib/overview.ts'
+import { bandSourceLabel, parseCarePlants, parseAlertPreferences, parseUnitHealth, parseOutlook, arrange, headline, statusOf, summaryLine, wateringWindow, type OverviewPlant } from '../src/lib/overview.ts'
 
 // Plants here are SYNTHETIC: built for the test, not read from any pot.
 const plant = (id: string, over: Partial<OverviewPlant> = {}): OverviewPlant => ({
@@ -63,4 +63,36 @@ test('watering window: now when dry, ±25 % of the projection otherwise, none be
   assert.deepEqual(wateringWindow(plant('a', { status: soon, etaH: 8 })), { from: 6, to: 10 })
   assert.equal(wateringWindow(plant('a', { etaH: 30 })), null)
   assert.equal(wateringWindow(plant('a', { etaH: null })), null)
+})
+
+// Scripted API examples: these are contract checks, not evidence from a physical pot.
+test('server care labels keep per-pot provenance and missing readings explicit', () => {
+  assert.equal(bandSourceLabel('own_pattern'), 'Berdasarkan pola pot Anda')
+  assert.equal(bandSourceLabel('profile'), 'Profil kurasi untuk pot ini')
+  const row = { slot_id: 'slot', unit_id: 'unit', name: 'Cabai', species_id: 1, moisture: null, state: 'no_reading', band_source: null, outlook: null }
+  const [p] = parseCarePlants({ ok: true, plants: [row] })
+  assert.equal(p.status.attention, true); assert.equal(p.status.word, 'Bacaan belum tersedia'); assert.equal(p.moisture, null)
+  assert.equal(parseCarePlants({ ok: true, plants: [{ ...row, state: 'no_device', unit_id: null }] })[0].status.word, 'Belum ada perangkat')
+  assert.equal(wateringWindow(p), null)
+  assert.throws(() => parseCarePlants({ ok: true, plants: [{ ...row, state: 'unknown' }] }))
+  assert.throws(() => parseCarePlants({ ok: false }))
+  assert.throws(() => parseCarePlants({ ok: true, plants: [{ ...row, state: 'constructor' }] }))
+  assert.throws(() => parseCarePlants({ ok: true, plants: [{ ...row, moisture: NaN }] }))
+  assert.throws(() => parseOutlook({ state: 'window', from: 'invalid', to: null }))
+  // The species comes from the shared catalog; an unknown id is a contract error, not a chili.
+  assert.equal(parseCarePlants({ ok: true, plants: [{ ...row, species_id: 2 }] })[0].species, 'bawang')
+  assert.throws(() => parseCarePlants({ ok: true, plants: [{ ...row, species_id: 99 }] }))
+})
+test('alert preferences validate every kind before presenting a saved result', () => {
+  assert.deepEqual(parseAlertPreferences({ ok: true, email_enabled: false, kinds: ['soil_dry'] }), { email_enabled: false, kinds: ['soil_dry'] })
+  assert.throws(() => parseAlertPreferences({ ok: true, email_enabled: true, kinds: ['invented'] }))
+  assert.throws(() => parseAlertPreferences({ ok: false }))
+})
+
+test('malformed health histories are rejected before rendering', () => {
+  const health = { ok: true, battery: [], upload_gaps: [], energy_days: [], packets: [], calibration: null }
+  assert.equal(parseUnitHealth(health), health)
+  assert.throws(() => parseUnitHealth({ ...health, battery: [null] }))
+  assert.throws(() => parseUnitHealth({ ...health, packets: ['invalid'] }))
+  assert.throws(() => parseUnitHealth({ ...health, calibration: 1 }))
 })

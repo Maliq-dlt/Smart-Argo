@@ -21,7 +21,7 @@ async function open({ width = 1440, theme = 'light', text = false, demo = true, 
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.type() === 'error' && !/ERR_CONNECTION_REFUSED|ERR_FAILED|127\.0\.0\.1:54321/.test(message.text())) errors.push(message.text()) })
   await page.addInitScript(value => { try { localStorage.setItem('smart-agro.theme', value) } catch { /* blocked */ } }, theme)
-  await page.goto(new URL('#tanaman', base).href); await curtainOpen(page)
+  await page.goto(new URL('#tanaman', base).href, { waitUntil: 'domcontentloaded', timeout: 90000 }); await curtainOpen(page)
   await page.locator('.plant-scene svg').waitFor()
   if (demo) {
     await page.locator('.session-pill .pill-trigger').click()

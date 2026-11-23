@@ -5,3 +5,6 @@
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://lh3.googleusercontent.com; media-src 'self' blob:; font-src 'self'; connect-src 'self' https://*.supabase.co https://sepolia.base.org https://ethereum-sepolia-rpc.publicnode.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()
   X-Frame-Options: DENY
+
+/.well-known/assetlinks.json
+  Content-Type: application/json

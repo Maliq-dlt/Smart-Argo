@@ -81,7 +81,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .nav-capsule { position: sticky; top: .75rem; z-index: 40; width: max-content; max-width: calc(100% - 1rem); margin: .75rem auto 0; display: flex; align-items: center; gap: .25rem;
   padding: .3125rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); box-shadow: var(--shadow-pop); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); }
 .nav-mark { width: 2.75rem; height: 2.75rem; border-radius: 50%; display: grid; place-items: center; color: var(--primary); flex: none; }
-.nav-tabs { display: flex; gap: .125rem; min-width: 0; }
+.nav-tabs { display: flex; flex-wrap: wrap; gap: .125rem; min-width: 0; }
 .nav-tab { position: relative; display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 1.125rem; border-radius: 999px; color: var(--muted); font-weight: 500; white-space: nowrap; text-decoration: none; transition: color .2s var(--ease-ui); }
 .nav-tab > svg, .nav-label { position: relative; z-index: 1; }
 .nav-tab > svg { width: 1.25rem; height: 1.25rem; }
@@ -1082,11 +1082,13 @@ a.menu-item { text-decoration: none; }
 }
 /* Phone: the capsule moves to the bottom edge, as on Android, and its tabs share the width equally. */
 @media (max-width: 47.99rem) {
-  .nav-capsule { position: fixed; top: auto; bottom: max(.75rem, env(safe-area-inset-bottom)); left: 50%; translate: -50% 0; margin: 0; width: calc(100% - 1.5rem); max-width: 28rem; }
+  .nav-capsule { position: fixed; top: auto; bottom: max(.75rem, env(safe-area-inset-bottom)); left: 50%; translate: -50% 0; margin: 0; width: calc(100% - 24px); max-width: 28rem; padding: 5px; gap: 4px; }
   .nav-mark { display: none; }
-  .nav-tabs { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .nav-tabs { flex: 1; display: grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
   .nav-tab { flex-direction: column; justify-content: center; gap: .125rem; min-height: 3.25rem; padding: .25rem; font-size: .75rem; container-type: inline-size; }
-  .nav-tools { border-left: 0; padding-left: 0; margin-left: 0; }
+  .nav-tab > svg { width: 20px; height: 20px; flex: none; }
+  .nav-tools { border-left: 0; padding-left: 0; margin-left: 0; gap: 4px; }
+  .nav-tools :is(.icon-button, .account-trigger) { width: 44px; height: 44px; flex: none; }
   .app-content { padding: 1rem 1rem 6.5rem; }
   .toast { bottom: 5.5rem; }
   /* Ringkasan is one tap away in the capsule at the bottom; the plant page starts with its rail instead. */

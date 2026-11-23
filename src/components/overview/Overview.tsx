@@ -2,7 +2,7 @@ import { useMemo, useState, type MouseEvent } from 'react'
 import { CheckCircle, Drop, MagnifyingGlass, Package, Plus, Sparkle, Thermometer, Warning, type Icon } from '@phosphor-icons/react'
 import PlantScene from '../PlantScene'
 import { sceneOf } from '../../lib/species'
-import { arrange, headline, summaryLine, wateringWindow, type OverviewPlant, type Tone } from '../../lib/overview'
+import { bandSourceLabel, outlookLabel, arrange, headline, summaryLine, wateringWindow, type OverviewPlant, type Tone } from '../../lib/overview'
 import './overview.css'
 
 const TONE_ICON: Record<Tone, Icon> = { ok: CheckCircle, soon: Drop, dry: Drop, wet: Drop, hot: Thermometer, check: Warning, learn: Sparkle, idle: Sparkle }
@@ -16,6 +16,7 @@ function Status({ plant }: { plant: OverviewPlant }) {
   return <span className="ov-status" data-tone={plant.status.tone}><Glyph weight={plant.status.tone === 'ok' ? 'fill' : 'regular'} aria-hidden="true" />{plant.status.word}</span>
 }
 function nextWater(p: OverviewPlant) {
+  if (p.live) return outlookLabel(p.outlook)
   const w = wateringWindow(p)
   if (!w) return p.status.tone === 'learn' ? 'Pola pot ini masih dipelajari' : p.planted ? 'Belum perlu disiram dalam 24 jam' : 'Tanam untuk mulai mengamati'
   return w.to === 0 ? 'Siram sekarang' : `Siram dalam ${hours(w.from)}–${hours(w.to)}`
@@ -31,7 +32,7 @@ function MiniPot({ plant }: { plant: OverviewPlant }) {
 }
 
 /** Ringkasan: the state of every plant in one sentence, the ones that need you as large cards, the rest as tiles,
- *  what is due within a day, and the products. Nothing here asks the server yet (my_overview arrives with Codex's backend). */
+ *  what is due within a day, and the products. Server and simulator supply their own data. */
 export default function Overview({ plants, products, onOpen, onAdd }: {
   plants: OverviewPlant[]; products: number | null
   onOpen: (plant: OverviewPlant, art: HTMLElement | null) => void; onAdd?: () => void
@@ -71,11 +72,12 @@ export default function Overview({ plants, products, onOpen, onAdd }: {
         <div className={`ov-featured ${featured.length === 1 ? 'single' : ''}`}>
           {featured.map(p => <a key={p.id} href="#tanaman" className="ov-card" data-tone={p.status.tone} data-species={p.species} onClick={open(p)}
             aria-label={`${p.name}, ${p.status.word}${p.moisture !== null ? `, kelembapan ${m0(p.moisture)}` : ''}`}>
-            <span className="ov-art"><PlantScene species={sceneOf(p.species)} day={p.day} planted={p.planted} moisture={p.moisture ?? 0} contact={p.moisture !== null} hour={p.hour} label={`Penampang pot ${p.name}`} /></span>
+            <span className="ov-art"><PlantScene species={sceneOf(p.species)} day={p.day} planted={p.planted} moisture={p.moisture ?? 0} contact={p.moisture !== null} hour={p.hour} label={`${p.live ? 'Ilustrasi pot' : 'Penampang pot'} ${p.name}`} /></span>
             <span className="ov-info">
               <span className="ov-name">{p.name}</span>
               {(p.place || p.tag) && <span className="ov-place">{[p.place, p.tag].filter(Boolean).join(' · ')}</span>}
               <Status plant={p} />
+              {p.live && <span className="ov-note">{bandSourceLabel(p.bandSource ?? null)}</span>}
               <span className="ov-meta">{p.moisture !== null && <>Kelembapan <b>{m0(p.moisture)}</b><span aria-hidden="true"> · </span></>}{nextWater(p)}</span>
             </span>
           </a>)}
@@ -108,7 +110,7 @@ export default function Overview({ plants, products, onOpen, onAdd }: {
             </span>
           </div>)}
           <div className="ov-due-scale" aria-hidden="true"><span /><span><em>Sekarang</em><em>+6</em><em>+12</em><em>+18</em><em>+24 jam</em></span></div>
-        </div> : <p className="ov-empty">Tidak ada yang perlu disiram dalam 24 jam.</p>}
+        </div> : <p className="ov-empty">Belum ada perkiraan siram dalam 24 jam.</p>}
       </section>
       {products !== null && <section className="panel ov-products" aria-labelledby="ov-products-title">
         <h2 id="ov-products-title">Produk</h2>

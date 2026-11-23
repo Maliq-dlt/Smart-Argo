@@ -67,6 +67,8 @@ import SimulationControls from './components/SimulationControls'
 import SimulationOverview from './components/SimulationOverview'
 import NavCapsule, { type NavTab } from './components/shell/NavCapsule'
 import Overview from './components/overview/Overview'
+import LiveCare from './components/dashboard/LiveCare'
+import AlertPreferences from './components/AlertPreferences'
 import { statusOf, type OverviewPlant } from './lib/overview'
 import { clockHour, scenePeriod, createJourney, simulationOf, advanceSimulation, plantSeed, waterSimulation, canUndoWater, undoWaterSimulation, recordFertilizer, feedingDue, shouldPause, simulationStopped, simulationStopReason, sampleIntervalMs, logEvent, type SimulationState } from './lib/simulation'
 
@@ -83,10 +85,11 @@ const pages = [
   // Opened from the account menu, not the rail.
   { id: 'profile', hash: '#profil', label: 'Profil', title: 'Profil', lead: 'Akun, keamanan, dan produk Anda.', icon: UserCircle, hidden: true },
   // Linked from Profil, the Android app and the store listing (Google Play asks for deletion on the web too).
+  { id: 'alerts', hash: '#pengaturan-peringatan', label: 'Peringatan', title: 'Pengaturan peringatan', lead: 'Email peringatan perangkat dan tanaman Anda.', icon: Warning, hidden: true },
   { id: 'delete', hash: '#hapus-akun', label: 'Hapus akun', title: 'Hapus akun', lead: 'Akun nonaktif sekarang, data dihapus 14 hari kemudian.', icon: Trash, hidden: true },
 ] as const
 // The capsule's tab for each page: a plant's own tools (compare, terminal, file check) sit under Tanaman, the account's under Akun.
-const TAB_OF: Partial<Record<string, string>> = { comparison: 'plant', terminal: 'plant', devices: 'plant', ecosystem: 'profile', delete: 'profile' }
+const TAB_OF: Partial<Record<string, string>> = { comparison: 'plant', terminal: 'plant', devices: 'plant', ecosystem: 'profile', delete: 'profile', alerts: 'profile' }
 const GUEST_KEY = 'smart-agro.guest'
 // The live app has no Ruang tanam: its address and the default page lead to the dashboard.
 const pageFromHash = () => { const found = pages.find(p => p.hash === location.hash)?.id; return features.playground ? found ?? 'simulation' : found === undefined || found === 'simulation' ? 'statistics' : found }
@@ -120,6 +123,7 @@ function Simulator() {
   const [playing, setPlaying] = useState(false), [running, setRunning] = useState(false)
   const [pauseNote, setPauseNote] = useState(boot.restored ? 'Sesi dipulihkan dalam keadaan dijeda. Tekan Lanjutkan waktu.' : '')
   const [page, setPage] = useState(pageFromHash)
+  const [livePlant, setLivePlant] = useState<string | null>(null)
   const [hash, setHash] = useState(() => location.hash)
   const account = useAccount()
   const [guest, setGuest] = useState(() => { try { return localStorage.getItem(GUEST_KEY) === '1' } catch { return false } })
@@ -127,6 +131,9 @@ function Simulator() {
   const [returning] = useState(() => oauthReturn(location.search) !== null || location.hash.includes('error='))
   // Signed in while the address still says #masuk (back from the gate): open the dashboard instead.
   useEffect(() => {
+    if (hash === '#pengaturan-peringatan') {
+      try { if (account.signedIn) sessionStorage.removeItem(AFTER_SIGN_IN); else sessionStorage.setItem(AFTER_SIGN_IN, hash) } catch { /* storage unavailable */ }
+    }
     if (!account.signedIn || hash !== '#masuk') return
     // A page that sent the visitor to sign in (#hapus-akun) gets them back; otherwise the dashboard.
     let next = '#statistik'
@@ -148,6 +155,7 @@ function Simulator() {
   // An account waiting to be deleted may only cancel; every other call would be refused (and read as a lost session).
   // `loaded`: a first sign-in has no account row until ensure_my_account answers, and my_garden would sign it out.
   const server = account.signedIn && account.loaded && account.identity && !account.deletion ? account.client : null
+  const realCare = account.signedIn || !features.playground
   const gardenRpc: GardenRpc | null = server && ((name, body) => server.rpc(name, body))
   useEffect(() => {
     if (!server) return
@@ -600,7 +608,7 @@ function Simulator() {
   })} />
   if (account.signedIn && account.deletion) return <DeletionPending />
   // Signed in for the first time (Google or email): set up the first pot, which opens its journey.
-  if (account.signedIn && account.identity && !account.identity.pot) return <PotSetup onSaved={pot => {
+  if (account.signedIn && account.identity && !account.identity.pot && page !== 'alerts') return <PotSetup onSaved={pot => {
     const fresh = { ...createJourney(loadScenario(curated(pot.crop).scenario).data), name: pot.name }
     openNew(fresh)
     // The first pot of an account is also its first slot, on the server; if that cannot be made the pot still opens.
@@ -646,10 +654,10 @@ function Simulator() {
     <main key={page} id="main" tabIndex={-1} className={`app-main page-${page}`}>
       {/* Ringkasan's heading is its sentence; a plant page's is its stage. The others open with their name. */}
       {page === 'plant' || page === 'simulation' ? <h1 className="sr-only">{currentPage.title}</h1> : page !== 'statistics' && <h1 className="page-heading">{currentPage.title}</h1>}
-      {(page === 'plant' || page === 'simulation') && plantToolbar}
+      {((page === 'plant' && !realCare) || page === 'simulation') && plantToolbar}
       {page === 'plant' && <div className="plant-head">
         <a className="button plant-back" href="#statistik"><CaretLeft aria-hidden="true" />Ringkasan</a>
-        {overviewPlants.length > 1 && <PlantRail plants={overviewPlants} activeId={overviewPlants.find(p => p.sessionId === book.activeId)?.id ?? null} onSelect={selectPlant} />}
+        {!realCare && overviewPlants.length > 1 && <PlantRail plants={overviewPlants} activeId={overviewPlants.find(p => p.sessionId === book.activeId)?.id ?? null} onSelect={selectPlant} />}
       </div>}
       {lead && <p className="page-sub">{lead}</p>}
       <input ref={importFile} type="file" accept=".json,application/json" className="sr-only" aria-label="Impor kasus JSON" onChange={e => void importSession(e.target.files?.[0])} />
@@ -692,8 +700,9 @@ function Simulator() {
         <a href="#tanaman" className="button statistics-link"><ChartLine aria-hidden="true" />Lihat rincian tanaman<ArrowUpRight aria-hidden="true" /></a>
       </div>}
 
-      {page === 'statistics' && <Overview plants={overviewPlants} products={account.signedIn ? account.products.length : null} onOpen={openPlant} onAdd={() => setGardenDialog('add')} />}
-      {page === 'plant' && <div className="statistics-page">
+      {!realCare && page === 'statistics' && <Overview plants={overviewPlants} products={account.signedIn ? account.products.length : null} onOpen={openPlant} onAdd={() => setGardenDialog('add')} />}
+      {realCare && (page === 'statistics' || page === 'plant') && (server ? <LiveCare key={gardenScope} client={server} detail={page === 'plant'} selected={livePlant} changed={garden.slots.map(s => `${s.id}:${s.cycles.length}`).join()} onSelect={setLivePlant} onAdd={() => setGardenDialog('add')} /> : <p aria-live="polite">Menunggu data akun. Data simulasi tidak digunakan untuk tanaman Anda.</p>)}
+      {!realCare && page === 'plant' && <div className="statistics-page">
         <div className="dash">
           <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, species)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
             species={species} day={developmentDay} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
@@ -732,6 +741,7 @@ function Simulator() {
         {page === 'profile' && <ProfilePage />}
       </Suspense>}
       {page === 'delete' && <DeleteAccount />}
+      {page === 'alerts' && <AlertPreferences key={gardenScope} />}
       {page === 'comparison' && <SessionComparison sessions={book.sessions} activeId={book.activeId} onSnapshot={snapshot} />}
       {page === 'terminal' && <section className="terminal-page" aria-label="Terminal sesi">
         <div className="terminal-page-heading"><div className="decision-code"><Pulse aria-hidden="true" /><span>Keputusan</span><code>{result.decision}</code></div>
@@ -740,7 +750,7 @@ function Simulator() {
         <TerminalSimulator clock={session.clock} data={data} decision={result} logs={logs} />
         <details className="panel disclosure evidence-detail"><summary><span>Bukti pendukung<small>Respons siram, status pH, dan fase</small></span><CaretRight aria-hidden="true" /></summary><div className="disclosure-body"><p>{result.evidence.watering_response}</p><p>{result.evidence.ph_status}</p><p>Fase ilustrasi: {phase}. Fase profil: {data.profile.phase}. HST tidak mengubah acuan lokal.</p></div></details>
       </section>}
-      <footer className="page-footer"><span><i aria-hidden="true" />Simulasi lokal · data sintetis · tanpa perangkat terhubung</span><span>Makalah satu pot · September 2026</span></footer>
+      <footer className="page-footer"><span>{realCare && !['simulation', 'comparison', 'terminal', 'devices'].includes(page) ? 'Data akun dan perangkat' : 'Simulasi lokal - data sintetis - tanpa perangkat terhubung'}</span><a href="/privasi.html">Kebijakan privasi</a></footer>
     </main>
     </div></div>
     <div className={`toast ${notice ? 'visible' : ''}`} role="status">{notice && <><Check weight="bold" aria-hidden="true" />{notice}</>}</div>
