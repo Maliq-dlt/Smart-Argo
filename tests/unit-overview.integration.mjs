@@ -55,6 +55,23 @@ await test('APP-03: unit overview and alerts',async t=>{
   assert.deepEqual([u.battery,u.alerts],[null,[]],'a newer packet without a reading clears the voltage')
   assert.equal((await overview(alice)).Segar.battery,null,'packets without the object report nothing')
  })
+ await t.test('soil pH, read once a day, shows the last measured value with its own time',async()=>{
+  const daily=await create(garden,'pH harian',alice)
+  const soil=(ph,moisture={status:'ok',value:48})=>({moisture,soil_temperature:{status:'ok',value:25},soil_ph:ph})
+  await ingest(garden,daily,soil({status:'ok',value:6.4}))
+  // SINTETIS. The morning reading is 20 hours old; the device has sent pH as not_measured since.
+  fixture(`UPDATE telemetry_packet SET received_at=received_at-interval '20 hours', measured_at=measured_at-interval '20 hours' WHERE unit_id=${q(daily)}; UPDATE measurement SET received_at=received_at-interval '20 hours', measured_at=measured_at-interval '20 hours' WHERE unit_id=${q(daily)}`)
+  await ingest(garden,daily,soil({status:'not_measured',value:null}))
+  let s=Object.fromEntries((await overview(alice))['pH harian'].sensors.map(x=>[x.sensor_id,x]))
+  assert.equal(s.soil_ph.quality_status,'ok')
+  assert.equal(Number(s.soil_ph.value_nullable),6.4)
+  assert.ok(Date.now()-Date.parse(s.soil_ph.measured_at)>19*3600000,'the pH keeps its own measurement time')
+  assert.ok(Date.now()-Date.parse(s.moisture.measured_at)<600000,'moisture is the newest packet')
+  // Only pH falls back: a moisture probe that stops measuring is never covered by an older value.
+  await ingest(garden,daily,soil({status:'not_measured',value:null},{status:'not_measured',value:null}),{measured_at:new Date(Date.now()+1000).toISOString()})
+  s=Object.fromEntries((await overview(alice))['pH harian'].sensors.map(x=>[x.sensor_id,x]))
+  assert.equal(s.moisture.quality_status,'not_measured')
+ })
  await t.test('energy, battery and device alerts',async()=>{
   const meter=randomUUID(),now=Date.now(),start=new Date(Math.floor(now/900000)*900000-900000*4).toISOString(),end=new Date(Math.floor(now/900000)*900000-900000*3).toISOString()
   fixture(`INSERT INTO energy_meter(id,device_id,public_key,calibration_ref,eligible_load_ref,valid_from,valid_until,max_power_w,created_by) VALUES(${q(meter)},${q(garden.device)},${q(garden.publicKey)},'fixture','fixture',clock_timestamp()-interval '2 days',clock_timestamp()+interval '1 day',100,${q(alice.id)});

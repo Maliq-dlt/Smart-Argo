@@ -42,9 +42,13 @@ export function parseExplanationContext(value: unknown): ExplanationContext {
 /** Uses recorded device values only. Missing values never become synthetic samples. */
 export function explainDeviceEvidence(context: ExplanationContext, question = ''): DeviceExplanation {
   const now=Date.parse(context.evaluated_at), last=context.packets.at(-1)
-  const result = (decision: DeviceExplanation['decision'], action: string, reason: string, mascot_state: DeviceExplanation['mascot_state']='bingung_menunggu'): DeviceExplanation => ({
+  // Firmware reads pH once a day (firmware/smart_agro kPhIntervalSeconds), so most packets carry it as not_measured.
+  const ph = last?.sensors.soil_ph.status
+  const phNote = ph==='not_measured' ? 'pH diukur sekali sehari dan tidak ada di paket terakhir; nilai lama tidak dipakai untuk keputusan ini. '
+    : ph && ph!=='ok' ? 'pH terakhir tidak tersedia sebagai angka valid; tidak diganti nol atau nilai lama. ' : ''
+  const result =(decision: DeviceExplanation['decision'], action: string, reason: string, mascot_state: DeviceExplanation['mascot_state']='bingung_menunggu'): DeviceExplanation => ({
     decision,action,reason,mascot_state,source_mode:'rule_fallback',rule_version:'agronomy-v1.telemetry-v1',ai_status:'not_configured',
-    explanation:`${action}. ${reason} ${last?.sensors.soil_ph.status!=='ok' ? 'pH terakhir tidak tersedia sebagai angka valid; tidak diganti nol atau nilai lama. ' : ''}${question.trim() ? 'Pertanyaan dicatat sebagai konteks; jawaban ini dibatasi bukti sensor dan aturan. ' : ''}Penjelasan aturan. Bukan diagnosis kesehatan tanaman atau perintah aktuator.`,
+    explanation:`${action}. ${reason} ${phNote}${question.trim() ? 'Pertanyaan dicatat sebagai konteks; jawaban ini dibatasi bukti sensor dan aturan. ' : ''}Penjelasan aturan. Bukan diagnosis kesehatan tanaman atau perintah aktuator.`,
   })
   if (!last) return result('DATA_BELUM_ADA','Tunggu bacaan perangkat','Belum ada paket perangkat pada periode kepemilikan ini dalam 24 jam terakhir.')
   if (context.device_status!=='active' || context.registry_status!=='active') return result('PULIHKAN_DATA','Periksa status perangkat','Perangkat atau registri tidak aktif; rekomendasi ditahan.')

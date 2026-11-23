@@ -39,6 +39,9 @@ constexpr time_t kBoundarySlackSeconds = 20;
 constexpr size_t kEnergyCapacity = 24 * 60 * 60 / kQuarterHour;
 constexpr uint8_t kInaConfig = 0x00, kInaShuntCal = 0x02, kInaEnergy = 0x09, kInaMaker = 0x3E, kInaPart = 0x3F;
 constexpr uint32_t kIntervalSeconds = 30 * 60;
+// Soil pH in a pot drifts over weeks, so one reading a day is enough; the other samples report not_measured.
+// ponytail: the DMS still draws power between readings. Saving battery needs a GPIO load switch on its 5 V supply.
+constexpr time_t kPhIntervalSeconds = 24 * 60 * 60;
 constexpr uint32_t kWifiTimeoutMs = 15000;
 constexpr time_t kEarliestUtc = 1767225600;  // 2026-01-01 UTC
 constexpr int64_t kLatestUtc = 4102444800LL;  // Before the DS3231 century bit changes
@@ -61,6 +64,7 @@ RTC_DATA_ATTR time_t energyMark = 0;  // quarter-hour of the last counter readin
 RTC_DATA_ATTR uint64_t solarMarkRaw = 0;
 RTC_DATA_ATTR uint64_t loadMarkRaw = 0;
 RTC_DATA_ATTR time_t lastTelemetry = 0;
+RTC_DATA_ATTR time_t lastPhAt = 0;  // last sample with an ok pH; a power cut measures again at the next sample
 
 bool trustworthyEpoch(time_t value) {
   return value >= kEarliestUtc && static_cast<int64_t>(value) < kLatestUtc;
@@ -654,11 +658,13 @@ bool commitEnvelope(const String &packet, const char *path) {
 
 // Reads the probes, signs one envelope and commits it to the queue as entry `id`.
 bool storeSample(uint32_t id, String &packet, char (&path)[13]) {
+  const time_t epoch = time(nullptr);
   const SensorReading moisture = readMoisture();
   const SensorReading temperature = readTemperature();
-  const SensorReading ph = readPh(moisture);
+  // Due when no ok pH yet, a day has passed, or the clock moved backwards past the last one.
+  const bool phDue = lastPhAt == 0 || epoch < lastPhAt || epoch - lastPhAt >= kPhIntervalSeconds;
+  const SensorReading ph = phDue ? readPh(moisture) : SensorReading{"not_measured", 0, nullptr};
   const SensorReading battery = readBattery();
-  const time_t epoch = time(nullptr);
   tm utc{};
   char measuredAt[25];
   if (!trustworthyEpoch(epoch) || !gmtime_r(&epoch, &utc) ||
@@ -679,6 +685,7 @@ bool storeSample(uint32_t id, String &packet, char (&path)[13]) {
     Serial.println("Telemetry could not be committed to flash.");
     return false;
   }
+  if (phDue && strcmp(ph.status, "ok") == 0) lastPhAt = epoch;
   return true;
 }
 
