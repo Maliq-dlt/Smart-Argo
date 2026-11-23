@@ -1,18 +1,18 @@
 # Node tanah Smart Agro
 
-Firmware untuk satu ESP32-WROOM DevKit 38 pin dan satu titik ukur. Acuan belanja adalah RAB_IoT_Smart_Agro_Lengkap.xlsx di folder proyek. Gunakan USB untuk uji meja terlebih dahulu. Semua pembacaan merujuk ke unit yang sudah terdaftar pada backend.
+Firmware untuk satu ESP32-WROOM DevKit 38 pin dan satu titik ukur. Acuan belanja adalah [RAB lengkap](../docs/rab/RAB_IoT_Smart_Agro_Lengkap.xlsx) dan [versi ringkas](../docs/rab/RAB_IoT_Smart_Agro.xlsx). Gunakan USB untuk uji meja terlebih dahulu. Semua pembacaan merujuk ke unit yang sudah terdaftar pada backend.
 
 ## RAB dan keputusan pembelian
 
 | Bagian | RAB | Keputusan |
 | --- | ---: | --- |
 | Komponen inti dan rakit | Rp694.650 | Termasuk harga estimasi Rp300.000 untuk sensor pH + DMS. Konfirmasi varian, pinout, tipe output dan prosedur pengukuran ke penjual. |
-| Opsional | Rp57.000 | Box Rp35.000 untuk pemasangan outdoor. INA219 Rp22.000 hanya jika dibutuhkan untuk memeriksa satu jalur daya. |
-| Total | Rp751.650 | Harga estimasi Rp411.000. Ongkir di luar total. Jika pH + DMS menjadi Rp600.000, total menjadi Rp1.051.650. |
+| Opsional | Rp485.000 | Box Rp35.000 dan dua modul INA228 EasyWare masing-masing Rp225.000 untuk jalur surya serta beban. |
+| Total | Rp1.179.650 | Harga modul energi diperiksa 23 November 2026. Ongkir di luar total. Jika pH + DMS menjadi Rp600.000, total menjadi Rp1.479.650. |
 
 Panel 9 V 2 W dan baterai nominal 14,8 Wh belum menetapkan durasi operasi. Sebagai ilustrasi, 2 W x 4 jam matahari efektif x 70% menghasilkan 5,6 Wh/hari. Beban konstan 50 mA pada 5 V memakai 6 Wh/hari sebelum rugi boost. Ukur arus dari seluruh rangkaian pada mode tidur dan saat koneksi Wi-Fi/TLS. Modul DMS, regulator, LED dan CP2102 bisa tetap menarik arus saat ESP32 tidur. Periksa suplai 5 V di bawah beban, pengisian CN3791 khusus varian 9 V dan terminal proteksi BMS 1S menurut diagram modul. Gunakan sel sejenis yang sehat dan minta perakit kompeten memeriksa kecocokan sebelum dipasang paralel. Cek sirkuit pengisian pada varian DS3231 yang dikirim. Suplai 3,3 V tidak mengisi LIR2032 sampai 4,2 V, dan resistor/dioda modul generik tidak membuktikan pengisian sesuai spesifikasi sel. Jaga perangkat dan sambungan kabel terlindung dari air.
 
-Satu INA219 mengukur satu jalur. [Bukti energi](../docs/energy-rewards.md) membutuhkan data panen dan beban yang terpisah pada jendela 15 menit. Firmware memakai interval 30 menit untuk sensor tanah. Firmware mengirim data pemantauan dan tidak mengendalikan pompa.
+[Bukti energi](../docs/energy-rewards.md) membutuhkan data panen dan beban yang terpisah pada jendela 15 menit. Firmware memakai interval 30 menit untuk sensor tanah. Firmware mengirim data pemantauan dan tidak mengendalikan pompa.
 
 ## Rakit dan kalibrasi di meja
 
@@ -69,7 +69,7 @@ Fitur seperti pH tetap muncul sebagai belum diukur saat datanya belum tersedia. 
 
 ## Bukti energi dengan INA228
 
-RAB perlu **dua** INA228 menggantikan satu INA219. Server energi ([energy-rewards](../docs/energy-rewards.md)) menerima jendela UTC tetap 15 menit berisi penghitung Wh kumulatif untuk panen surya dan beban. Satu INA228 tidak bisa memisahkan keduanya karena register ENERGY menjumlahkan daya ke dua arah, dan INA219 tidak punya akumulator. Dengan VS di rel 3,3 V DevKit, INA228 terus mengakumulasi selama ESP32 deep sleep (sekitar 0,6 mA per papan).
+RAB mencantumkan **dua** INA228. Server energi ([energy-rewards](../docs/energy-rewards.md)) menerima jendela UTC tetap 15 menit berisi penghitung Wh kumulatif untuk panen surya dan beban. Satu INA228 tidak bisa memisahkan keduanya karena register ENERGY menjumlahkan daya ke dua arah, dan INA219 tidak punya akumulator. Dengan VS di rel 3,3 V DevKit, INA228 terus mengakumulasi selama ESP32 deep sleep (sekitar 0,6 mA per papan).
 
 Isi `solarMeterAddress` 0x40, `loadMeterAddress` 0x41, `meterShuntOhms` sesuai shunt di papan (banyak papan INA228 memakai 15 mOhm), dan `meterMaxAmps` di atas arus puncak jalur beban saat Wi-Fi menyala (2 A cukup untuk 15 mOhm; amps x ohms harus di bawah 0,16384 V). `provision.mjs` membuat kunci meter terpisah dan mencetak public key-nya. Operator mendaftarkan kunci itu beserta referensi kalibrasi dan daya maksimum, lalu `meterId` dari server diisi dan firmware di-build ulang.
 

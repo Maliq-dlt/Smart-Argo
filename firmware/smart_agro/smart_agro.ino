@@ -198,6 +198,7 @@ struct CalibrationPair { int32_t first, second; int64_t epoch; };
 CalibrationPair moistureCal{device::moistureDryMv, device::moistureWetMv, 0};
 CalibrationPair phCal{device::phLowMv, device::phHighMv, 0};
 bool savedCalibration = false;
+bool moistureCalibrated = false;
 
 bool validPair(const CalibrationPair &p, bool moisture) {
   return p.first >= 100 && p.first < 3000 && p.second >= 100 && p.second < 3000 &&
@@ -212,6 +213,7 @@ void loadCalibration() {
     if (prefs.getBytes(moisture ? "moisture" : "ph", &pair, sizeof(pair)) == sizeof(pair) && validPair(pair, moisture)) {
       (moisture ? moistureCal : phCal) = pair;
       savedCalibration = true;
+      if (moisture) moistureCalibrated = true;
     }
   }
   prefs.end();
@@ -340,7 +342,7 @@ bool setupRequested() {
 // with the setup password on the device label, serves one form that stores the home Wi-Fi in NVS. It closes after
 // 10 minutes; a saved network restarts the device so it reports at once.
 // ponytail: credentials sit in plain NVS like the compiled ones; enable flash and NVS encryption for production units.
-void runSetupPortal() {
+void runSetupPortal(bool firstSetup) {
   const size_t keyLength = strlen(device::setupPassword);
   if (keyLength < 8 || keyLength > 63) {
     Serial.println("Wi-Fi setup needs setupPassword (8-63 characters) in DeviceConfig.h.");
@@ -364,6 +366,7 @@ void runSetupPortal() {
   dns.start(53, "*", WiFi.softAPIP());  // phones then open the form as a sign-in page
   WebServer server(80);
   bool saved = false;
+  uint32_t lastInteraction = millis();
   const String head =
       "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
       "<title>Smart Agro</title><style>body{font:17px system-ui,sans-serif;max-width:28rem;margin:2rem auto;"
@@ -376,6 +379,7 @@ void runSetupPortal() {
   server.on("/api/calibration", HTTP_GET, [&]() {
     JsonDocument body;
     body["ok"] = true;
+    body["moisture_saved"] = moistureCalibrated;
     body["moisture_mv"] = medianMv(kMoisturePin);
     body["ph_mv"] = medianMv(kPhPin);
     const String moistureAt = calibrationStamp(moistureCal.epoch), phAt = calibrationStamp(phCal.epoch);
@@ -398,6 +402,7 @@ void runSetupPortal() {
       server.send(400, "application/json", "{\"ok\":false,\"code\":\"invalid_point\"}");
       return;
     }
+    lastInteraction = millis();  // A deliberate calibration step restarts the setup timeout.
     CalibrationPair &pending = moisture ? pendingMoisture : pendingPh;
     const int mv = medianMv(moisture ? kMoisturePin : kPhPin);
     if (mv < 100 || mv >= 3000) {
@@ -429,9 +434,11 @@ void runSetupPortal() {
     (moisture ? moistureCal : phCal) = pending;
     pending = {-1, -1, 0};
     savedCalibration = true;
+    if (moisture) moistureCalibrated = true;
     server.send(200, "application/json", "{\"ok\":true,\"saved\":true}");
   });
   server.on("/calibrate", HTTP_GET, [&]() {
+    lastInteraction = millis();
     if (server.hostHeader() != "192.168.4.1") {
       server.sendHeader("Location", "http://192.168.4.1/calibrate");
       server.send(302);
@@ -467,13 +474,20 @@ for(const b of buttons)b.onclick=async()=>{
   });
   server.on("/", HTTP_GET, [&]() {
     server.send(200, "text/html; charset=utf-8",
-                head + "<h1>Wi-Fi perangkat</h1><form method=post action=/save>"
+                head + "<h1>Wi-Fi perangkat</h1>" + (firstSetup && !moistureCalibrated ?
+                  "<p><a href=/calibrate>Kalibrasi kelembapan</a> sebelum menyimpan Wi-Fi pertama kali.</p>" : "") +
+                  "<form method=post action=/save>"
                        "<label>Nama Wi-Fi<input name=ssid list=found maxlength=32 required autocomplete=off></label>"
                        "<datalist id=found>" + options + "</datalist>"
                        "<label>Kata sandi Wi-Fi<input name=pass type=password maxlength=63></label>"
                        "<button>Simpan dan sambungkan</button></form><p>Hanya Wi-Fi 2,4 GHz.</p><a href=/calibrate>Kalibrasi sensor</a>");
   });
   server.on("/save", HTTP_POST, [&]() {
+    if (firstSetup && !moistureCalibrated) {
+      server.send(409, "text/html; charset=utf-8", head +
+                  "<p>Catat titik kering dan basah sebelum menyimpan Wi-Fi.</p><a href=/calibrate>Kalibrasi kelembapan</a>");
+      return;
+    }
     const String ssid = server.arg("ssid");
     const String pass = server.arg("pass");
     if (ssid.isEmpty() || ssid.length() > 32 || (!pass.isEmpty() && pass.length() < 8) || pass.length() > 63) {
@@ -494,7 +508,7 @@ for(const b of buttons)b.onclick=async()=>{
     server.send(302, "text/plain", "");
   });
   server.begin();
-  for (const uint32_t opened = millis(); !saved && millis() - opened < kSetupPortalMs; delay(2)) {
+  for (; !saved && millis() - lastInteraction < kSetupPortalMs; delay(2)) {
     dns.processNextRequest();
     server.handleClient();
   }
@@ -962,7 +976,7 @@ void setup() {
   bool clockTrusted = false;
   WifiCredentials wifi = storedWifi();
   if (esp_reset_reason() != ESP_RST_DEEPSLEEP && (wifi.ssid.isEmpty() || setupRequested())) {
-    runSetupPortal();  // restarts after a save; otherwise the device carries on with what it has
+    runSetupPortal(wifi.ssid.isEmpty());  // restarts after a save; otherwise the device carries on with what it has
     wifi = storedWifi();
   }
 
