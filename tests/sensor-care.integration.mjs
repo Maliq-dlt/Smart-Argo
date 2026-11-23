@@ -110,6 +110,9 @@ test('owner sensor care, calibration and scheduled mail',async t=>{
       Number(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',hourCycle:'h23',timeZone:zone}).format(new Date(ago(74))))===13)
     const {outlook:w}=await outlook(a.token,{p_timezone:timezone})
     assert.equal(w.state,'window');assert.deepEqual(w.band,[40,85]);assert.equal(w.rate_per_hour,1)
+    await sample(73,59.7)
+    const uneven=await outlook(a.token,{p_timezone:timezone})
+    assert.equal(uneven.outlook.rate_per_hour,1.11,'a one-minute interval contributes one minute to the combined rate')
     assert.ok(Date.parse(w.from)<Date.parse(w.to));assert.ok(Date.parse(w.from)>Date.now())
     assert.equal((await outlook(a.token,{p_timezone:'Bad/Zone'})).code,'invalid_request')
 
@@ -331,7 +334,7 @@ test('garden overview and sensor trends from seven days of half-hourly readings'
         CASE WHEN (i=7 AND n=335) OR (i=15 AND n=0) THEN 'error' ELSE 'ok' END AS status
       FROM pots p CROSS JOIN generate_series(0,335) n
       -- Pot 5 has one recovered 3 h gap; pot 10 has three in the week (weak Wi-Fi where it stands).
-      WHERE NOT ((i=4 AND n>330) OR (i=5 AND n BETWEEN 64 AND 68) OR (i=6 AND n BETWEEN 326 AND 330)
+      WHERE i<>29 AND NOT ((i=4 AND n>330) OR (i=5 AND n BETWEEN 64 AND 68) OR (i=6 AND n BETWEEN 326 AND 330)
         OR (i=10 AND (n BETWEEN 100 AND 104 OR n BETWEEN 200 AND 204 OR n BETWEEN 300 AND 304))
         OR (i IN (8,14) AND n<CASE i WHEN 8 THEN 306 ELSE 325 END) OR (i=15 AND n BETWEEN 1 AND 306)
         OR (i=12 AND n<239))
@@ -351,9 +354,9 @@ test('garden overview and sensor trends from seven days of half-hourly readings'
   const water = (i, args={}) => rpc('my_watering_outlook',token,{p_unit_id:rows[i-1].unit,...args})
   const health = i => rpc('my_unit_health',token,{p_unit_id:rows[i-1].unit})
   // SINTETIS. One synced moisture reading for a fixture pot.
-  const addReading = (row, at, value) => sql(`WITH added AS (INSERT INTO telemetry_packet(device_id,unit_id,boot_id,sequence,clock_status,measured_at,received_at,payload,payload_sha256,signature)
+  const addReading = (row, at, value, calibration) => sql(`WITH added AS (INSERT INTO telemetry_packet(device_id,unit_id,boot_id,sequence,clock_status,measured_at,received_at,payload,payload_sha256,signature)
       VALUES(${q(row.device)},${q(row.unit)},gen_random_uuid(),1,'synced',${q(at)},${q(at)},
-        ${q(JSON.stringify({sensors:{moisture:{status:'ok',value}}}))},'SINTETIS','SINTETIS') RETURNING id)
+        ${q(JSON.stringify({calibration,sensors:{moisture:{status:'ok',value}}}))},'SINTETIS','SINTETIS') RETURNING id)
     INSERT INTO measurement(packet_id,device_id,unit_id,device_boot_seq_sensor,source,sensor_id,quality_status,value_nullable,measured_at,received_at)
     SELECT id,${q(row.device)},${q(row.unit)},id||'-moisture','device','moisture','ok',${value},${q(at)},${q(at)} FROM added`)
 
@@ -375,6 +378,7 @@ test('garden overview and sensor trends from seven days of half-hourly readings'
     assert.equal(plant(1).state,'ok')
     assert.deepEqual(plant(1).outlook,(await water(1)).outlook)
     assert.equal(plant(2).state,'below')
+    assert.equal(sql(`SELECT bad_at IS NOT NULL FROM care_alert_signals(${q(rows[1].unit)},${q(rows[1].device)},now()-interval '8 days',40) WHERE kind='soil_dry'`),'t','email and overview agree at the lower limit')
     assert.equal(plant(3).state,'above')
     assert.equal(plant(11).state,'learning')
     assert.equal(plant(11).band,null)
@@ -387,8 +391,14 @@ test('garden overview and sensor trends from seven days of half-hourly readings'
     assert.equal(plant(1).band_source,'profile')
     assert.equal(plant(1).outlook.band_source,'profile')
     assert.equal(plant(4).moisture,null)
+    assert.equal(plant(4).state,'no_reading')
+    assert.equal(plant(7).state,'no_reading','sensor error')
     const kinds=i=>snapshot.devices.issues.filter(x=>x.unit_id===rows[i-1].unit).map(x=>x.kind).sort()
     assert.deepEqual(kinds(4),['silent'])
+    assert.deepEqual(kinds(29),[],'before the first upload the probe has no lost connection to report')
+    assert.equal(plant(29).state,'no_reading')
+    const unused=rows[28]
+    assert.equal(sql(`SELECT bad_at IS NULL FROM care_alert_signals(${q(unused.unit)},${q(unused.device)},now()-interval '7 days',40) WHERE kind='device_silent'`),'t')
     // One recovered gap is device history, not a Ringkasan issue. Three in seven days are.
     assert.deepEqual(kinds(5),['battery_low'])
     assert.deepEqual(kinds(10),['gap'])
@@ -397,6 +407,15 @@ test('garden overview and sensor trends from seven days of half-hourly readings'
     assert.ok(Date.parse(flaky.detail.last_resumed_at)>Date.parse(flaky.since))
     assert.ok(snapshot.devices.issues.every(x=>Date.parse(x.since)>0 && x.detail))
     assert.deepEqual(await rpc('my_overview',outsider.token),{ok:true,plants:[],devices:{total:0,issues:[]}})
+  })
+
+  await t.test('a changed calibration cannot become a watering suggestion',async()=>{
+    const pot=rows[19], at=ago(1), stamp=ago(1.5)
+    addReading(pot,at,96,{moisture_at:stamp,ph_at:null})
+    const result=await rpc('my_unlogged_rises',token,{p_unit_id:pot.unit})
+    assert.equal(result.ok,true)
+    assert.deepEqual(result.rises,[])
+    assert.equal((await water(20)).outlook.state,'waiting')
   })
 
   await t.test('thirty connected plants fit the 300 ms overview budget over HTTP', async () => {

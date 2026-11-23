@@ -10,8 +10,7 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 const kotlinCatalog = read('android/app/src/main/java/id/smartagro/app/SpeciesCatalog.kt')
 const kotlinObservation = read('android/app/src/main/java/id/smartagro/app/Observation.kt')
 const speciesSql = read('supabase/migrations/20261115100000_garden_sites_cycles.sql')
-const overviewSql = read('supabase/migrations/20261123030000_garden_overview.sql')
-const careSql = read('supabase/migrations/20261123000000_unit_health.sql')
+const overviewSql = read('supabase/migrations/20261123050000_care_reading_continuity.sql')
 
 interface Row { speciesId: number; tag: string; name: string; tier: string }
 const ts: Row[] = SPECIES.map(({ speciesId, tag, name, tier }) => ({ speciesId, tag, name, tier }))
@@ -43,7 +42,7 @@ test('learning thresholds agree in TypeScript, Kotlin and SQL', () => {
   assert.ok(kotlin, 'ObservationThresholds not found')
   assert.deepEqual(kotlin.slice(1).map(Number), [THRESHOLDS.days, THRESHOLDS.inspections, THRESHOLDS.waterings], 'Observation.kt')
 
-  const band = careSql.match(/CREATE FUNCTION public\.care_band\([\s\S]*?\$\$;/)?.[0]
+  const band = overviewSql.match(/CREATE OR REPLACE FUNCTION public\.care_band\([\s\S]*?\$\$;/)?.[0]
   assert.ok(band, 'care_band not found')
   assert.match(band, new RegExp(`>=interval '${THRESHOLDS.days} days'`), 'care_band days')
   assert.match(band, new RegExp(`WHERE kind='inspection'\\)>=${THRESHOLDS.inspections}\\b`), 'care_band inspections')
