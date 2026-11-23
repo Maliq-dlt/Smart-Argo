@@ -68,11 +68,14 @@ try {
       assert(swap > 0 && frames[swap].curtain === 'covered', 'The page swaps behind the closed curtain')
       assert(frames.slice(swap).some(frame => frame.curtain === 'open'), 'The curtain lifts afterwards')
     } else assert(frames.every(frame => frame.curtain === null), 'Reduced motion has no curtain')
-    await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
-    await page.getByRole('heading', { name: 'Dashboard', exact: true, level: 1 }).waitFor()
+    await page.getByRole('link', { name: 'Ringkasan', exact: true }).click()
+    await page.locator('.ov-title').waitFor()
     await page.waitForFunction(() => getComputedStyle(document.getElementById('main')).opacity === '1')
     if (width === 1440 && animated) await page.screenshot({ path: `${output}/dashboard.png` })
-    await page.getByRole('link', { name: 'Smart Agro · Beranda', exact: true }).click()
+    // Wide screens: the capsule's logo. Phones: the capsule has no room for it, so home is in the account menu.
+    const home = page.getByRole('link', { name: 'Smart Agro · Beranda', exact: true })
+    if (await home.isVisible()) await home.click()
+    else { await page.getByRole('button', { name: /^Akun: / }).click(); await page.getByRole('link', { name: 'Beranda Smart Agro', exact: true }).click() }
     await landingReady(page)
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'landing-main')
     for (let i = 0; i < 3; i++) {
@@ -81,7 +84,7 @@ try {
       assert.equal(await page.locator('.app-shell').count(), 0, 'Rapid Back keeps latest destination')
     }
     await page.goto(`${url}#statistik`)
-    await page.getByRole('heading', { name: 'Dashboard', exact: true, level: 1 }).waitFor(); await settled(page)
+    await page.locator('.ov-title').waitFor(); await settled(page)
     report.push({ width, reducedMotion, coldLoad: animated ? 'curtain' : 'landing retained', swap: animated ? 'behind curtain' : 'instant', focus: 'pass', rapidBack: 'pass', directDashboard: 'pass' })
     await page.close()
   }

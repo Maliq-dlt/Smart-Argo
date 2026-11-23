@@ -22,7 +22,7 @@ const open = async ({ width = 1440, text = false, reducedMotion = 'no-preference
   const page = await browser.newPage({ viewport: { width, height: 1000 }, reducedMotion })
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.type() === 'error' && !/ERR_CONNECTION_REFUSED|ERR_FAILED|127\.0\.0\.1:54321/.test(message.text())) errors.push(message.text()) })
-  await page.goto(new URL('#statistik', base).href); await curtainOpen(page)
+  await page.goto(new URL('#tanaman', base).href); await curtainOpen(page)
   await page.locator('.plant-scene svg').waitFor()
   if (text) {
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' })
@@ -142,7 +142,7 @@ try {
   const other = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   await other.addInitScript(key => { if (!localStorage.getItem(key)) localStorage.setItem(key, '{broken') }, KEY)
   other.on('pageerror', error => errors.push(error.message))
-  await other.goto(new URL('#statistik', base).href); await curtainOpen(other)
+  await other.goto(new URL('#tanaman', base).href); await curtainOpen(other)
   await other.locator('.plant-scene svg').waitFor()
   await openPicker(other)
   ok(/Belum ada pot atau kebun/.test(await other.locator('.slot-picker').innerText()), 'A damaged garden opens as an empty one')

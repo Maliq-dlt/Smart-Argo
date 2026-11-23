@@ -1,0 +1,97 @@
+/* Ringkasan. The page is its own size container, so its layout follows its width, not the window's. */
+.overview { container: overview / inline-size; display: grid; gap: 2rem; min-width: 0; }
+.ov-head { max-width: 46rem; }
+.ov-title { margin: .5rem 0 0; font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: clamp(2rem, 4.2cqi, 3rem); line-height: 1.06; letter-spacing: -.02em; }
+.ov-sub { margin: .625rem 0 0; color: var(--muted); font-size: 1.0625rem; }
+
+.ov-section-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.ov-section-head h2, .ov-pair h2 { margin: 0; font-size: 1.1875rem; font-weight: 600; letter-spacing: -.01em; }
+.ov-count { color: var(--muted); font-weight: 400; font-size: 1rem; margin-left: .25rem; }
+.ov-tools { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; min-width: 0; }
+.ov-search { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 1rem; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--raised); min-width: 0; }
+.ov-search input { border: 0; background: none; font: inherit; color: inherit; min-width: 0; width: 10rem; outline: none; }
+.ov-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--ring); }
+.ov-chips { display: flex; flex-wrap: wrap; gap: .375rem; margin-top: .875rem; }
+.ov-chip { min-height: 2.5rem; padding: 0 1rem; border-radius: 999px; border: 1px solid var(--line-strong); background: none; color: var(--muted); font: inherit; font-weight: 500; cursor: pointer; transition: background-color .15s var(--ease-ui), color .15s var(--ease-ui); }
+.ov-chip:hover { color: var(--ink); }
+.ov-chip[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.ov-group { margin: 1.25rem 0 .75rem; font-size: .9375rem; font-weight: 600; color: var(--muted); }
+
+/* Large cards: a small window onto the same stage the plant page opens with. */
+/* auto-fill, not auto-fit: two or three cards keep a card's width instead of stretching across the page. */
+.ov-featured { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr)); gap: 1rem; margin-top: 1rem; }
+.ov-group + .ov-featured { margin-top: 0; }
+.ov-card { --wash: var(--surface); display: grid; grid-template-rows: auto 1fr; overflow: hidden; border-radius: var(--r-card); border: 1px solid var(--line); background: linear-gradient(var(--wash), var(--wash)), var(--raised);
+  color: inherit; text-decoration: none; box-shadow: var(--shadow-sm); transition: box-shadow .2s var(--ease-ui), border-color .2s var(--ease-ui); }
+.ov-card[data-species=cabai] { --wash: rgb(196 134 106 / .1); }
+.ov-card[data-species=bawang] { --wash: rgb(150 92 128 / .09); }
+.ov-card[data-species=anggrek] { --wash: rgb(96 112 160 / .09); }
+.ov-card:hover { box-shadow: var(--shadow); border-color: var(--line-strong); }
+/* The scene keeps its own 800:560 frame; the card follows it rather than letterboxing it. */
+.ov-art { display: block; overflow: hidden; background: var(--water-soft); }
+.ov-art .plant-scene { border-radius: 0; }
+.ov-info { display: grid; gap: .375rem; padding: 1rem 1.25rem 1.25rem; align-content: start; }
+.ov-name { font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 1.625rem; line-height: 1.1; letter-spacing: -.015em; }
+.ov-place { color: var(--muted); font-size: .875rem; }
+.ov-meta { color: var(--muted); font-size: .9375rem; }
+.ov-meta b { color: var(--ink); font-weight: 600; }
+/* One card (one plant, or one that leads): picture beside the words, the picture capped so it never fills the page. */
+.ov-featured.single { grid-template-columns: minmax(0, 1fr); }
+@container overview (min-width: 44rem) {
+  .ov-featured.single .ov-card { grid-template-columns: minmax(0, 28rem) minmax(0, 1fr); grid-template-rows: auto; }
+  .ov-featured.single .ov-info { align-content: center; padding: 1.75rem 2rem; gap: .625rem; }
+  .ov-featured.single .ov-name { font-size: 2.25rem; }
+}
+
+.ov-status { display: inline-flex; align-items: center; gap: .375rem; font-weight: 600; }
+.ov-status svg { width: 1.125rem; height: 1.125rem; }
+.ov-status[data-tone=dry], .ov-status[data-tone=hot] { color: var(--amber); }
+.ov-status[data-tone=check] { color: var(--warn); }
+.ov-status[data-tone=wet] { color: var(--water); }
+.ov-status[data-tone=ok] svg { color: var(--primary); }
+.ov-status[data-tone=soon] svg { color: var(--water); }
+.ov-status[data-tone=learn], .ov-status[data-tone=idle] { color: var(--muted); }
+
+/* Tiles: everything else, compact, so many plants stay calm. */
+.ov-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr)); gap: .625rem; }
+.ov-tile { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .875rem; min-height: 4.25rem; padding: .75rem 1rem; border-radius: var(--r-tile);
+  border: 1px solid var(--line); background: var(--raised); color: inherit; text-decoration: none; transition: border-color .2s var(--ease-ui), box-shadow .2s var(--ease-ui); }
+.ov-tile:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+.ov-tile-text { display: grid; gap: .125rem; min-width: 0; }
+.ov-tile-name { font-weight: 600; }
+.ov-tile .ov-status { font-size: .875rem; font-weight: 500; }
+.ov-tile-value { font-size: 1.25rem; font-weight: 600; }
+.ov-minipot { width: 2.25rem; height: 2.25rem; }
+.ov-minipot .pot-fill { fill: var(--line); }
+.ov-minipot .pot-soil { fill: var(--water); opacity: .75; }
+.ov-minipot .pot-soil[data-dry] { fill: var(--amber); }
+.ov-minipot .pot-line { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linejoin: round; }
+.ov-minipot .pot-rim { stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; }
+.ov-empty { color: var(--muted); margin: 1rem 0 0; }
+
+.ov-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr)); gap: 1rem; }
+.ov-pair .panel { padding: 1.25rem 1.375rem 1.375rem; }
+.ov-note { margin: .375rem 0 1rem; color: var(--muted); font-size: .875rem; }
+.ov-big { margin: .5rem 0 0; color: var(--muted); }
+.ov-big b { color: var(--ink); font-size: 2rem; font-weight: 600; margin-right: .25rem; }
+
+/* "Siram dalam 24 jam": a ruler per plant, from now to a day ahead. */
+.ov-due-rows { display: grid; gap: .75rem; }
+.ov-due-row, .ov-due-scale { display: grid; grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr); gap: 1rem; align-items: center; }
+.ov-due-name { display: grid; font-weight: 500; }
+.ov-due-name small { color: var(--muted); font-weight: 400; font-size: .8125rem; }
+.ov-ruler { position: relative; display: block; height: 1.75rem; }
+.ov-ruler i { position: absolute; top: .5rem; width: 1px; height: .75rem; background: var(--line-strong); }
+.ov-ruler i.major { top: .25rem; height: 1.25rem; background: var(--muted); opacity: .6; }
+.ov-window { position: absolute; top: .375rem; height: 1rem; min-width: .375rem; border-radius: .375rem; background: color-mix(in srgb, var(--water) 30%, transparent); border-left: 2px solid var(--water); }
+.ov-now-dot { position: absolute; left: 0; top: .5rem; width: .75rem; height: .75rem; margin-left: -.375rem; border-radius: 50%; background: var(--amber); }
+.ov-ruler::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--ink); border-radius: 1px; }
+.ov-due-scale span:last-child { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); }
+.ov-due-scale em { font-style: normal; }
+
+@container overview (max-width: 32rem) {
+  .ov-due-row, .ov-due-scale { grid-template-columns: minmax(0, 1fr); gap: .25rem; }
+  .ov-due-scale > span:first-child { display: none; }
+  .ov-tile { grid-template-columns: auto minmax(0, 1fr); }
+  .ov-tile-value { grid-column: 2; font-size: 1rem; }
+}

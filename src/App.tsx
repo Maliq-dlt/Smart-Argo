@@ -1,10 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { flushSync } from 'react-dom'
-import { MotionConfig, motion, useReducedMotion } from 'framer-motion'
-import { gsap } from 'gsap'
-import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
+import { MotionConfig } from 'framer-motion'
 
-import { ArrowCounterClockwise, ArrowUpRight, BookOpenText, Broadcast, CaretRight, ChartLine, Check, Clock, DownloadSimple, Drop, Flask, FolderSimple, GitDiff, Hourglass, Leaf, LinkSimple, Pause, Plant, Play, Printer, Pulse, Question, ShieldCheck, SlidersHorizontal, SquaresFour, TerminalWindow, Trash, UploadSimple, UserCircle, Warning, X } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, ArrowUpRight, BookOpenText, Broadcast, CaretLeft, CaretRight, ChartLine, Check, Clock, DownloadSimple, Drop, Flask, FolderSimple, GitDiff, Hourglass, Leaf, LinkSimple, Pause, Plant, Play, Printer, Pulse, Question, ShieldCheck, SlidersHorizontal, SquaresFour, TerminalWindow, Trash, UploadSimple, UserCircle, Warning, X } from '@phosphor-icons/react'
 import { addSample, evaluate, parseCase, phaseAt, type PotCase, type Profile } from './lib/agronomyEngine'
 import scenarios from './lib/scenarios.json'
 import ThemeToggle from './components/ThemeToggle'
@@ -30,10 +28,10 @@ import { addSiteOnServer, gardenErrorText, switchOnServer, type GardenRpc } from
 import { createSlotSession, loadScenario, loadSpeciesScenario } from './lib/gardenSessions'
 import { browserStorage, keepDeviceCopy, readGarden, saveGarden } from './lib/gardenStore'
 import PlantMood from './components/PlantMood'
-import AgroMark from './components/AgroMark'
 import SessionReport from './components/SessionReport'
 import SensorControls from './components/SensorControls'
-import StatisticsDashboard from './components/StatisticsDashboard'
+import HistoryCard from './components/dashboard/HistoryCard'
+import PlantRail from './components/dashboard/PlantRail'
 import TerminalSimulator from './components/TerminalSimulator'
 import SessionComparison from './components/SessionPanel'
 import PlantStage from './components/dashboard/PlantStage'
@@ -67,13 +65,16 @@ import { clockTime } from './lib/sessionClock'
 import { deviceStatuses, type DeviceSnapshot } from './lib/telemetry'
 import SimulationControls from './components/SimulationControls'
 import SimulationOverview from './components/SimulationOverview'
+import NavCapsule, { type NavTab } from './components/shell/NavCapsule'
+import Overview from './components/overview/Overview'
+import { statusOf, type OverviewPlant } from './lib/overview'
 import { clockHour, scenePeriod, createJourney, simulationOf, advanceSimulation, plantSeed, waterSimulation, canUndoWater, undoWaterSimulation, recordFertilizer, feedingDue, shouldPause, simulationStopped, simulationStopReason, sampleIntervalMs, logEvent, type SimulationState } from './lib/simulation'
 
-gsap.registerPlugin(ScrollToPlugin)
-
-// Each page names itself once in the top bar; pages without a plant scene open with one plain sentence instead.
+// Every page of the app. Ringkasan keeps #statistik (the landing, links and sign-in return there); one plant's details
+// live at #tanaman. Pages without a plant scene open with their name and one plain sentence.
 const pages = [
-  { id: 'statistics', hash: '#statistik', label: 'Dashboard', title: 'Dashboard', lead: '', icon: SquaresFour },
+  { id: 'statistics', hash: '#statistik', label: 'Ringkasan', title: 'Ringkasan', lead: '', icon: SquaresFour },
+  { id: 'plant', hash: '#tanaman', label: 'Tanaman', title: 'Tanaman', lead: '', icon: Leaf },
   { id: 'simulation', hash: '#simulasi', label: 'Simulasi', title: 'Ruang tanam', lead: '', icon: Plant },
   { id: 'comparison', hash: '#bandingkan', label: 'Bandingkan sesi', title: 'Bandingkan sesi', lead: 'Dua riwayat, satu sudut pandang.', icon: GitDiff },
   { id: 'devices', hash: '#perangkat', label: 'Status perangkat', title: 'Status perangkat', lead: 'Periksa paket sensor dari berkas.', icon: Broadcast },
@@ -84,8 +85,8 @@ const pages = [
   // Linked from Profil, the Android app and the store listing (Google Play asks for deletion on the web too).
   { id: 'delete', hash: '#hapus-akun', label: 'Hapus akun', title: 'Hapus akun', lead: 'Akun nonaktif sekarang, data dihapus 14 hari kemudian.', icon: Trash, hidden: true },
 ] as const
-// Short words under the rail icons; the long labels stay as the accessible names.
-const RAIL_TEXT: Record<string, string> = { statistics: 'Dashboard', simulation: 'Ruang tanam', comparison: 'Bandingkan', devices: 'Perangkat', ecosystem: 'Ekosistem', terminal: 'Terminal' }
+// The capsule's tab for each page: a plant's own tools (compare, terminal, file check) sit under Tanaman, the account's under Akun.
+const TAB_OF: Partial<Record<string, string>> = { comparison: 'plant', terminal: 'plant', devices: 'plant', ecosystem: 'profile', delete: 'profile' }
 const GUEST_KEY = 'smart-agro.guest'
 // The live app has no Ruang tanam: its address and the default page lead to the dashboard.
 const pageFromHash = () => { const found = pages.find(p => p.hash === location.hash)?.id; return features.playground ? found ?? 'simulation' : found === undefined || found === 'simulation' ? 'statistics' : found }
@@ -202,6 +203,36 @@ function Simulator() {
     return `${plantLabel(slot)} · ${linked && linkedSim ? `Hari ke-${linkedSim.mode === 'journey' ? Math.floor(linkedSim.growthHours / 24) : linked.day}` : 'Belum dibuka'}`
   }
   const zoneStatus = (slot: Slot) => ({ plant: plantLabel(slot), text: sessionOfSlot(slot) ? evaluate(sessionOfSlot(slot)!.data).action : 'Belum dibuka' })
+  // Ringkasan reads every plant from its own session with the same rules the plant page shows (until my_overview).
+  const overviewPlants = useMemo<OverviewPlant[]>(() => {
+    const fromSession = (s: Session, base: Pick<OverviewPlant, 'id' | 'name'> & Partial<OverviewPlant>): OverviewPlant => {
+      const r = evaluate(s.data), lst = s.data.samples.at(-1)!, sp = speciesOfCrop(s.data.profile.crop), sm = simulationOf(s), isJourney = sm.mode === 'journey'
+      const planted = !isJourney || sm.planted
+      return { tag: null, place: null, slotId: null, ...base, species: sp, moisture: lst.valid ? lst.moisture : null,
+        status: statusOf(r.decision, { learning: speciesById(sp).tier === 'belajar', planted }), etaH: r.evidence.eta_h,
+        day: isJourney ? Math.floor(sm.growthHours / 24) : s.day, planted, hour: clockHour(s.data.now_h, s.clock), sessionId: s.id }
+    }
+    const planted = garden.slots.filter(slot => activeCycle(slot))
+    if (!planted.length) return [fromSession(session, { id: session.id, name: session.name })]
+    return planted.map(slot => {
+      const cycle = activeCycle(slot)!, species = speciesByCode(cycle.speciesId), site = garden.sites.find(x => x.id === slot.siteId)
+      const linked = slot.sessionId ? book.sessions.find(s => s.id === slot.sessionId) : undefined
+      const base = { id: slot.id, name: cycle.nickname, tag: species ? plantTag(species, cycle.plantNo) : null, place: site && site.name !== cycle.nickname ? site.name : null, slotId: slot.id }
+      return linked ? fromSession(linked, base)
+        : { ...base, species: species?.id ?? 'cabai', moisture: null, status: { tone: 'idle' as const, word: 'Belum dibuka', attention: false }, etaH: null, day: 0, planted: false, hour: 10, sessionId: null }
+    })
+  }, [garden, book.sessions, session])
+  /** From a Ringkasan card: select the plant, then carry the card into the plant page's stage (one View Transition). */
+  function selectPlant(plant: OverviewPlant) {
+    if (plant.sessionId !== book.activeId) { if (plant.slotId) openSlot(plant.slotId); else if (plant.sessionId) resume(plant.sessionId) }
+  }
+  function openPlant(plant: OverviewPlant, art: HTMLElement | null) {
+    selectPlant(plant)
+    if (art && typeof document.startViewTransition === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      art.style.viewTransitionName = 'plant-stage'; document.documentElement.dataset.morph = ''
+    }
+    location.hash = '#tanaman'
+  }
   const sessionForCycle = (slot: Slot) => { const cycle = activeCycle(slot), species = cycle && speciesByCode(cycle.speciesId); return cycle && species ? createSlotSession(species.id, slot.name, cycle.plantedOn, today()) : null }
   /** Makes and binds a session for each slot and opens the first, as a new pot or garden (or the demo) is added. */
   function launch(base: GardenBook, slots: Slot[]) {
@@ -276,15 +307,7 @@ function Simulator() {
     const timer = setTimeout(() => setCareEffect(null), 1800)
     return () => clearTimeout(timer)
   }, [careEffect])
-  const reducedMotion = useReducedMotion()
   const previousPage = useRef<typeof page | null>(null), pendingCare = useRef(false)
-  const scrollTween = useRef<gsap.core.Tween | null>(null)
-  const scrollTo = useCallback((top: number) => {
-    scrollTween.current?.kill()
-    if (reducedMotion) window.scrollTo({ top, behavior: 'instant' })
-    else scrollTween.current = gsap.to(window, { scrollTo: { y: top, autoKill: true }, duration: .65, ease: 'power2.inOut' })
-  }, [reducedMotion])
-  useEffect(() => () => { scrollTween.current?.kill() }, [])
   const sim = simulationOf(session), journey = sim.mode === 'journey'
   const developmentDay = journey ? Math.floor(sim.growthHours / 24) : session.day
   const [printSession, setPrintSession] = useState<Session | null>(null)
@@ -341,24 +364,21 @@ function Simulator() {
   function toggleRunning() { setPauseNote(running ? 'Dijeda oleh pengguna.' : ''); setRunning(!running) }
 
   useEffect(() => {
-    // A page change cross-fades the whole view (see "Page change" in styles.css). The swap runs inside the transition, so
-    // the new page, its scroll position and its focus are all in place before the new view is captured. Reduced motion,
-    // browsers without View Transitions, a running theme reveal and routes that leave the app swap at once.
+    // Pages swap at once (see "Page change" in styles.css): quick back-and-forth never dims or slides the screen. The one
+    // morph is a plant opened from Ringkasan (openPlant sets data-morph): its card travels into the stage. The swap runs
+    // inside the transition, so the new page, its scroll position and its focus are in place before it is captured.
     const root = document.documentElement
     let current: ViewTransition | null = null
     const swap = () => { setPage(pageFromHash()); setHash(location.hash); setCareEffect(null) }
     const navigate = () => {
-      const animate = typeof document.startViewTransition === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches
-        && root.dataset.themeTransition === undefined && pages.some(p => p.hash === location.hash)
-      if (!animate) return swap()
-      root.dataset.pageTransition = 'true'
+      if (root.dataset.morph === undefined || typeof document.startViewTransition !== 'function' || root.dataset.themeTransition !== undefined) { delete root.dataset.morph; swap(); return }
       const transition = document.startViewTransition(() => flushSync(swap))
       current = transition
-      // A quick second change skips this one; only the latest transition clears the flag.
-      transition.finished.finally(() => { if (current === transition) { delete root.dataset.pageTransition; current = null } })
+      // A second change skips this one; only the latest transition clears the flag.
+      transition.finished.finally(() => { if (current === transition) { delete root.dataset.morph; current = null } })
     }
     window.addEventListener('hashchange', navigate)
-    return () => { window.removeEventListener('hashchange', navigate); delete root.dataset.pageTransition }
+    return () => { window.removeEventListener('hashchange', navigate); delete root.dataset.morph }
   }, [])
   // Layout effect: inside a page transition the new view is captured right after the swap, so focus and scroll must
   // already be final. The jump to the top is instant; a scroll animation here would play under the cross-fade.
@@ -368,7 +388,6 @@ function Simulator() {
     const care = pendingCare.current
     const target = care && page === 'simulation' ? document.querySelector<HTMLElement>('.controls-panel') ?? document.querySelector<HTMLElement>('.simulation-controls') : document.getElementById('main')
     pendingCare.current = false
-    scrollTween.current?.kill()
     target?.focus({ preventScroll: true })
     window.scrollTo({ top: care && target ? Math.max(0, target.getBoundingClientRect().top + window.scrollY - 24) : 0, behavior: 'instant' })
   }, [page])
@@ -527,7 +546,7 @@ function Simulator() {
       edit(undoWaterSimulation); setCareEffect(null); setNotice('Siraman dibatalkan. Riwayat sensor tetap utuh.')
       setPauseNote('Siraman dibatalkan. Waktu tetap dijeda.')
       requestAnimationFrame(() => {
-        const target = document.querySelector<HTMLElement>(page === 'statistics' ? '.dashboard-care > a' : '.care-actions button, .watering-control button')
+        const target = document.querySelector<HTMLElement>(page === 'plant' ? '.dashboard-care > a' : '.care-actions button, .watering-control button')
         target?.focus({ preventScroll: true })
       })
     }}><ArrowCounterClockwise aria-hidden="true" />Batalkan siraman</button>
@@ -597,42 +616,42 @@ function Simulator() {
     if (pot.device) location.hash = '#ekosistem' // activation by serial lives there
     else if (!location.hash || location.hash === '#masuk') location.hash = '#statistik'
   }} />
+  const navTabs: NavTab[] = [
+    { id: 'statistics', hash: '#statistik', label: 'Ringkasan', icon: SquaresFour },
+    { id: 'plant', hash: '#tanaman', label: 'Tanaman', icon: Leaf },
+    ...(features.playground ? [{ id: 'simulation', hash: '#simulasi', label: 'Ruang tanam', icon: Plant }] : []),
+    { id: 'profile', hash: '#profil', label: 'Akun', icon: UserCircle },
+  ]
+  // A plant's own tools, on the pages that show one: which plant (and its session), whether it is saved, its clock, files, guide.
+  const plantToolbar = <div className="plant-toolbar">
+    <div className="session-pill"><SlotPicker book={{ ...garden, activeSlotId: slotOfSession?.id ?? null }} describe={describeSlot} canSwitch={!!slotOfSession} canLoadDemo={garden.sites.length === 0 && features.demoGarden && !server} onSelect={openSlot} onAdd={() => setGardenDialog('add')} onSwitch={() => setGardenDialog('switch')} onDemo={loadDemo}><PlantMood mood={!sim.planted ? 'ready' : mood} /><span><strong>{session.name}</strong><small>Simulasi · {!journey ? 'Eksperimen' : sim.planted ? `Hari ke-${day}` : 'Belum ditanam'}</small></span></SlotPicker>
+      <span className={`save-status ${saveState.error ? 'save-failed' : ''}`} role="status"><i aria-hidden="true" />{saveState.error ? 'Belum tersimpan' : saveState.book === book ? 'Tersimpan' : 'Menyimpan…'}</span></div>
+    <div className="topbar-tools">
+      <ClockSettings clock={session.clock} hour={data.now_h} onChange={clock => { setRunning(false); setPauseNote('Zona waktu diubah. Tekan Lanjutkan waktu.'); edit({ clock }) }} />
+      <Popover><PopoverTrigger asChild><button type="button" className="icon-button" aria-label="Berkas" title="Berkas"><FolderSimple aria-hidden="true" /></button></PopoverTrigger>
+        <PopoverContent className="session-actions-popover" align="end" aria-label="Menu sesi"><strong>{session.name}</strong>
+          <PopoverClose asChild><button className="menu-item" onClick={() => importFile.current?.click()}><UploadSimple aria-hidden="true" />Impor</button></PopoverClose>
+          <PopoverClose asChild><button className="menu-item" onClick={exportSession}><DownloadSimple aria-hidden="true" />Ekspor sesi</button></PopoverClose>
+          <PopoverClose asChild><button className="menu-item" onClick={() => setModal('proof')}><LinkSimple aria-hidden="true" />Bukti blockchain</button></PopoverClose>
+          <PopoverClose asChild><button className="menu-item" onClick={() => window.print()}><Printer aria-hidden="true" />Ringkasan cetak</button></PopoverClose>
+        </PopoverContent></Popover>
+      <button type="button" className="icon-button" aria-label="Panduan" title="Panduan" onClick={openGuide}><Question aria-hidden="true" /></button>
+    </div>
+  </div>
   return <>
     <a className="skip-link" href="#main" onClick={e => { e.preventDefault(); document.getElementById('main')?.focus() }}>Lewati ke konten</a>
     <div className="app-shell">
-    <aside className="app-rail" aria-label="Navigasi aplikasi">
-      <a className="rail-brand" href="#" aria-label="Smart Agro · Beranda"><AgroMark /></a>
-      {/* Rail with a sliding active marker, after "Rail Panel Sidebar" by dhxwhy: https://21st.dev/@dhxwhy/components/rail-panel-sidebar */}
-      <nav className="rail-nav" aria-label="Navigasi utama">
-        {pages.filter(p => !('hidden' in p) && (features.playground || p.id !== 'simulation')).map(({ id, hash, label, icon: Icon }) => <a key={id} href={hash} className="rail-link" data-label={label} aria-label={label} aria-current={page === id ? 'page' : undefined} onClick={() => { if (page === id) scrollTo(0) }}>
-          {page === id && <motion.span className="rail-active" layoutId="rail-active" transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }} aria-hidden="true" />}
-          <Icon weight={page === id ? 'fill' : 'regular'} aria-hidden="true" /><span className="rail-text">{RAIL_TEXT[id]}</span>
-        </a>)}
-      </nav>
-      <button type="button" className="rail-link rail-guide" data-label="Panduan" aria-label="Panduan" onClick={openGuide}><Question aria-hidden="true" /><span className="rail-text">Panduan</span></button>
-    </aside>
+    <NavCapsule tabs={navTabs} active={TAB_OF[page] ?? page}><ThemeToggle /><AccountMenu /></NavCapsule>
     <div className="app-content">
-    <header className="app-topbar">
-      <a className="topbar-brand" href="#" aria-label="Smart Agro · Beranda"><AgroMark /></a>
-      <h1 className="page-title"><i aria-hidden="true" />{currentPage.title}</h1>
-      <div className="session-pill"><SlotPicker book={{ ...garden, activeSlotId: slotOfSession?.id ?? null }} describe={describeSlot} canSwitch={!!slotOfSession} canLoadDemo={garden.sites.length === 0 && features.demoGarden && !server} onSelect={openSlot} onAdd={() => setGardenDialog('add')} onSwitch={() => setGardenDialog('switch')} onDemo={loadDemo}><PlantMood mood={!sim.planted ? 'ready' : mood} /><span><strong>{session.name}</strong><small>Simulasi · {!journey ? 'Eksperimen' : sim.planted ? `Hari ke-${day}` : 'Belum ditanam'}</small></span></SlotPicker>
-        <span className={`save-status ${saveState.error ? 'save-failed' : ''}`} role="status"><i aria-hidden="true" />{saveState.error ? 'Belum tersimpan' : saveState.book === book ? 'Tersimpan' : 'Menyimpan…'}</span></div>
-      <div className="topbar-tools">
-        <ClockSettings clock={session.clock} hour={data.now_h} onChange={clock => { setRunning(false); setPauseNote('Zona waktu diubah. Tekan Lanjutkan waktu.'); edit({ clock }) }} />
-        <Popover><PopoverTrigger asChild><button type="button" className="icon-button" aria-label="Berkas" title="Berkas"><FolderSimple aria-hidden="true" /></button></PopoverTrigger>
-          <PopoverContent className="session-actions-popover" align="end" aria-label="Menu sesi"><strong>{session.name}</strong>
-            <PopoverClose asChild><button className="menu-item" onClick={() => importFile.current?.click()}><UploadSimple aria-hidden="true" />Impor</button></PopoverClose>
-            <PopoverClose asChild><button className="menu-item" onClick={exportSession}><DownloadSimple aria-hidden="true" />Ekspor sesi</button></PopoverClose>
-            <PopoverClose asChild><button className="menu-item" onClick={() => setModal('proof')}><LinkSimple aria-hidden="true" />Bukti blockchain</button></PopoverClose>
-            <PopoverClose asChild><button className="menu-item" onClick={() => window.print()}><Printer aria-hidden="true" />Ringkasan cetak</button></PopoverClose>
-          </PopoverContent></Popover>
-        <button type="button" className="icon-button topbar-guide" aria-label="Panduan" title="Panduan" onClick={openGuide}><Question aria-hidden="true" /></button>
-        <ThemeToggle />
-        <AccountMenu />
-      </div>
-    </header>
     <main key={page} id="main" tabIndex={-1} className={`app-main page-${page}`}>
-      {lead && <p className="page-lead">{lead}</p>}
+      {/* Ringkasan's heading is its sentence; a plant page's is its stage. The others open with their name. */}
+      {page === 'plant' || page === 'simulation' ? <h1 className="sr-only">{currentPage.title}</h1> : page !== 'statistics' && <h1 className="page-heading">{currentPage.title}</h1>}
+      {(page === 'plant' || page === 'simulation') && plantToolbar}
+      {page === 'plant' && <div className="plant-head">
+        <a className="button plant-back" href="#statistik"><CaretLeft aria-hidden="true" />Ringkasan</a>
+        {overviewPlants.length > 1 && <PlantRail plants={overviewPlants} activeId={overviewPlants.find(p => p.sessionId === book.activeId)?.id ?? null} onSelect={selectPlant} />}
+      </div>}
+      {lead && <p className="page-sub">{lead}</p>}
       <input ref={importFile} type="file" accept=".json,application/json" className="sr-only" aria-label="Impor kasus JSON" onChange={e => void importSession(e.target.files?.[0])} />
       {saveState.error && <div className="storage-error" role="alert"><p>{saveState.error}</p><div><button className="button" onClick={exportSession}>Ekspor sesi aktif</button>{!boot.error && <button className="button" onClick={persist}>Coba simpan lagi</button>}</div></div>}
       {error && <div className="error-banner" role="alert"><Warning weight="duotone" aria-hidden="true" /><span>{error}</span><button className="icon-button" onClick={() => setError('')} aria-label="Tutup kesalahan"><X aria-hidden="true" /></button></div>}
@@ -670,10 +689,11 @@ function Simulator() {
             }} onWater={recordWater} onFault={fault} />}
           </div>
         </div>
-        <a href="#statistik" className="button statistics-link"><ChartLine aria-hidden="true" />Lihat statistik sesi<ArrowUpRight aria-hidden="true" /></a>
+        <a href="#tanaman" className="button statistics-link"><ChartLine aria-hidden="true" />Lihat rincian tanaman<ArrowUpRight aria-hidden="true" /></a>
       </div>}
 
-      {page === 'statistics' && <div className="statistics-page">
+      {page === 'statistics' && <Overview plants={overviewPlants} products={account.signedIn ? account.products.length : null} onOpen={openPlant} onAdd={() => setGardenDialog('add')} />}
+      {page === 'plant' && <div className="statistics-page">
         <div className="dash">
           <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, species)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
             species={species} day={developmentDay} planted={!journey || sim.planted} moisture={last.moisture} contact={result.decision !== 'PERIKSA_SENSOR'}
@@ -697,7 +717,14 @@ function Simulator() {
             <Instruments samples={data.samples} now={data.now_h} hot={data.profile.hot_c} phRange={data.profile.ph_range} phValidated={data.profile.ph_validated} day={developmentDay} species={species} awaitingPlant={awaitingPlant} />
           </>}
         </div>
-        <StatisticsDashboard awaitingPlant={awaitingPlant} onPlant={plantNow} manual={sim.source === 'manual'} clock={session.clock} key={session.id} data={data} decision={result} logs={session.logs} />
+        <HistoryCard awaitingPlant={awaitingPlant} onPlant={plantNow} manual={sim.source === 'manual'} clock={session.clock} key={session.id} data={data} decision={result} logs={session.logs}
+          band={learning ? learnedRange : [low, result.evidence.wet]} />
+        {/* The tools that used to have their own rail entries; they belong to this plant's session. */}
+        <nav className="plant-more" aria-label="Alat lain untuk tanaman ini">
+          {/* The name is the page; the line under it is read as its description. */}
+          {([['#bandingkan', GitDiff, 'Bandingkan sesi', 'Dua riwayat berdampingan'], ['#terminal', TerminalWindow, 'Terminal', 'Kejadian dan alasan tiap keputusan'], ['#perangkat', Broadcast, 'Status perangkat', 'Periksa paket sensor dari berkas']] as const).map(([href, Icon, name, about]) =>
+            <a key={href} className="plant-more-link" href={href} aria-describedby={`more-${href.slice(1)}`}><Icon aria-hidden="true" /><span>{name}<small id={`more-${href.slice(1)}`} aria-hidden="true">{about}</small></span><CaretRight aria-hidden="true" /></a>)}
+        </nav>
       </div>}
       {page === 'devices' && <DevicePanel key={session.id} clock={session.clock} snapshot={session.deviceSnapshot} onImport={importDevice} />}
       {(page === 'ecosystem' || page === 'profile') && <Suspense fallback={<div className="page-loading" aria-busy="true">Memuat…</div>}>

@@ -71,7 +71,7 @@ try {
   assert.equal(await page.getByText('Lanjutkan sesi', { exact: false }).count(), 0)
   assert.equal(await page.locator('.plant-mood').count(), 1)
   assert.equal(await page.locator('.plant-mood').getAttribute('data-mood'), 'ready')
-  assert.equal(await page.locator('.app-rail').evaluate(e => getComputedStyle(e).backdropFilter), 'none')
+  assert.equal(await page.locator('.nav-capsule').evaluate(e => getComputedStyle(e).backdropFilter), 'none')
   const plantButton = page.getByRole('button', { name: 'Tanam & mulai', exact: true })
   await plantButton.focus(); await page.keyboard.down('Space')
   await page.waitForFunction(() => Math.abs(new DOMMatrixReadOnly(getComputedStyle(document.querySelector('.plant-seed')).transform).a - .97) < .001)
@@ -99,9 +99,11 @@ try {
     return book.sessions.find(s => s.id === book.activeId).data.now_h > before
   }, before)
   const beforeNavigation = (await active(page)).data.now_h
-  for (const [label, heading] of [['Terminal', 'Terminal'], ['Status perangkat', 'Status perangkat'], ['Bandingkan sesi', 'Bandingkan sesi'], ['Dashboard', 'Dashboard'], ['Simulasi', 'Ruang tanam']]) {
+  // Terminal, file check and comparison open from the plant page (dashboard v2: no rail entries of their own).
+  for (const [label, heading] of [['Tanaman', 'Tanaman'], ['Terminal', 'Terminal'], ['Tanaman', 'Tanaman'], ['Status perangkat', 'Status perangkat'], ['Tanaman', 'Tanaman'], ['Bandingkan sesi', 'Bandingkan sesi'], ['Ringkasan', null], ['Ruang tanam', 'Ruang tanam']]) {
     await page.getByRole('link', { name: label, exact: true }).click()
-    await page.getByRole('heading', { name: heading, exact: true, level: 1 }).waitFor()
+    if (heading) await page.getByRole('heading', { name: heading, exact: true, level: 1 }).waitFor()
+    else await page.locator('.ov-title').waitFor()
   }
   await page.getByRole('button', { name: 'Jeda', exact: true }).click()
   assert((await active(page)).data.now_h > before, 'Theme animation must not starve simulation time')
@@ -183,7 +185,7 @@ try {
   assert.deepEqual((await active(page)).data, saved.data)
   await page.waitForFunction(id => JSON.parse(localStorage.getItem('smart-agro.sessions.v1')).activeId !== id, saved.id)
   const imported = await active(page)
-  await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
+  await page.getByRole('link', { name: 'Tanaman', exact: true }).click()
   const dashboardSession = (await active(page)).data
   assert.equal(await page.locator('.dashboard-details').getAttribute('open'), null)
   assert.equal(await page.locator('.distribution-card').isVisible(), false, 'Secondary analysis starts collapsed')
@@ -191,7 +193,7 @@ try {
   assert.equal(await page.locator('.plant-stage-section .dashboard-clock').count(), 1, 'The clock sits inside the stage')
   assert.equal(await page.locator('.condition-band').count(), 1, 'Moisture against its zones')
   assert.equal(await page.locator('.instrument').count(), 3, 'Phase, soil temperature and pH')
-  assert.equal(await page.locator('.rail-text').first().isVisible(), true, 'Rail items carry their words')
+  assert.equal(await page.locator('.nav-label').first().isVisible(), true, 'Tabs carry their words')
   assert.equal(await page.locator('.history-panel').count(), 1)
   await page.screenshot({ path: '.tmp/landing-dashboard-polish/dashboard-light.png', fullPage: true })
   await page.locator('.dashboard-details > summary').focus(); await page.keyboard.press('Space')
@@ -215,6 +217,8 @@ try {
   await page.getByRole('option').last().click()
   await page.getByRole('article', { name: 'Ringkasan sesi B' }).waitFor()
   assert.equal(await page.locator('.analysis-toolbar, .device-panel, .terminal-panel').count(), 0)
+  // The plant's other tools are listed on its page (dashboard v2), so the way to the file check goes back through Tanaman.
+  await page.getByRole('link', { name: 'Tanaman', exact: true }).click()
   await page.getByRole('link', { name: 'Status perangkat', exact: true }).click()
   await page.getByLabel('Impor paket perangkat', { exact: true }).setInputFiles({ name: 'packet.json', mimeType: 'application/json', buffer: await readFile('public/telemetry-example.json') })
   await page.locator('.device-statuses').waitFor()
@@ -222,6 +226,8 @@ try {
   await page.reload()
   assert.equal(new URL(page.url()).hash, '#perangkat')
   await page.locator('.device-statuses').waitFor()
+  // Terminal is linked from the plant page (dashboard v2), not from the devices page: go back through Tanaman.
+  await page.getByRole('link', { name: 'Tanaman', exact: true }).click()
   await page.getByRole('link', { name: 'Terminal', exact: true }).click()
   await page.locator('.terminal-panel').waitFor()
   await page.reload()
@@ -232,13 +238,16 @@ try {
   assert.equal(await page.locator('.tab-list .segment-selection').count(), 1)
   await page.locator('.terminal-panel pre').waitFor()
   await page.screenshot({ path: '.tmp/ui-check/terminal.png' })
+  // History now runs #perangkat → #tanaman → #terminal (Terminal is reached through the plant page in dashboard v2).
+  await page.goBack()
+  await page.locator('.plant-stage-section').waitFor()
   await page.goBack()
   await page.locator('.device-statuses').waitFor()
-  await page.goForward()
+  await page.goForward(); await page.goForward()
   await page.locator('.terminal-panel').waitFor()
   await page.locator('.theme-toggle').click()
   await waitTheme(page, 'dark')
-  await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
+  await page.getByRole('link', { name: 'Tanaman', exact: true }).click()
   await page.screenshot({ path: '.tmp/landing-dashboard-polish/dashboard-dark.png', fullPage: true })
   await page.locator('.dashboard-details > summary').focus(); await page.keyboard.press('Enter')
   await checkSpotlight(page, page.locator('.analytics-metrics > .spotlight-card').first())
@@ -282,12 +291,12 @@ try {
     await mobile.getByRole('button', { name: 'Pengaturan waktu & sampel', exact: true }).click()
     await mobile.getByRole('button', { name: '+30 menit', exact: true }).click()
     await mobile.getByRole('button', { name: 'Selesai', exact: true }).click()
-    for (const [label, hash] of [['Dashboard', '#statistik'], ['Status perangkat', '#perangkat'], ['Terminal', '#terminal'], ['Bandingkan sesi', '#bandingkan']]) {
-      if (!(await mobile.getByRole('navigation', { name: 'Navigasi utama' }).isVisible())) await mobile.getByRole('button', { name: 'Buka navigasi', exact: true }).click()
+    for (const [label, hash] of [['Tanaman', '#tanaman'], ['Status perangkat', '#perangkat'], ['Tanaman', '#tanaman'], ['Terminal', '#terminal'], ['Tanaman', '#tanaman'], ['Bandingkan sesi', '#bandingkan']]) {
       await mobile.getByRole('link', { name: label, exact: true }).click()
       await mobile.getByRole('heading', { name: label, exact: true, level: 1 }).waitFor()
       assert.equal(new URL(mobile.url()).hash, hash)
-      if (hash === '#statistik') {
+      if (hash === '#tanaman' && label === 'Tanaman' && !(await mobile.locator('.dashboard-details').getAttribute('data-checked'))) {
+        await mobile.locator('.dashboard-details').evaluate(e => e.setAttribute('data-checked', '1'))
         assert.equal(await mobile.locator('.dashboard-details').getAttribute('open'), null)
         await mobile.locator('.dashboard-details > summary').focus(); await mobile.keyboard.press('Enter')
         await mobile.locator('.histogram').waitFor({ state: 'visible' })
@@ -301,14 +310,14 @@ try {
   }
   const enlarged = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
   monitor(enlarged)
-  await enlarged.goto(new URL('#statistik', url).href); await curtainOpen(enlarged)
-  await enlarged.getByRole('heading', { name: 'Dashboard', exact: true, level: 1 }).waitFor()
+  await enlarged.goto(new URL('#tanaman', url).href); await curtainOpen(enlarged)
+  await enlarged.getByRole('heading', { name: 'Tanaman', exact: true, level: 1 }).waitFor()
   await enlarged.evaluate(() => document.fonts.ready)
   await enlargeText(enlarged)
-  assert(await enlarged.locator('.rail-nav > a').evaluateAll(links => links.every(link => {
-    const bounds = link.getBoundingClientRect(), rail = document.querySelector('.app-rail').getBoundingClientRect()
-    return bounds.left >= rail.left && bounds.right <= rail.right && link.scrollWidth <= link.clientWidth
-  })), 'Enlarged navigation must remain inside the rail')
+  assert(await enlarged.locator('.nav-tab').evaluateAll(links => links.every(link => {
+    const bounds = link.getBoundingClientRect(), capsule = document.querySelector('.nav-capsule').getBoundingClientRect()
+    return bounds.left >= capsule.left - 1 && bounds.right <= capsule.right + 1 && capsule.right <= innerWidth
+  })), 'Enlarged navigation must remain inside the capsule and the screen')
   assert(await enlarged.locator('.dashboard-clock .button').evaluate(button => {
     const bounds = button.getBoundingClientRect(), card = button.closest('.dashboard-clock').getBoundingClientRect()
     return button.scrollWidth <= button.clientWidth && bounds.left >= card.left && bounds.right <= card.right

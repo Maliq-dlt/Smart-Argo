@@ -24,7 +24,8 @@ export default function PlantStage({ crop, sub, status, species, day, planted, m
       <div><h2 id="plant-stage-title">{crop} <span>dalam pot</span></h2><p>{sub}</p></div>
       <span className="reading-status" data-alert={!status.ok || undefined}><i aria-hidden="true" />{status.text}</span>
     </header>
-    <div className="stage-scene">
+    {/* Same name as the plant card in Ringkasan: opening a plant carries its card into this stage (see "Page change"). */}
+    <div className="stage-scene" style={{ viewTransitionName: 'plant-stage' }}>
       <PlantScene species={sceneOf(species)} day={day} planted={planted} moisture={moisture} contact={contact} hour={hour} readings={readings} weather={weather?.kind} careEffect={careEffect}
         label={`${crop} dalam pot, ${sub}. Kelembapan ${readings.kelembapan}, suhu ${readings.suhu}, pH ${readings.ph}.`} />
     </div>

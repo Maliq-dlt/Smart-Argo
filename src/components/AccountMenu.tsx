@@ -1,4 +1,4 @@
-import { SignIn, SignOut, UserCircle } from '@phosphor-icons/react'
+import { House, Package, SignIn, SignOut, UserCircle } from '@phosphor-icons/react'
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover'
 import { useAccount } from './accountContext'
 
@@ -17,8 +17,11 @@ export default function AccountMenu() {
         <small>{identity?.email || (client ? 'Data hanya tersimpan di browser ini' : 'Akun belum tersedia di demo ini')}</small></div></div>
       {signedIn ? <>
         <PopoverClose asChild><a className="menu-item" href="#profil"><UserCircle aria-hidden="true" />Profil & keamanan</a></PopoverClose>
+        <PopoverClose asChild><a className="menu-item" href="#ekosistem"><Package aria-hidden="true" />Produk & ekosistem</a></PopoverClose>
         <PopoverClose asChild><button type="button" className="menu-item" onClick={() => { void signOut(); location.hash = '#masuk' }}><SignOut aria-hidden="true" />Keluar</button></PopoverClose>
       </> : client && <PopoverClose asChild><a className="menu-item" href="#masuk"><SignIn aria-hidden="true" />Masuk</a></PopoverClose>}
+      {/* The capsule's logo leads home on wide screens; on a phone the capsule has no room for it, so the way home is here. */}
+      <PopoverClose asChild><a className="menu-item" href="#"><House aria-hidden="true" />Beranda Smart Agro</a></PopoverClose>
     </PopoverContent>
   </Popover>
 }

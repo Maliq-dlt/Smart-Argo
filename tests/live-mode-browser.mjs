@@ -38,19 +38,21 @@ try {
   await page.locator('.app-shell').waitFor({ timeout: 20000 })
   await page.locator('.plant-scene svg').waitFor()
 
-  const rail = await page.locator('.rail-nav a').evaluateAll(links => links.map(a => a.getAttribute('aria-label')))
-  ok(rail.includes('Dashboard') && rail.includes('Bandingkan sesi') && rail.includes('Ekosistem'), `The rest of the app is there: ${rail}`)
-  ok(!rail.includes('Simulasi') && !rail.some(name => /Ruang tanam/i.test(name ?? '')), `There is no Ruang tanam in the rail: ${rail}`)
-  ok(await page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true }).count() === 1, 'The app opens on the dashboard')
+  const tabs = await page.locator('.nav-tab').evaluateAll(links => links.map(a => a.textContent.trim()))
+  ok(tabs.includes('Ringkasan') && tabs.includes('Tanaman') && tabs.includes('Akun'), `The rest of the app is there: ${tabs}`)
+  ok(!tabs.some(name => /Ruang tanam|Simulasi/i.test(name)), `There is no Ruang tanam in the capsule: ${tabs}`)
+  ok(await page.locator('.ov-title').count() === 1, 'The app opens on Ringkasan')
 
   // Its old address and the care link lead to the dashboard, not to a room that does not exist.
   const settled = () => page.waitForFunction(() => !document.documentElement.hasAttribute('data-site-transition'))
   await settled()
   await page.evaluate(() => { location.hash = '#simulasi' })
   await page.waitForTimeout(500); await settled()
-  ok(await page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true }).count() === 1, '#simulasi shows the dashboard')
+  ok(await page.locator('.ov-title').count() === 1, '#simulasi shows Ringkasan')
   ok(await page.getByRole('heading', { level: 1, name: 'Ruang tanam', exact: true }).count() === 0 && await page.locator('.studio').count() === 0, 'Ruang tanam is not rendered')
 
+  // The weather lives on the plant page's stage.
+  await page.evaluate(() => { location.hash = '#tanaman' }); await page.locator('.stage-scene .plant-scene svg').waitFor()
   ok(await page.locator('.stage-weather').count() === 0, 'No simulated weather control')
   ok(await page.locator('.stage-weather-note').count() === 0, 'No weather note')
   ok(await page.locator('.plant-scene svg').getAttribute('data-weather') !== 'hujan', 'The sky is not one the visitor picked')

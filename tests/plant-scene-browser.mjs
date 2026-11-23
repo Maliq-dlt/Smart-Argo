@@ -60,7 +60,7 @@ const luminance = hex => { const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.sli
 try {
   // Readable at every width and in both themes, with every reading inside the picture.
   for (const width of [1440, 768, 390, 320]) for (const theme of ['light', 'dark']) {
-    const page = await open('#statistik', { width, theme, seed: cabai })
+    const page = await open('#tanaman', { width, theme, seed: cabai })
     const frame = await page.locator('.plant-scene').boundingBox()
     ok(frame && frame.width > 0 && frame.height > frame.width * .5, `The stage has a size at ${width}px`)
     ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `No horizontal overflow at ${width}px ${theme}`)
@@ -78,14 +78,14 @@ try {
   }
 
   // The second species, and growth: a plant 25 days in draws more than a seed.
-  const onion = await open('#statistik', { seed: bawang })
+  const onion = await open('#tanaman', { seed: bawang })
   ok(await onion.locator('.plant-scene .rv').count() === 3, 'Bawang merah renders its readings')
   await onion.locator('.plant-scene').screenshot({ path: `${output}/bawang-1440-light.png` })
   await onion.close()
-  const seedOnly = await open('#statistik', { seed: plantSeed(createJourney(scenarios[0])) })
+  const seedOnly = await open('#tanaman', { seed: plantSeed(createJourney(scenarios[0])) })
   const young = await seedOnly.locator('.plant-scene svg *').evaluateAll(all => all.filter(e => e.getAttribute('display') !== 'none' && e.getAttribute('opacity') !== '0.0').length)
   await seedOnly.close()
-  const grown = await open('#statistik', { seed: cabai })
+  const grown = await open('#tanaman', { seed: cabai })
   const mature = await grown.locator('.plant-scene svg *').evaluateAll(all => all.filter(e => e.getAttribute('display') !== 'none' && e.getAttribute('opacity') !== '0.0').length)
   ok(mature > young, `A grown plant shows more parts than a seedling (${mature} vs ${young})`)
 
@@ -97,7 +97,7 @@ try {
   // The sky follows the session clock: the stop colour at night is darker than at noon, and the page period agrees.
   const sky = []
   for (const hours of [0, 6, 16]) {
-    const page = await open('#statistik', { seed: advance(plantSeed(createJourney(scenarios[0])), hours) })
+    const page = await open('#tanaman', { seed: advance(plantSeed(createJourney(scenarios[0])), hours) })
     const stop = await page.locator('.plant-scene linearGradient[id$="-sky"] stop').first().getAttribute('stop-color')
     sky.push({ period: await page.locator('.dash-stage').getAttribute('data-sky'), light: luminance(stop) })
     await page.close()
@@ -107,7 +107,7 @@ try {
 
   // The demo weather: every sky draws, rain falls only in the rain, the note speaks only about rain and heat, and the choice is remembered.
   {
-    const page = await open('#statistik', { seed: leafy })
+    const page = await open('#tanaman', { seed: leafy })
     const pick = name => page.locator('.stage-weather').getByRole('radio', { name, exact: true }).check()
     const skyIs = kind => page.waitForFunction(k => document.querySelector('.plant-scene svg')?.getAttribute('data-weather') === k, kind)
     for (const [name, kind, note] of [['Berawan', 'berawan', null], ['Mendung', 'mendung', null], ['Hujan', 'hujan', /sedang hujan/i], ['Terik', 'terik', /suhu tinggi/i], ['Cerah', 'cerah', null]]) {
@@ -126,7 +126,7 @@ try {
     ok(await page.locator('.stage-weather input[value=hujan]').isChecked(), 'The choice survives a reload')
     ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'The weather control does not widen the page')
     await page.close()
-    const narrow = await open('#statistik', { width: 320, seed: leafy, text: true, reducedMotion: 'reduce' })
+    const narrow = await open('#tanaman', { width: 320, seed: leafy, text: true, reducedMotion: 'reduce' })
     ok(await narrow.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'The weather control fits at 320px with text at 200%')
     await narrow.locator('.dash-stage').screenshot({ path: `${output}/stage-320-text200.png` })
     await narrow.close()
@@ -134,7 +134,7 @@ try {
 
   // Text at 200% never pushes the page wider than a phone.
   for (const width of [375, 320]) {
-    const page = await open('#statistik', { width, seed: cabai, text: true, reducedMotion: 'reduce' })
+    const page = await open('#tanaman', { width, seed: cabai, text: true, reducedMotion: 'reduce' })
     ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Text at 200% overflows at ${width}px`)
     await page.locator('.plant-scene').screenshot({ path: `${output}/cabai-${width}-text200.png` })
     await page.close()
@@ -143,7 +143,7 @@ try {
   // One gentle breeze moves the plant; reduced motion holds it still.
   const outline = page => page.evaluate(() => [...document.querySelectorAll('.plant-scene path')].map(p => p.getAttribute('d')).join('|'))
   for (const reducedMotion of ['reduce', 'no-preference']) {
-    const page = await open('#statistik', { seed: leafy, reducedMotion })
+    const page = await open('#tanaman', { seed: leafy, reducedMotion })
     const before = await outline(page)
     await page.waitForTimeout(700)
     ok((before === await outline(page)) === (reducedMotion === 'reduce'), `The leaves ${reducedMotion === 'reduce' ? 'must hold still' : 'must sway'} with reduced motion = ${reducedMotion}`)
@@ -152,14 +152,14 @@ try {
 
   // Going back and forth between pages must not pile up animation loops.
   {
-    const page = await open('#statistik', { seed: cabai })
+    const page = await open('#tanaman', { seed: cabai })
     const pending = async () => { let most = 0; for (let i = 0; i < 12; i++) { most = Math.max(most, await page.evaluate(() => window.__raf.size)); await page.waitForTimeout(40) } return most }
     const baseline = await pending()
     for (let i = 0; i < 5; i++) {
-      await page.getByRole('link', { name: 'Simulasi', exact: true }).click()
+      await page.getByRole('link', { name: 'Ruang tanam', exact: true }).click()
       await page.getByRole('heading', { name: 'Ruang tanam', exact: true, level: 1 }).waitFor()
-      await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
-      await page.getByRole('heading', { name: 'Dashboard', exact: true, level: 1 }).waitFor()
+      await page.getByRole('link', { name: 'Tanaman', exact: true }).click()
+      await page.getByRole('heading', { name: 'Tanaman', exact: true, level: 1 }).waitFor()
     }
     await page.locator('.plant-scene svg').waitFor()
     const after = await pending()
