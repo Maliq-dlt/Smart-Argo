@@ -5,27 +5,40 @@
 <meta name="color-scheme" content="light dark">
 <title>Kebijakan privasi | Smart Agro</title>
 <style>
-@font-face{font-family:General;src:url('/fonts/general-sans-400.woff2')}@font-face{font-family:Fraunces;src:url('/fonts/fraunces-soft.woff2')}
-:root{--paper:#ecefe7;--ink:#18211b;--accent:#2f5a3c;color-scheme:light dark}
-@media(prefers-color-scheme:dark){:root{--paper:#161d19;--ink:#ecefe7;--accent:#acc9a8}}
-body{max-width:43rem;margin:auto;padding:clamp(1rem,5vw,4rem);background:var(--paper);color:var(--ink);font:1.05rem/1.65 General,sans-serif}
-h1,h2{font-family:Fraunces,serif;line-height:1.2}h1{font-size:clamp(2.3rem,7vw,3.6rem)}h2{margin-top:2rem}a{color:var(--accent);text-underline-offset:.18em}
+@font-face{font-family:General;src:url('/fonts/general-sans-400.woff2');font-weight:400}@font-face{font-family:General;src:url('/fonts/general-sans-600.woff2');font-weight:600}
+@font-face{font-family:Fraunces;src:url('/fonts/fraunces-soft.woff2')}
+/* Sage dan lumut, the site's palette (CLAUDE.md, Sistem desain). */
+:root{--bg:#ecefe7;--ink:#18211b;--muted:#55615a;--primary:#2f5a3c}
+@media(prefers-color-scheme:dark){:root{--bg:#161d19;--ink:#e8ede6;--muted:#a5afa7;--primary:#a6cf8f}}
+body{max-width:43rem;margin:auto;padding:clamp(1rem,5vw,4rem);background:var(--bg);color:var(--ink);font:1.05rem/1.65 General,system-ui,sans-serif;overflow-wrap:break-word}
+h1,h2{font-family:Fraunces,Georgia,serif;font-weight:420;font-variation-settings:'SOFT' 100;line-height:1.2}
+h1{font-size:clamp(2.3rem,7vw,3.6rem);margin-bottom:.5rem}h2{margin-top:2.25rem}
+.meta{color:var(--muted)}a{color:var(--primary);text-underline-offset:.18em}header a{font-weight:600;text-decoration:none}
 </style>
 <header><a href="/">Smart Agro</a></header>
 <main>
 <h1>Kebijakan privasi</h1>
-<p>23 November 2026 | Aplikasi Android dan website Smart Agro</p>
-<h2>Akun dan kebun Anda</h2>
-<p>Smart Agro menggunakan alamat email dan pengenal akun untuk mengautentikasi pengguna, mencatat kepemilikan produk, dan membatasi akses ke kebun. Anda dapat menambahkan nama tampilan dan foto profil. Login dengan Google memakai layanan Google. Peristiwa keamanan seperti perubahan akses dicatat untuk melindungi akun.</p>
-<p>Saat Anda menghubungkan alat, server menerima nomor perangkat, waktu pengukuran dan pengiriman, kelembapan, suhu, status pH, baterai dan data energi yang tersedia. Nama kebun, tanaman, catatan penyiraman, inspeksi dan pertanyaan yang Anda kirim disimpan agar dapat ditampilkan kembali. Anda memilih sendiri kapan membagikan hasil perawatan ke komunitas.</p>
+<p class="meta">Berlaku sejak 23 November 2026 · Aplikasi Android dan website Smart Agro</p>
+
+<h2>Data yang kami simpan</h2>
+<p>Email dan pengenal akun dipakai untuk masuk, mencatat kepemilikan produk, dan membatasi akses ke kebun Anda. Nama tampilan dan foto profil bersifat pilihan. Bila Anda masuk dengan Google, Google mengirim email, nama, dan foto profil akun Anda. Perubahan keamanan, seperti ganti sandi atau 2FA, dicatat untuk melindungi akun.</p>
+<p>Saat alat terhubung, server menerima nomor perangkat, waktu ukur dan kirim, kelembapan, suhu, pH, baterai, dan data energi yang tersedia. Nama kebun dan pot, lokasi kebun bila Anda mengisinya, tanaman, catatan siram dan pengecekan, serta pertanyaan yang Anda kirim disimpan agar bisa ditampilkan lagi. Hasil perawatan hanya dibagikan ke komunitas bila Anda menyalakannya per pot.</p>
+<p>Smart Agro tidak memasang iklan, pelacak analitik, atau cookie pihak ketiga, dan tidak menjual data.</p>
+
 <h2>Layanan yang menerima data</h2>
-<p>Supabase menangani autentikasi dan penyimpanan data aplikasi. Untuk prakiraan, server meneruskan koordinat lokasi kebun yang dibulatkan ke Open-Meteo. Untuk peringatan email yang Anda aktifkan, penyedia email memproses alamat tujuan dan isi peringatan. Anda dapat <a href="/#pengaturan-peringatan">mengubah atau mematikan peringatan email</a>.</p>
-<p>Jika layanan penjelasan tambahan diaktifkan oleh pengelola, saat Anda meminta penjelasan, pertanyaan dan ringkasan kondisi tanaman dapat diproses penyedia model. Aplikasi Android menghubungi GitHub untuk memeriksa rilis aplikasi. Pada perangkat yang mendukungnya, pemindaian QR menggunakan Google Play Services.</p>
-<h2>Data di HP Anda</h2>
-<p>Sesi masuk dilindungi dengan kunci Android Keystore. Aplikasi menyimpan ringkasan kebun terakhir di penyimpanan privat agar Anda tetap dapat membacanya saat offline. Widget dapat menampilkan status tanaman di layar utama jika Anda memasangnya. Berkas CSV yang Anda ekspor atau bagikan tetap berada di lokasi dan aplikasi tujuan yang Anda pilih.</p>
-<p>Pengaturan Wi-Fi mengirim nama jaringan dan sandinya ke ESP32 melalui jaringan setup milik alat. Alat menyimpan konfigurasi tersebut untuk tersambung ke jaringan Anda.</p>
+<p>Supabase (wilayah Singapura) menangani akun dan menyimpan data aplikasi. Untuk prakiraan cuaca, server mengirim koordinat kebun yang dibulatkan ke dua desimal (sekitar 1 km) ke Open-Meteo. Bila Anda menyalakan email peringatan, penyedia email memproses alamat tujuan dan isi peringatan; Anda dapat <a href="/#pengaturan-peringatan">mengubah atau mematikannya</a>.</p>
+<p>Bila pengelola menyalakan penjelasan tambahan, pertanyaan Anda dan ringkasan kondisi tanaman diproses oleh penyedia model bahasa saat Anda memintanya. Aplikasi Android memeriksa versi baru di GitHub, dan pada HP yang mendukungnya memindai QR lewat Google Play Services.</p>
+
+<h2>Data di HP dan browser Anda</h2>
+<p>Di Android, sesi masuk dienkripsi dengan kunci Android Keystore, dan ringkasan kebun terakhir disimpan di penyimpanan privat aplikasi agar tetap terbaca saat offline. Widget hanya tampil bila Anda memasangnya. Berkas CSV yang Anda ekspor berada di tempat yang Anda pilih.</p>
+<p>Siapkan Wi-Fi mengirim nama dan sandi Wi-Fi rumah langsung ke alat lewat jaringan setup alat itu. Alat menyimpannya untuk tersambung; aplikasi tidak menyimpan sandi tersebut.</p>
+<p>Website menyimpan sesi masuk, pilihan tema, dan, dalam mode tamu, kebun latihan di penyimpanan browser Anda. Data mode tamu tidak dikirim ke server.</p>
+
 <h2>Menghapus akun</h2>
-<p><a href="/#hapus-akun">Ajukan penghapusan akun</a> melalui website atau buka pengaturan akun di Android. Sesi ditutup dan produk dilepas ketika permintaan diterima. Anda dapat membatalkan permintaan selama 14 hari. Setelah tenggang berakhir, proses penghapusan server menghapus akses login, foto, kebun, jurnal, kontribusi komunitas serta data pribadi terkait yang ditangani proses tersebut.</p>
-<p>Rekam teknis perangkat, riwayat kepemilikan, transaksi dan bukti audit tertentu dipertahankan untuk integritas catatan. Entri akun pada riwayat itu ditandai "Akun dihapus". Salinan yang sudah Anda ekspor dikelola terpisah di perangkat atau layanan penerima.</p>
+<p><a href="/#hapus-akun">Ajukan penghapusan akun</a> di website atau di Akun pada aplikasi Android. Saat permintaan diterima, semua sesi ditutup dan produk dilepas. Anda dapat membatalkannya selama 14 hari. Setelah itu login, foto, kebun, jurnal, pertanyaan, dan kontribusi komunitas Anda dihapus.</p>
+<p>Catatan teknis perangkat, riwayat kepemilikan, transaksi, dan bukti audit tertentu tetap disimpan untuk menjaga keutuhan catatan; nama Anda di sana diganti "Akun dihapus". Salinan yang sudah Anda ekspor berada di luar kendali kami.</p>
+
+<h2>Kontak</h2>
+<p>Pertanyaan tentang privasi dapat diajukan lewat <a href="https://github.com/Maliq-dlt/Smart-Argo/issues">GitHub Issues proyek ini</a>. Laman itu publik, jadi jangan tulis data pribadi di sana; untuk permintaan yang menyangkut akun, gunakan penghapusan akun di atas.</p>
 </main>
 </html>

@@ -151,7 +151,7 @@ Isinya langkah dengan hasil yang diharapkan dan tabel hasil (`No | Uji | Harapan
   - (c) rencana ini.
 
   Akhiri pesan commit dengan baris atribusi yang berlaku di sesi itu.
-- [ ] **Langkah 4 (izin):** push `android-iot-readiness`; buka PR ke `main` (aturan cabang mewajibkan PR + status check); merge setelah CI hijau.
+- [ ] **Langkah 4 (izin):** (push selesai 23 Nov 16:40 atas izin pengguna; PR + merge menunggu rilis cloud langkah 5, karena merge memicu deploy web) push `android-iot-readiness`; buka PR ke `main` (aturan cabang mewajibkan PR + status check); merge setelah CI hijau.
 - [ ] **Langkah 5 (izin, cloud):**
   - cadangkan skema dan data ke `.tmp/cloud/backups/pre-2026-11-23-*`;
   - terapkan 6 migrasi tertunda;
@@ -262,8 +262,8 @@ FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk ta
 - Modify: `android/app/build.gradle.kts` (`com.google.android.gms:play-services-code-scanner:16.1.0`)
 - Modify: `ProductsScreen.kt` (tombol pindai), `QrSupport.kt`
 
-- [ ] **Langkah 1:** pakai `GmsBarcodeScanning.getClient(context, GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()).startScan()`. Hasilnya lewat pengurai yang sama dengan jalur foto (URL `…/?serial=…#ekosistem`, `src/lib/productQr.ts:13`).
-- [ ] **Langkah 2:** bila modul Play Services tidak tersedia, jalur foto lama (`decodeQrFromUri`) tetap tersedia.
+- [x] **Langkah 1:** pakai `GmsBarcodeScanning.getClient(context, GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()).startScan()`. Hasilnya lewat pengurai yang sama dengan jalur foto (URL `…/?serial=…#ekosistem`, `src/lib/productQr.ts:13`).
+- [x] **Langkah 2:** bila modul Play Services tidak tersedia, jalur foto lama (`decodeQrFromUri`) tetap tersedia.
 - [ ] **Langkah 3:** tes pengurai yang ada tetap hijau; uji manual di emulator dengan image Google Play.
 
 ### Tugas 11: cache bacaan terakhir (offline)
@@ -278,12 +278,12 @@ FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk ta
 - `data class Cached(val json: String, val at: Instant)`.
 - Berkas `cache-<sha256(account)>.json` di `filesDir`.
 
-- [ ] **Langkah 1: tulis tes:**
+- [x] **Langkah 1: tulis tes:**
   - simpan lalu muat → sama;
   - `load` untuk akun lain → `null`;
   - setelah `clear()` → `null`.
-- [ ] **Langkah 2:** implementasi. Saat jaringan gagal, UI menampilkan data cache dengan baris "Terakhir diperbarui 14.30" (bukan layar galat).
-- [ ] **Langkah 3:** tes Android → PASS.
+- [x] **Langkah 2:** implementasi. Saat jaringan gagal, UI menampilkan data cache dengan baris "Terakhir diperbarui 14.30" (bukan layar galat).
+- [x] **Langkah 3:** tes Android → PASS.
 
 ### Tugas 12: sambungkan Wi-Fi dan kalibrasi alat dari app
 
@@ -301,8 +301,8 @@ FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk ta
 - Android 8–9: tampilkan langkah membuka `http://192.168.4.1` di browser.
 - `fun wifiFormError(ssid: String, pass: String): String?`: validasi yang sama dengan firmware.
 
-- [ ] **Langkah 1:** tes `wifiFormError` (SSID kosong, SSID 33 karakter, sandi 7 karakter → galat; sandi kosong → boleh).
-- [ ] **Langkah 2:** implementasi wizard "Siapkan perangkat": sambung → Wi-Fi rumah → kalibrasi kering → basah → selesai.
+- [x] **Langkah 1:** tes `wifiFormError` (SSID kosong, SSID 33 karakter, sandi 7 karakter → galat; sandi kosong → boleh).
+- [x] **Langkah 2:** implementasi wizard "Siapkan perangkat": sambung → Wi-Fi rumah → kalibrasi kering → basah → selesai.
 - [ ] **Langkah 3:** uji bersama pengguna dengan ESP32 nyata (bagian dari Tugas 2).
 
 ### Tugas 13: pH sekali sehari (hanya bila Tugas 3 memilih B)
@@ -325,8 +325,8 @@ FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk ta
 - Consumes: `OverviewCache` (Tugas 11); diperbarui oleh `CareCheckWorker` (Tugas 9).
 - `fun widgetLine(overview: JSONObject?): String`: tanaman `below` pertama ("Cabai 1 perlu disiram"); bila tidak ada, "Semua tanaman aman"; tanpa data, "Buka Smart Agro untuk memuat".
 
-- [ ] **Langkah 1:** tes `widgetLine` untuk ketiga kasus di atas.
-- [ ] **Langkah 2:** implementasi; mengetuk widget membuka app.
+- [x] **Langkah 1:** tes `widgetLine` untuk ketiga kasus di atas.
+- [x] **Langkah 2:** implementasi; mengetuk widget membuka app.
 
 ---
 
@@ -340,8 +340,8 @@ FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk ta
 - Modify: `PlantScreens.kt`, `DetailScreen.kt`
 - Test: `ModelsTest.kt`
 
-- [ ] **Langkah 1:** tes pengurai untuk contoh jawaban tiap RPC (salin bentuknya dari `docs/sensor-care-api.md`, termasuk `band_source`).
-- [ ] **Langkah 2:** implementasi:
+- [x] **Langkah 1:** tes pengurai untuk contoh jawaban tiap RPC (salin bentuknya dari `docs/sensor-care-api.md`, termasuk `band_source`).
+- [x] **Langkah 2:** implementasi:
   - beranda memakai `my_overview` (status `below/ok/above/learning/no_device`);
   - label pita:
     - `own_pattern` → "Berdasarkan pola pot Anda";
@@ -358,18 +358,18 @@ FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk ta
 - Create: kartu Perangkat di `src/components/dashboard/`, halaman `#pengaturan-peringatan` (daftarkan di `src/lib/siteRoute.ts`)
 - Test: `tests/overview.test.ts`, `tests/overview-browser.mjs`
 
-- [ ] **Langkah 1:** tes unit label `band_source`; tes browser untuk kartu Perangkat dan halaman pengaturan (sakelar per jenis lewat `set_my_alert_preferences`).
-- [ ] **Langkah 2:** implementasi mengikuti rencana `docs/superpowers/plans/2026-11-22-web-ui-dashboard-v2.md` (U5).
+- [x] **Langkah 1:** tes unit label `band_source`; tes browser untuk kartu Perangkat dan halaman pengaturan (sakelar per jenis lewat `set_my_alert_preferences`).
+- [x] **Langkah 2:** implementasi mengikuti rencana `docs/superpowers/plans/2026-11-22-web-ui-dashboard-v2.md` (U5).
 - [ ] **Langkah 3:** pemeriksaan web penuh + tangkapan 1440/768/390/320 terang/gelap.
 
 ### Tugas 17: pengaturan notifikasi dan email di Android
 
 **Files:** `AccountScreens.kt`, `AgroApi.kt`
 
-- [ ] **Langkah 1:** grup "Peringatan" di Akun:
+- [x] **Langkah 1:** grup "Peringatan" di Akun:
   - sakelar per jenis (`soil_dry`, `battery_low`, `device_silent`, `soil_hot`) lewat `my_alert_preferences` dan `set_my_alert_preferences`;
   - sakelar "Notifikasi di HP" yang meminta izin `POST_NOTIFICATIONS` dan menjadwalkan `CareCheckWorker`.
-- [ ] **Langkah 2:** tes alur Robolectric (nyalakan → izin → tersimpan); tes Android → PASS.
+- [x] **Langkah 2:** tes alur Robolectric (nyalakan → izin → tersimpan); tes Android → PASS.
 
 ### Tugas 18: QR kemasan langsung membuka app (App Links)
 
@@ -379,8 +379,8 @@ FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk ta
 - Modify: manifest (`intent-filter` `autoVerify` untuk host `live.smart-agro-demo.pages.dev`)
 - Modify: `MainActivity.kt` (baca `serial` dari intent)
 
-- [ ] **Langkah 1 (pengguna):** jalankan `keytool -list -v` pada keystore rilis di `android/.private/` dan berikan sidik SHA-256. Jangan memindahkan keystore.
-- [ ] **Langkah 2:** isi `assetlinks.json`; intent membuka layar klaim produk dengan serial terisi.
+- [x] **Langkah 1 (pengguna):** jalankan `keytool -list -v` pada keystore rilis di `android/.private/` dan berikan sidik SHA-256. Jangan memindahkan keystore.
+- [x] **Langkah 2:** isi `assetlinks.json`; intent membuka layar klaim produk dengan serial terisi.
 - [ ] **Langkah 3:** setelah deploy (izin), verifikasi dengan `adb shell pm get-app-links id.smartagro.app`.
 
 ### Tugas 19: cek pembaruan APK
@@ -392,8 +392,8 @@ FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk ta
 **Interfaces:**
 - `fun isNewer(latestTag: String, current: String): Boolean`: membandingkan `v0.1.2` dengan `0.1.1` per angka.
 
-- [ ] **Langkah 1:** tes kasus `v0.1.2 > 0.1.1`, `v0.2.0 > 0.1.9`, `v0.1.1 = 0.1.1`, dan tag tak terurai → `false`.
-- [ ] **Langkah 2:** sekali sehari, `GET https://api.github.com/repos/Maliq-dlt/Smart-Argo/releases/latest`. Bila lebih baru, tampilkan baris "Versi baru tersedia" yang membuka halaman rilis.
+- [x] **Langkah 1:** tes kasus `v0.1.2 > 0.1.1`, `v0.2.0 > 0.1.9`, `v0.1.1 = 0.1.1`, dan tag tak terurai → `false`.
+- [x] **Langkah 2:** sekali sehari, `GET https://api.github.com/repos/Maliq-dlt/Smart-Argo/releases/latest`. Bila lebih baru, tampilkan baris "Versi baru tersedia" yang membuka halaman rilis.
 
 Laporan crash tidak ditambahkan (ponytail: tambahkan saat rilis lewat Play Store).
 
@@ -403,13 +403,13 @@ Laporan crash tidak ditambahkan (ponytail: tambahkan saat rilis lewat Play Store
 - Create: `public/privasi.html` (halaman statis berbahasa Indonesia dengan token warna situs)
 - Create: `docs/play-data-safety.md`
 
-- [ ] **Langkah 1:** tulis data yang benar-benar dikumpulkan, diperiksa dari kode:
+- [x] **Langkah 1:** tulis data yang benar-benar dikumpulkan, diperiksa dari kode:
   - email, nama tampilan, foto profil, bacaan sensor, koordinat situs untuk cuaca;
   - log keamanan;
   - jurnal perawatan;
   - retensi;
   - cara hapus (`#hapus-akun`, tenggang 14 hari).
-- [ ] **Langkah 2:** pengguna meninjau teks sebelum terbit.
+- [x] **Langkah 2:** teks ditinjau Claude atas permintaan pengguna (23 Nov 16:35): klaim dicocokkan dengan kode, ditambah kontak, data browser, wilayah server.
 
 ---
 
@@ -451,9 +451,10 @@ Laporan crash tidak ditambahkan (ponytail: tambahkan saat rilis lewat Play Store
 | 12 | langkah 1–2 selesai (Codex) + perbaikan Claude, langkah 3 menunggu ESP32 | Wizard kini menawarkan "Pakai kalibrasi tersimpan": kalibrasi ulang hanya untuk ganti Wi-Fi mengulang belajar pola pot 7 hari (migrasi 20261123050000). |
 | 14 | selesai (Codex) | RemoteViews, bukan Glance (tanpa runtime UI tambahan). |
 | 15 | selesai (Codex) + perbaikan Claude | `my_overview` opsional saat memuat (cloud belum punya fungsinya: dulu seluruh akun gagal dimuat), rincian tanpa banner galat untuk RPC yang belum ada (404), zona waktu non-IANA dikirim WIB, kode galat perawatan dipetakan, unit milik tanaman lain tidak ditawarkan. |
-| 16 | selesai (Codex) + perbaikan Claude | Ringkasan akun dimuat ulang saat tanaman ditambah/diganti, spesies dari katalog (bukan jatuh ke cabai), `aria-live` bukan `role=status` tambahan, ikon menu, kontras kotak centang. |
+| 16 | selesai (Codex) + perbaikan Claude, langkah 3 selesai | Ringkasan akun dimuat ulang saat tanaman ditambah/diganti, spesies dari katalog (bukan jatuh ke cabai), `aria-live` bukan `role=status` tambahan, ikon menu, kontras kotak centang. Putaran 2 (16:50): umur tanaman dan jam WIB nyata di panggung, judul tidak pecah di tengah kata pada 320 px teks 200% (cek baru di `care-browser`, merah lalu hijau), petunjuk volume, unit diarsipkan tetap tampil, "perangkat terdaftar". Tangkapan 4 lebar × terang/gelap × 100/200% dilihat. |
 | 17 | selesai (Codex) | Grup "Peringatan" di Akun. |
 | 18 | selesai (Codex) + perbaikan Claude, verifikasi live menunggu deploy | Serial tautan dilepas setelah ditangani (dulu rotasi HP atau membuka Produk lagi mengulang tautan). |
 | 19 | selesai (Codex) | |
-| 20 | langkah 1 selesai (Codex), langkah 2 menunggu tinjauan pengguna | `public/privasi.html`, `docs/play-data-safety.md`. |
+| 20 | selesai; teks ditinjau Claude atas permintaan pengguna | Klaim dicocokkan dengan kode (koordinat `round2`, isi purge, tanpa SDK iklan/analitik). Ditambah: kontak (GitHub Issues, publik; sediakan email sebelum Play), data di browser, Supabase Singapura, sandi Wi-Fi tidak disimpan app, palet dan Fraunces SOFT. Purge harian di cloud belum berjalan: aktifkan sebelum halaman terbit. |
+| `konsep-kebun` | diputuskan pengguna | Tidak dikomit; dipindah ke `android/.tmp/konsep-kebun-2026-11-18/`. |
 | Migrasi 20261123050000 (Codex: b, e, f, i, j) | selesai + perbaikan Claude, lokal saja | `care_moisture_since` sebagai fungsi SQL direncanakan ulang tiap panggilan dan menggandakan Ringkasan (p95 315 ms > 300). Kini plpgsql: median 136 ms. |
