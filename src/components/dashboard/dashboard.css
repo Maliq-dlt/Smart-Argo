@@ -91,9 +91,6 @@
 .band-area { fill: url(#band-fill); }
 .band-line { fill: none; stroke: var(--primary); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .band-solo { fill: var(--primary); }
-.band-dot { fill: var(--surface); stroke: var(--primary); stroke-width: 2.6; }
-.band-hover { stroke: var(--ink); stroke-opacity: .4; stroke-dasharray: 3 3; }
-.band-tip { position: absolute; translate: -50% -100%; padding: .375rem .6875rem; border-radius: .75rem; background: var(--ink); color: var(--bg); font-size: .78rem; font-weight: 500; white-space: nowrap; pointer-events: none; }
 .band-ribbon { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: .875rem; margin-top: .75rem; border-radius: 999px; overflow: hidden; }
 .band-ribbon i, .band-legend i { display: block; }
 .band-ribbon i[data-zone=dry], .band-legend [data-zone=dry] i { background: var(--z-dry); box-shadow: inset 0 -3px 0 var(--warn); }

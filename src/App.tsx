@@ -50,8 +50,15 @@ import DevicePanel from './components/DevicePanel'
 import ChainProofDialog from './components/ChainProofDialog'
 import { settledMood } from './lib/mascot'
 // The ecosystem and profile pages (every online panel) load on first visit, keeping them out of the dashboard chunk.
-const MiroEcosystemWorkspace = lazy(() => import('./components/MiroEcosystemWorkspace'))
-const ProfilePage = lazy(() => import('./components/ProfilePage'))
+// Akun and Ekosistem are separate chunks. Once a chunk is in, its page renders directly instead of through React.lazy
+// (which suspends at least once and showed "Memuat…" for a frame: a blink, 2026-11-24). Both are fetched once the
+// browser is idle, and a page change waits for a missing chunk before its transition starts.
+const chunks: { ecosystem?: typeof import('./components/MiroEcosystemWorkspace').default; profile?: typeof import('./components/ProfilePage').default } = {}
+const loadEcosystem = () => import('./components/MiroEcosystemWorkspace').then(m => { chunks.ecosystem = m.default; return m })
+const loadProfile = () => import('./components/ProfilePage').then(m => { chunks.profile = m.default; return m })
+const LazyEcosystem = lazy(loadEcosystem), LazyProfile = lazy(loadProfile)
+const chunkMissing = (page: string) => page === 'ecosystem' && !chunks.ecosystem ? loadEcosystem : page === 'profile' && !chunks.profile ? loadProfile : null
+if (typeof window !== 'undefined') (window.requestIdleCallback ?? ((run: () => void) => setTimeout(run, 2000)))(() => { void loadEcosystem(); void loadProfile() })
 import DeleteAccount, { AFTER_SIGN_IN, DeletionPending } from './components/DeleteAccount'
 import AccountProvider from './components/AccountProvider'
 import { useAccount } from './components/accountContext'
@@ -112,6 +119,7 @@ const downloadJson = (value: unknown, filename: string) => {
 }
 
 function Simulator() {
+  const MiroEcosystemWorkspace = chunks.ecosystem ?? LazyEcosystem, ProfilePage = chunks.profile ?? LazyProfile
   const [boot] = useState(restoreSessions)
   const [book, setBook] = useState<SessionBook>(boot.book)
   const session = book.sessions.find(s => s.id === book.activeId)!
@@ -374,21 +382,33 @@ function Simulator() {
   function toggleRunning() { setPauseNote(running ? 'Dijeda oleh pengguna.' : ''); setRunning(!running) }
 
   useEffect(() => {
-    // Pages swap at once (see "Page change" in styles.css): quick back-and-forth never dims or slides the screen. The one
-    // morph is a plant opened from Ringkasan (openPlant sets data-morph): its card travels into the stage. The swap runs
-    // inside the transition, so the new page, its scroll position and its focus are in place before it is captured.
+    // Every page change is a View Transition (see "Page change" in styles.css): the new page eases in over the old one,
+    // which never fades, so the screen neither blinks nor dims. A plant opened from Ringkasan (openPlant sets
+    // data-morph) is the one morph: its card travels into the stage. The swap runs inside the transition, so the new
+    // page, its scroll position and its focus are in place before it is captured. Reduced motion swaps at once.
     const root = document.documentElement
-    let current: ViewTransition | null = null
+    let current: ViewTransition | null = null, latest = 0
     const swap = () => { setPage(pageFromHash()); setHash(location.hash); setCareEffect(null) }
-    const navigate = () => {
-      if (root.dataset.morph === undefined || typeof document.startViewTransition !== 'function' || root.dataset.themeTransition !== undefined) { delete root.dataset.morph; swap(); return }
+    const go = (kind: 'page' | 'morph') => {
+      if (typeof document.startViewTransition !== 'function' || root.dataset.themeTransition !== undefined
+        || matchMedia('(prefers-reduced-motion: reduce)').matches) { swap(); return }
+      root.dataset.pageTransition = kind
       const transition = document.startViewTransition(() => flushSync(swap))
       current = transition
-      // A second change skips this one; only the latest transition clears the flag.
-      transition.finished.finally(() => { if (current === transition) { delete root.dataset.morph; current = null } })
+      transition.ready.catch(() => undefined) // a quick second click skips this one: expected, not an error
+      // A second change skips this one (it finishes at once); only the latest transition clears the flag.
+      transition.finished.finally(() => { if (current === transition) { delete root.dataset.pageTransition; current = null } })
+    }
+    const navigate = () => {
+      const ticket = ++latest, kind = root.dataset.morph === undefined ? 'page' : 'morph'
+      delete root.dataset.morph // consumed: a tab clicked during the morph is a plain page change
+      const load = chunkMissing(pageFromHash())
+      // The old page stays until the chunk is in; a later change wins over this one.
+      if (load) load().catch(() => undefined).finally(() => { if (ticket === latest) go(kind) })
+      else go(kind)
     }
     window.addEventListener('hashchange', navigate)
-    return () => { window.removeEventListener('hashchange', navigate); delete root.dataset.morph }
+    return () => { window.removeEventListener('hashchange', navigate); delete root.dataset.morph; delete root.dataset.pageTransition }
   }, [])
   // Layout effect: inside a page transition the new view is captured right after the swap, so focus and scroll must
   // already be final. The jump to the top is instant; a scroll animation here would play under the cross-fade.

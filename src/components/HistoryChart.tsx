@@ -5,6 +5,7 @@ import type { PotCase, Decision } from '../lib/agronomyEngine'
 import type { LogEntry } from '../lib/sessionStore'
 import { careEvents, chartSegments, METRICS, type Metric, type CareEvent } from '../lib/chartData'
 import { clockTime, clockDate, utcLabel, type SessionClock } from '../lib/sessionClock'
+import { ScrubMarker, ScrubTip, useScrub } from './ChartScrub'
 
 export default function HistoryChart({ clock, data, decision, logs = [], metric = 'moisture' }: { clock: SessionClock; data: PotCase; decision: Decision; logs?: LogEntry[]; metric?: Metric }) {
   const [selectedTime, setSelectedTime] = useState<number | null>(null)
@@ -35,11 +36,16 @@ export default function HistoryChart({ clock, data, decision, logs = [], metric 
   const segments = chartSegments(rows, metric)
   const { low, wet, slope_per_h, r2, eta_h } = decision.evidence
   const limits = metric === 'moisture' ? [low, wet] : metric === 'temp_c' ? [data.profile.hot_c] : data.profile.ph_range
+  // The reading dot: rests on the newest measured value, follows the pointer or a finger, glides back (ChartScrub).
+  const viewHeight = care.length ? 292 : 245
+  const points = rows.filter(r => r.valid && r[metric] !== null).map(r => ({ x: x(r.t_h), y: y(r[metric]!), text: `${clockTime(clock, r.t_h).slice(0, 5)} · ${r[metric]} ${spec.unit}` }))
+  const { pick, handlers } = useScrub(points, width)
+  const at = points[pick ?? points.length - 1]
   const status = !selected.valid ? 'Gagal · tidak digunakan untuk keputusan' : selected[metric] === null ? 'Tidak diukur · bukan nilai nol' : metric === 'ph' && !data.profile.ph_validated ? 'Terukur · pH belum tervalidasi' : 'Valid'
   return <section className="panel history-panel" aria-labelledby="history-title">
     <div className="panel-heading"><h2 id="history-title"><ChartLine />Riwayat sensor</h2><span className="history-unit">{spec.label} · {spec.unit}</span></div>
     <p className="chart-help">{rows.length} dari {data.samples.length} sampel · {utcLabel(clock, data.now_h)}. Pilih titik untuk rinciannya.</p>
-    <div className="chart-wrap" ref={chart}><svg key={metric} className="reading-feedback" viewBox={`0 0 ${width} ${care.length ? 292 : 245}`} role="group" aria-label={`Grafik ${spec.label} terhadap waktu sesi`}>
+    <div className="chart-wrap" ref={chart}><div className="scrub-host"><svg key={metric} className="reading-feedback" viewBox={`0 0 ${width} ${viewHeight}`} role="group" aria-label={`Grafik ${spec.label} terhadap waktu sesi`} {...handlers}>
       {[0, 1, 2, 3, 4].map(i => { const n = spec.min + (spec.max - spec.min) * i / 4; return <g key={i}><text x="28" y={y(n) + 4} textAnchor="end">{n}</text><line x1="38" x2={width - 28} y1={y(n)} y2={y(n)} stroke="var(--border-soft)" /></g> })}
       <text x="38" y="17">{spec.unit}</text>
       {limits.map((limit, i) => <line key={i} className="threshold-line" x1="38" x2={width - 28} y1={y(limit)} y2={y(limit)} stroke={i === 0 ? 'var(--amber)' : 'var(--muted)'} strokeDasharray="4 5" />)}
@@ -65,7 +71,8 @@ export default function HistoryChart({ clock, data, decision, logs = [], metric 
           <Icon x={x(hour) - 8} y="255" width="16" height="16" aria-hidden="true" />{events.length > 1 && <text x={x(hour) + 14} y="251">{events.length}</text>}
         </g>
       })}
-    </svg></div>
+      {at && <ScrubMarker point={at} reading={pick !== null} top={27} bottom={184} />}
+    </svg>{at && <ScrubTip point={at} reading={pick !== null} viewWidth={width} viewHeight={viewHeight} />}</div></div>
     <div className="chart-legend"><span><Circle />Terukur</span><span><X />Gagal</span><span><Diamond />Tidak diukur</span><span><i className="legend-line amber" />{metric === 'moisture' ? `Acuan air ${low} / basah ${wet}` : metric === 'temp_c' ? `Acuan panas ${limits[0]} °C` : `Acuan pH ${limits.join('–')}`}</span></div>
     <details className="chart-details" ref={sampleDetails}><summary><span>Detail pengukuran<small>{spec.label}: {selected[metric] === null ? 'Tidak diukur' : `${selected[metric]} ${spec.unit}`} · {status}</small></span><CaretDown aria-hidden="true" /></summary>
     <div className="point-detail"><label>Pilih sampel<SelectField label="Pilih sampel grafik" value={selected.t_h} onValueChange={value => selectSample(Number(value))} options={rows.map(r => ({ value: r.t_h, label: `${clockDate(clock, r.t_h)} ${clockTime(clock, r.t_h)}` }))} /></label><div aria-live="polite"><strong>{spec.label}: {selected[metric] === null ? 'Tidak diukur' : `${selected[metric]} ${spec.unit}`}</strong><span>{status}</span><span>Waktu {`${clockDate(clock, selected.t_h)} ${clockTime(clock, selected.t_h)}`} {utcLabel(clock, selected.t_h)} · umur {Math.round((data.now_h - selected.t_h) * 60)} menit</span></div></div>

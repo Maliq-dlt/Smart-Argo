@@ -20,7 +20,7 @@ export const motion = { reduced: false }
 export class Spring {
   x: number; t: number; v = 0
   r: number; z: number
-  constructor(x: number, response = .6, damping = .85) { this.x = x; this.t = x; this.r = response; this.z = damping }
+  constructor(x: number, response = .6, damping = 1) { this.x = x; this.t = x; this.r = response; this.z = damping }
   snap(x: number) { this.x = this.t = x; this.v = 0 }
   step(dt: number) {
     if (motion.reduced) { this.x = this.t; this.v = 0; return }

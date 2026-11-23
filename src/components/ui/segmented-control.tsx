@@ -12,7 +12,7 @@ export default function SegmentedControl({ label, value, options, onValueChange 
     <div className="segment-options">{options.map(option => <label className="segment" key={option.value}>
       <input type="radio" name={id} value={option.value} checked={value === option.value} onChange={() => onValueChange(option.value)} />
       {value === option.value && <motion.span className="segment-selection" layoutId={`${id}-selection`} layoutDependency={value} initial={false}
-        transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 40 }} aria-hidden="true" />}
+        transition={reduced ? { duration: 0 } : { type: 'tween', duration: .26, ease: [.2, .7, .2, 1] }} aria-hidden="true" />}
       <span className="segment-label">{option.label}</span>
     </label>)}</div>
   </fieldset>

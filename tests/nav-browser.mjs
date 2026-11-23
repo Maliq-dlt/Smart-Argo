@@ -1,6 +1,7 @@
 // Navigation v2 (plan 2026-11-22-web-ui-dashboard-v2, U1 + U4): the floating capsule, its lens, the phone layout at
-// the bottom, and page changes that swap at once (no cross-fade: the page is never dimmed between two frames). Guest
-// mode, no backend. Serve the build with `npx vite preview --port 4174 --host 127.0.0.1` (default TEST_URL).
+// the bottom, and page changes where the new page eases in over the old one (2026-11-24: a swap in one frame read as a
+// blink). The old page is never faded, so the screen never dims between two pages. Guest mode, no backend. Serve the
+// build with `npx vite preview --port 4174 --host 127.0.0.1` (default TEST_URL).
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { asGuest } from './entry-helpers.mjs'
@@ -24,15 +25,23 @@ async function open(width, reducedMotion = 'no-preference') {
 }
 const nav = page => page.getByRole('navigation', { name: 'Navigasi utama' })
 const current = page => nav(page).locator('[aria-current=page]').innerText()
-/** Watches every frame while `act` runs and the page settles: the lowest opacity of <main> and whether any page-wide
- *  View Transition animated (a theme change or a plant card's morph are the only allowed ones). */
+/** Watches every frame while `act` runs and the page settles: the lowest opacity of <main>, the View Transition
+ *  animations seen, which of them touched the old page (it must stay opaque, or the screen dims) and the longest one
+ *  on the new page. */
 async function watchFrames(page, act) {
   await page.evaluate(() => {
-    const w = window.__frames = { min: 1, viewTransitions: 0, frames: 0, stop: false }
+    const w = window.__frames = { min: 1, viewTransitions: 0, oldAnimated: 0, newAnimated: 0, longest: 0, loading: 0, frames: 0, stop: false }
     const tick = () => {
       const main = document.getElementById('main')
       if (main) w.min = Math.min(w.min, Number(getComputedStyle(main).opacity))
-      w.viewTransitions += document.getAnimations().filter(a => /::view-transition/.test(a.effect?.pseudoElement ?? '')).length
+      if (document.querySelector('.page-loading')) w.loading++
+      for (const a of document.getAnimations()) {
+        const pseudo = a.effect?.pseudoElement ?? ''
+        if (!/::view-transition/.test(pseudo)) continue
+        w.viewTransitions++
+        if (pseudo.startsWith('::view-transition-old')) w.oldAnimated++
+        if (pseudo === '::view-transition-new(root)') { w.newAnimated++; w.longest = Math.max(w.longest, Number(a.effect.getTiming().duration) || 0) }
+      }
       w.frames++
       if (!w.stop) requestAnimationFrame(tick)
     }
@@ -52,13 +61,23 @@ try {
   ok(await current(page) === 'Ringkasan', 'Ringkasan is the landing page')
   ok(await nav(page).locator('[aria-current=page] .nav-lens').count() === 1, 'The lens sits under the current tab')
 
-  // A tab click swaps the page at once: never dimmed, no page-wide transition.
+  // A tab click eases the new page in over the old one: no swap in one frame, the old page never fades (no dim), and
+  // it is quick enough not to slow a second click down.
   for (const label of ['Tanaman', 'Ruang tanam', 'Ringkasan', 'Tanaman']) {
     const frames = await watchFrames(page, () => nav(page).getByRole('link', { name: label }).click())
     ok(await current(page) === label, `${label} becomes current`)
     ok(frames.min === 1, `Opening ${label} never dims the page (lowest opacity ${frames.min})`)
-    ok(frames.viewTransitions === 0, `Opening ${label} runs no page transition (${frames.viewTransitions})`)
+    ok(frames.newAnimated > 0, `Opening ${label} eases the new page in (${frames.newAnimated} frames)`)
+    ok(frames.oldAnimated === 0, `Opening ${label} never fades the old page (${frames.oldAnimated})`)
+    ok(frames.longest > 0 && frames.longest <= 300, `Opening ${label} takes at most 300 ms (${frames.longest})`)
   }
+  // Ringkasan straight to Akun (a separate chunk): the page eases in like the others and "Memuat…" never shows for a
+  // frame (2026-11-24: React.lazy suspended once and the page blinked).
+  await nav(page).getByRole('link', { name: 'Ringkasan' }).click(); await page.locator('.overview').waitFor()
+  const account = await watchFrames(page, () => nav(page).getByRole('link', { name: 'Akun' }).click())
+  ok(await current(page) === 'Akun', 'Akun becomes current')
+  ok(account.loading === 0, `Opening Akun never shows "Memuat…" (${account.loading} frames)`)
+  ok(account.newAnimated > 0 && account.oldAnimated === 0, 'Opening Akun eases the page in without dimming')
   // The tools of a plant live under Tanaman; the account's pages under Akun.
   await page.goto(new URL('#terminal', base).href)
   ok(await current(page) === 'Tanaman', 'Terminal belongs to Tanaman')
@@ -69,7 +88,8 @@ try {
   await page.goto(new URL('#statistik', base).href)
   const quick = await watchFrames(page, async () => { for (const label of ['Tanaman', 'Ringkasan', 'Tanaman', 'Ringkasan']) await nav(page).getByRole('link', { name: label }).click() })
   ok(await current(page) === 'Ringkasan' && await page.locator('.overview').count() === 1, 'After quick clicks the last page is shown')
-  ok(quick.min === 1, `Quick clicks never dim the page (${quick.min})`)
+  ok(quick.min === 1 && quick.oldAnimated === 0, `Quick clicks never dim the page (${quick.min}, old faded ${quick.oldAnimated})`)
+  ok(await page.evaluate(() => document.documentElement.dataset.pageTransition === undefined), 'No transition is left half-way after quick clicks')
   await page.close()
 
   // Keyboard: the tabs are links in reading order, after the skip link.
@@ -99,6 +119,8 @@ try {
   const frames = await watchFrames(calm, () => calm.locator('.ov-card, .ov-tile').first().click())
   ok(await current(calm) === 'Tanaman', 'A card opens its plant')
   ok(frames.viewTransitions === 0 && frames.min === 1, 'With reduced motion the card does not morph')
+  const tab = await watchFrames(calm, () => nav(calm).getByRole('link', { name: 'Ringkasan' }).click())
+  ok(await current(calm) === 'Ringkasan' && tab.viewTransitions === 0, 'With reduced motion a tab swaps the page at once')
   await calm.close()
 
   ok(errors.length === 0, `No page errors: ${errors.join(' | ')}`)

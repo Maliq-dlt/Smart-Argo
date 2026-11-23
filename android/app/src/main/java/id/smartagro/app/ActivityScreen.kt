@@ -3,6 +3,8 @@ package id.smartagro.app
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,7 +30,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
@@ -41,6 +46,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -93,10 +99,21 @@ private fun barColor(p: Palette, sensor: Sensor, v: Double, ref: Reference?): Co
     else -> p.secondary
 }
 
-/** Hairline bars from the floor of the scale, with the reference range as a pale band behind them. */
-@Composable internal fun ThinBars(values: List<Double?>, sensor: Sensor, ref: Reference?, height: Dp, modifier: Modifier = Modifier, selected: Int? = null) {
+/**
+ * Hairline bars from the floor of the scale, with the reference range as a pale band behind them. With [selected], a
+ * reading dot sits on that bar's top with a guide line: it glides between bars (a critically damped spring, no
+ * overshoot), and while [reading] its value shows above it. The bars themselves never change colour under the finger.
+ */
+@Composable internal fun ThinBars(values: List<Double?>, sensor: Sensor, ref: Reference?, height: Dp, modifier: Modifier = Modifier,
+                                  selected: Int? = null, reading: Boolean = false) {
     val p = palette
     val scale = scaleOf(sensor)
+    val at by animateFloatAsState(selected?.toFloat() ?: 0f, Springs.snappy(), label = "Titik baca")
+    val shown by animateFloatAsState(if (reading) 1f else 0f, tween(200), label = "Label baca")
+    val measurer = rememberTextMeasurer()
+    val label = selected?.let { values.getOrNull(it) }?.let { v ->
+        measurer.measure("${formatValue(sensor, v)}${unitOf(sensor)}", T.footnote.copy(color = p.canvas, fontWeight = FontWeight.SemiBold))
+    }
     Canvas(modifier.fillMaxWidth().height(height)) {
         val n = values.size.coerceAtLeast(1)
         val gap = size.width / n
@@ -106,11 +123,32 @@ private fun barColor(p: Palette, sensor: Sensor, v: Double, ref: Reference?): Co
         values.forEachIndexed { i, v ->
             if (v != null) {
                 val top = y(v).coerceAtMost(size.height - 2.dp.toPx())
-                drawRoundRect(if (i == selected) p.ink else barColor(p, sensor, v, ref), Offset(i * gap + (gap - bw) / 2, top), Size(bw, size.height - top), CornerRadius(bw / 2))
+                drawRoundRect(barColor(p, sensor, v, ref), Offset(i * gap + (gap - bw) / 2, top), Size(bw, size.height - top), CornerRadius(bw / 2))
             }
+        }
+        val target = selected?.let { values.getOrNull(it) } ?: return@Canvas
+        // Between two bars the dot's height follows the line joining their tops; an empty bar holds the selected value.
+        val lo = floor(at).toInt().coerceIn(0, n - 1)
+        val a = values[lo] ?: target
+        val b = values.getOrNull(lo + 1) ?: a
+        val cx = at * gap + gap / 2
+        val cy = y(a + (b - a) * (at - lo)).coerceIn(0f, size.height)
+        drawLine(p.ink.copy(alpha = .3f), Offset(cx, 0f), Offset(cx, size.height), 1.dp.toPx())
+        drawCircle(p.canvas, 5.5.dp.toPx(), Offset(cx, cy))
+        drawCircle(p.ink, 5.5.dp.toPx(), Offset(cx, cy), style = Stroke(2.5.dp.toPx()))
+        if (label != null && shown > 0f) {
+            val pad = 8.dp.toPx()
+            val w = label.size.width + pad * 2
+            val h = label.size.height + pad
+            val left = (cx - w / 2).coerceIn(0f, size.width - w)
+            val top = (cy - h - 10.dp.toPx()).coerceAtLeast(0f)
+            drawRoundRect(p.ink.copy(alpha = shown), Offset(left, top), Size(w, h), CornerRadius(h / 2))
+            drawText(label, topLeft = Offset(left + pad, top + pad / 2), alpha = shown)
         }
     }
 }
+
+private fun unitOf(sensor: Sensor) = when (sensor) { Sensor.Moisture -> "/100"; Sensor.Temperature -> " °C"; Sensor.Ph -> " pH" }
 
 private fun nearest(values: List<Double?>, i: Int): Int? = values.indices.filter { values[it] != null }.minByOrNull { abs(it - i) }
 
@@ -122,11 +160,16 @@ private fun nearest(values: List<Double?>, i: Int): Int? = values.indices.filter
     val values = remember(state.history, sensor, window, state.historyRange) {
         window?.let { buckets(state.history, sensor, it.from, it.to, slices(state.historyRange)) }.orEmpty()
     }
-    var picked by remember(values) { mutableStateOf(nearest(values, values.size - 1)) }
+    // At rest the dot sits on the newest reading; a finger moves it, and lifting the finger sends it back (2026-11-24).
+    val newest = nearest(values, values.size - 1)
+    var picked by remember(values) { mutableStateOf(newest) }
+    var pressing by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf(false) }
     val pick: (Float, Float) -> Unit = { x, width ->
         val i = nearest(values, (x / width * (values.size - 1)).roundToInt())
         if (i != picked) { haptics.tick(); picked = i }
     }
+    val rest = { pressing = false; picked = newest }
     AgroSheet(sensor.label, onDismiss) {
         Column(Modifier.padding(horizontal = 16.dp)) {
             Segmented(HistoryRange.entries.map { it.label }, state.historyRange.ordinal, { model.selectHistoryRange(HistoryRange.entries[it]) })
@@ -144,14 +187,28 @@ private fun nearest(values: List<Double?>, i: Int): Int? = values.indices.filter
                 if (window == null || values.all { it == null }) Text("Belum ada bacaan pada rentang ini.", style = T.subhead, color = p.secondary)
                 else {
                     ThinBars(values, sensor, ref, 170.dp, Modifier
-                        .pointerInput(values) { detectTapGestures { pick(it.x, size.width.toFloat()) } }
-                        .pointerInput(values) { detectHorizontalDragGestures(onDragStart = { pick(it.x, size.width.toFloat()) }) { c, _ -> c.consume(); pick(c.position.x, size.width.toFloat()) } }
+                        // A press reads at once; when it turns into a horizontal drag the drag takes over, and the dot only
+                        // goes back when the finger lifts (or the sheet's scroll takes the gesture).
+                        .pointerInput(values) {
+                            detectTapGestures(onPress = {
+                                pressing = true; pick(it.x, size.width.toFloat())
+                                val released = tryAwaitRelease()
+                                if (released || !dragging) rest()
+                            })
+                        }
+                        .pointerInput(values) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { dragging = true; pressing = true; pick(it.x, size.width.toFloat()) },
+                                onDragEnd = { dragging = false; rest() },
+                                onDragCancel = { dragging = false; rest() },
+                            ) { c, _ -> c.consume(); pick(c.position.x, size.width.toFloat()) }
+                        }
                         .semantics {
                             contentDescription = "Telusuri bacaan ${sensor.label}"
                             stateDescription = i?.let { values[it] }?.let { formatValue(sensor, it) }.orEmpty()
                             progressBarRangeInfo = ProgressBarRangeInfo((i ?: 0).toFloat(), 0f..(values.size - 1).toFloat(), values.size - 2)
                             setProgress { target -> picked = nearest(values, target.roundToInt()); true }
-                        }, selected = i)
+                        }, selected = i, reading = pressing)
                     AxisLabels(axisFor(window, state.historyRange, !state.demo))
                 }
             }

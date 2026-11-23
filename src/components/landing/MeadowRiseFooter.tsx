@@ -940,7 +940,7 @@ const MRF_CSS = `
   overflow: hidden;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 10px 30px -12px rgba(20, 30, 10, 0.45), 0 2px 6px -2px rgba(20, 30, 10, 0.25);
   transform: translate3d(var(--mx), var(--my), 0);
-  transition: transform 500ms cubic-bezier(.2, .9, .3, 1.2), color 450ms ease, box-shadow 450ms ease;
+  transition: transform 500ms cubic-bezier(.2, .9, .3, 1), color 450ms ease, box-shadow 450ms ease;
 }
 .mrf-cta::before {
   content: "";
@@ -1092,11 +1092,6 @@ const MRF_CSS = `
 }
 .mrf-form:focus-within::after { transform: scaleX(1); }
 .mrf-form[data-state="error"]::after { background: #e8a48f; transform: scaleX(1); }
-.mrf-form[data-state="error"] { animation: mrf-shake 420ms cubic-bezier(.36, .07, .19, .97); }
-@keyframes mrf-shake {
-  20%, 60% { transform: translateX(-5px); }
-  40%, 80% { transform: translateX(5px); }
-}
 .mrf-form > svg { flex: none; color: var(--mrf-muted); }
 .mrf-input {
   flex: 1;
@@ -1127,7 +1122,7 @@ const MRF_CSS = `
   color: var(--mrf-ground);
   cursor: pointer;
   overflow: hidden;
-  transition: transform 450ms cubic-bezier(.2, .9, .3, 1.3), background 300ms ease;
+  transition: transform 450ms cubic-bezier(.2, .9, .3, 1), background 300ms ease;
 }
 .mrf-send:hover { transform: scale(1.1); }
 .mrf-send:focus-visible { outline: 2px solid var(--mrf-text); outline-offset: 3px; }
@@ -1229,7 +1224,7 @@ const MRF_CSS = `
   height: 32px;
   border-radius: 50%;
   color: var(--mrf-muted);
-  transition: color 300ms ease, background 300ms ease, transform 450ms cubic-bezier(.2, .9, .3, 1.4);
+  transition: color 300ms ease, background 300ms ease, transform 450ms cubic-bezier(.2, .9, .3, 1);
 }
 .mrf-icon:hover, .mrf-icon:focus-visible { color: var(--mrf-text); background: var(--mrf-line); transform: translateY(-3px); }
 .mrf-icon:focus-visible { outline: 2px solid var(--mrf-text); outline-offset: 2px; }

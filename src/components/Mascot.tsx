@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 
 /** Expressions the mascot can wear. Callers map their own state onto one (sign-in field, rule status). */
 export type Face = 'smile' | 'joy' | 'happy' | 'shy' | 'sad' | 'think' | 'flat' | 'worry' | 'curious'
-const spring = { type: 'spring', stiffness: 260, damping: 22 } as const
+// A tween that eases out and stops on its target: a spring here overshot and wobbled (motion comfort, 2026-11-24).
+const settle = { type: 'tween', duration: .32, ease: [.2, .7, .2, 1] } as const
 const mouths: Record<Face, string> = {
   smile: 'M74 117Q80 123 86 117',
   joy: 'M72.5 115Q80 127 87.5 115Z',
@@ -51,7 +52,7 @@ export default function Mascot({ face = 'smile', look = { x: 0, y: 0 }, hide = f
     <circle className="mascot-glint" cx={cx + 2.2} cy="106.6" r="1.1" />
   </g>
   const hand = (x: number, flip: boolean, slip: boolean) => <g transform={`translate(${x} 111)${flip ? ' scale(-1 1)' : ''}`}>
-    <motion.g initial={false} animate={{ rotate: hide ? (slip ? 22 : -16) : 118 }} transition={spring} style={{ originX: 0, originY: 0.5 }}>
+    <motion.g initial={false} animate={{ rotate: hide ? (slip ? 22 : -16) : 118 }} transition={settle} style={{ originX: 0, originY: 0.5 }}>
       <path className="mascot-leaf" d="M0 0C6 -9 19 -10 27 -2C19 6 6 7 0 0Z" />
       <path className="mascot-vein" d="M3 -.5H21" />
     </motion.g>
@@ -59,14 +60,14 @@ export default function Mascot({ face = 'smile', look = { x: 0, y: 0 }, hide = f
 
   return <svg className={`mascot ${className}`} viewBox="18 16 124 140" aria-hidden="true" data-face={shown} data-peek={peek || undefined}>
     <ellipse className="mascot-shadow" cx="80" cy="150" rx="38" ry="4.5" />
-    <motion.g initial={false} animate={{ y: shown === 'happy' ? [0, -7, 0] : 0 }} transition={{ duration: .5, ease: 'easeOut' }}>
-      <motion.g initial={false} animate={{ rotate: shown === 'sad' ? -14 : 0 }} transition={spring} style={{ originX: 0.5, originY: 1 }}>
+    <motion.g>
+      <motion.g initial={false} animate={{ rotate: shown === 'sad' ? -14 : 0 }} transition={settle} style={{ originX: 0.5, originY: 1 }}>
         <g className="mascot-sprout">
           <path className="mascot-stem" d="M80 72C80 60 79 52 80 43" />
           <path className="mascot-leaf is-light" d="M79.5 56C66 58 56 50 57 37C70 35 79.5 43 79.5 56Z" />
           <path className="mascot-leaf" d="M80.5 48C81.5 34 92 26 106 28C106 42 96 50 80.5 48Z" />
           <path className="mascot-vein" d="M78 54L63 41M82 46L99 33" />
-          <motion.g initial={false} animate={{ scale: bud ? 1 : 0 }} transition={spring} style={{ originX: 0.5, originY: 1 }}>
+          <motion.g initial={false} animate={{ scale: bud ? 1 : 0 }} transition={settle} style={{ originX: 0.5, originY: 1 }}>
             {[0, 72, 144, 216, 288].map(deg => <ellipse key={deg} className="mascot-petal" cx="80" cy="36" rx="3.2" ry="5" transform={`rotate(${deg} 80 41)`} />)}
             <circle className="mascot-bud" cx="80" cy="41" r="3" />
           </motion.g>
@@ -85,7 +86,7 @@ export default function Mascot({ face = 'smile', look = { x: 0, y: 0 }, hide = f
             <g transform="translate(96 107) scale(.8) translate(-96 -104)">{eye(96)}</g>
           </motion.g>}
         </>
-        : <motion.g initial={false} animate={{ x: look.x * 3, y: look.y * 2.4 }} transition={spring}>
+        : <motion.g initial={false} animate={{ x: look.x * 3, y: look.y * 2.4 }} transition={settle}>
           <g className="mascot-blink">{eye(66)}{eye(94)}</g>
         </motion.g>}
       {brows[shown] && <path className="mascot-line is-thin" d={brows[shown]} />}
