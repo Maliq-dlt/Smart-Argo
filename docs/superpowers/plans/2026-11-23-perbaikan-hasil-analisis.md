@@ -64,7 +64,7 @@
 | Android | di `android/`: `./gradlew.bat testDebugUnitTest lintDebug assembleDebug` dengan `JAVA_HOME=C:/Users/malik/.jdks/temurin-25.0.3` |
 | Firmware | lihat `firmware/README.md` (arduino-cli di `.cache/firmware/`, `subst V:` untuk jalur pendek) |
 
-Migrasi `20261123*` belum dikomit dan belum di cloud, jadi boleh diubah di tempat. Begitu sudah dikomit atau ada di cloud, perubahan harus berupa migrasi baru dengan `CREATE OR REPLACE`.
+Migrasi `20261123*` sudah dikomit lokal (`698f978`) tetapi belum dipush dan belum di cloud, jadi masih boleh diubah di tempat (hanya DB lokal yang pernah menerapkannya; reset DB lokal sesudahnya). Begitu sudah dipush atau ada di cloud, perubahan harus berupa migrasi baru dengan `CREATE OR REPLACE`.
 
 ## Review Focus
 
@@ -100,8 +100,8 @@ Migrasi `20261123*` belum dikomit dan belum di cloud, jadi boleh diubah di tempa
 - [x] **Langkah 2: pastikan gagal.** `node --test tests/sensor-care.integration.mjs` → FAIL karena `band` cabai `null` dan `band_source` `undefined`.
 - [x] **Langkah 3: implementasi.** Hapus syarat `JOIN public.plant_species sp ... AND sp.tier='belajar'` dari `care_band` (baris 52); tulis `care_band_source`; tambahkan `band_source` ke kedua keluaran; perbarui komentar di atas `care_band` dan `docs/sensor-care-api.md` (pita "pola pot Anda" berlaku untuk semua spesies tanpa profil tervalidasi per pot; arti `band_source`).
 - [x] **Langkah 4: reset DB lokal dan ulangi tes.** Reset total (lihat **Cara menjalankan**), lalu `node --test tests/sensor-care.integration.mjs` → PASS.
-- [ ] **Langkah 5: semua tes backend.** `npm run test:backend` → semua lulus (sebelumnya 215/215).
-- [ ] **Langkah 6 (izin): commit** bersama Tugas 4, jangan sendirian, agar migrasi Codex dan perbaikan ini tercatat berurutan.
+- [x] **Langkah 5: semua tes backend.** `npm run test:backend` → semua lulus (sebelumnya 215/215).
+- [x] **Langkah 6 (izin): commit** bersama Tugas 4, jangan sendirian, agar migrasi Codex dan perbaikan ini tercatat berurutan.
 
 ### Tugas 2: panduan uji bangku perangkat fisik
 
@@ -130,6 +130,7 @@ Isinya langkah dengan hasil yang diharapkan dan tabel hasil (`No | Uji | Harapan
 **Files:** `../RAB_IoT_Smart_Agro_Lengkap.xlsx`, `../RAB_IoT_Smart_Agro.xlsx` (di luar repo)
 
 **Keputusan pengguna (23 Nov 11:52): B, pH diukur sekali sehari.** Tugas 13 dikerjakan; probe pH tetap ada di RAB.
+**Ralat Claude (12:40):** modul pH (DMS) mendapat 5 V terus dari MT3608, tanpa pin daya yang bisa dimatikan (`smart_agro.ino` tidak punya `pinMode` selain tombol BOOT). Jadi mengukur sekali sehari **tidak** menghemat baterai; manfaatnya data yang jujur dan antrean lebih kecil. Penghematan baterai butuh sakelar beban (MOSFET dikendalikan GPIO) di jalur 5 V DMS, ditambah waktu pemanasan modul sebelum membaca. Itu perubahan RAB dan perakitan: tunggu keputusan pengguna.
 
 - [x] **Langkah 1: tanya pengguna** dengan pilihan:
   - A. pH tetap dibaca terus (tanpa perubahan);
@@ -140,11 +141,11 @@ Isinya langkah dengan hasil yang diharapkan dan tabel hasil (`No | Uji | Harapan
 
 ### Tugas 4: amankan pekerjaan (izin di tiap langkah)
 
-**Izin pengguna (23 Nov 11:52): commit lokal saja, dipisah per pemilik, setelah pemeriksaan hijau.** Push, PR, merge, dan cloud (langkah 4–5) tetap butuh izin baru.
+**Izin pengguna (23 Nov 11:52): commit lokal saja, dipisah per pemilik, setelah pemeriksaan hijau. (12:45): commit lokal per fase/tugas begitu hijau, tanpa push.** Push, PR, merge, dan cloud (langkah 4–5) tetap butuh izin baru.
 
 - [x] **Langkah 1:** pindahkan `mail.go`, `verify.go`, `one_time_token.go` ke `.tmp/gotrue-ref/`; tambahkan `tsconfig.tsbuildinfo` ke `.gitignore`. Tanyakan nasib `android/design-preview/konsep-kebun/` (mock Codex).
-- [ ] **Langkah 2:** pemeriksaan penuh sebelum commit: `npm run typecheck`, eslint (tanpa `android/`), `npm test`, `npm run test:backend`, `npm run build`, `git diff --check`, tes Android.
-- [ ] **Langkah 3 (izin): commit terpisah per pemilik**:
+- [x] **Langkah 2:** pemeriksaan penuh sebelum commit: `npm run typecheck`, eslint (tanpa `android/`), `npm test`, `npm run test:backend`, `npm run build`, `git diff --check`, tes Android.
+- [x] **Langkah 3 (izin): commit terpisah per pemilik**:
   - (a) backend A–F Codex beserta perbaikan Claude: `supabase/migrations/20261123*`, `supabase/functions/alert-dispatch/`, `supabase/functions/_shared/observability.ts`, `supabase/config.toml`, `.github/workflows/care-alerts.yml`, `scripts/backend-gateway.mjs`, `firmware/`, `docs/sensor-care-api.md`, `docs/telemetry-v2.md`, `tests/sensor-care.integration.mjs`, `Dockerfile`, `package.json`, `package-lock.json`, `src/lib/telemetry.ts`;
   - (b) UI dashboard v2 Claude: `src/components/shell/`, `src/components/overview/`, `src/components/dashboard/*`, `src/lib/overview.ts`, `src/lib/plantHistory.ts`, `src/lib/siteRoute.ts`, `src/App.tsx`, `src/styles.css`, `src/components/AccountMenu.tsx`, `src/components/SimulationOverview.tsx`, `src/components/StatisticsDashboard.tsx`, `public/_headers`, tes browser dan unit terkait, `docs/superpowers/plans/2026-11-22-web-ui-dashboard-v2.md`;
   - (c) rencana ini.
@@ -172,10 +173,10 @@ Isinya langkah dengan hasil yang diharapkan dan tabel hasil (`No | Uji | Harapan
 **Interfaces:**
 - Consumes: `SPECIES` dari `src/lib/species.ts`, `THRESHOLDS` dari `src/lib/observation.ts`; teks `android/app/src/main/java/id/smartagro/app/SpeciesCatalog.kt`, `Observation.kt`, `supabase/migrations/20261115100000_garden_sites_cycles.sql`, `20261123030000_garden_overview.sql`, `20261123000000_unit_health.sql` (dibaca sebagai teks, diurai dengan regex).
 
-- [ ] **Langkah 1: tulis tes:**
+- [x] **Langkah 1: tulis tes:**
   - `species ids, tags, names and tiers agree in TypeScript, Kotlin and SQL`: untuk tiap spesies, `speciesId`, `tag`, `name`, `tier` sama di ketiganya, dan larik `ARRAY['CB','BM','AB','PN']` di SQL berurutan menurut `speciesId`;
   - `learning thresholds agree`: `THRESHOLDS` = `{days:7, inspections:3, waterings:2}` = default `ObservationThresholds` Kotlin = `interval '7 days'`, `>=3`, `>=2` di `care_band`.
-- [ ] **Langkah 2:** `npm test` → PASS. Lalu ubah sementara satu tag di `SpeciesCatalog.kt` → FAIL. Kembalikan perubahan itu.
+- [x] **Langkah 2:** `npm test` → PASS. Lalu ubah sementara satu tag di `SpeciesCatalog.kt` → FAIL. Kembalikan perubahan itu.
 
 ### Tugas 6: dokumen pembekuan cakupan dan titik gagal tunggal
 
@@ -183,13 +184,13 @@ Isinya langkah dengan hasil yang diharapkan dan tabel hasil (`No | Uji | Harapan
 - Modify: `README.md` (bagian "Status fitur": berjalan / dibekukan / rencana)
 - Modify: `docs/backend-operations.md` (bagian "Titik gagal tunggal")
 
-- [ ] **Langkah 1:** di README, tandai reward energi, bukti chain, pengetahuan komunitas, dan ruang kerja operator sebagai **dibekukan**: dirawat, tetapi tanpa fitur baru sampai uji bangku (Tugas 2) lulus.
-- [ ] **Langkah 2:** tulis daftar periksa pengguna:
+- [x] **Langkah 1:** di README, tandai reward energi, bukti chain, pengetahuan komunitas, dan ruang kerja operator sebagai **dibekukan**: dirawat, tetapi tanpa fitur baru sampai uji bangku (Tugas 2) lulus.
+- [x] **Langkah 2:** tulis daftar periksa pengguna:
   - cadangkan `.tmp/cloud/issuer/smart-agro-2026.pem` dan `android/.private/*` ke dua tempat offline (jangan dikomit);
   - buat PAT Supabase baru;
   - SMTP transaksional + domain (berbayar, tunggu hasil uji email);
   - jeda proyek gratis tertangani oleh cron `care-alerts.yml` setelah Tugas 4 langkah 5.
-- [ ] **Langkah 3:** periksa setiap jalur berkas di dokumen itu memang ada (`ls`).
+- [x] **Langkah 3:** periksa setiap jalur berkas di dokumen itu memang ada (`ls`).
 
 ### Tugas 7: histeresis baterai, waktu WIB, dan tautan pengaturan di email
 
@@ -199,16 +200,17 @@ Isinya langkah dengan hasil yang diharapkan dan tabel hasil (`No | Uji | Harapan
 - Test: `tests/sensor-care.integration.mjs` (tes `owner sensor care, calibration and scheduled mail`, `smtpSink`)
 
 **Interfaces:**
-- `care_alert_signals`: tiap jenis punya predikat `bad` dan `good`. Untuk `battery_low`: `bad = volts < 3.4`, `good = volts >= 3.6`; jenis lain `good = NOT bad`. Pemulihan (baris 68) memakai dua bacaan `good` berturut-turut. Beri komentar `ponytail:` bahwa 3,6 V adalah histeresis rekayasa untuk sel Li-ion, bukan hasil ukur.
+- `care_alert_signals`: tiap jenis punya predikat `bad` dan `good`. Untuk `battery_low`: `bad = volts < 3.4`, `good = volts >= 3.6`; jenis lain `good = NOT bad`. Pemulihan memakai dua bacaan `good` berturut-turut, **dan** untuk `battery_low` juga 24 jam tanpa bacaan `bad` (`last_bad`). Histeresis 3,6 V saja tidak cukup: panel surya menaikkan baterai jauh di atas 3,6 V setiap siang, jadi tiap malam tetap membuka episode baru. Komentar `ponytail:` menyebut 3,6 V dan 24 jam sebagai nilai rekayasa, bukan hasil ukur.
+- Email: `wib(at)` (diekspor dari `handler.ts`) menghasilkan `23 Nov 14.30 WIB`; tautan `<ALERT_APP_URL>/#pengaturan-peringatan` hanya muncul bila env `ALERT_APP_URL` adalah URL https (atau http localhost). Secret `ALERT_APP_URL` (app live) ikut diatur di Tugas 4 langkah 5.
 
-- [ ] **Langkah 1: tulis tes yang gagal:**
-  - tegangan 3,35 → 3,50 → 3,35 → 3,50 (tiap 30 menit) menghasilkan **satu** episode `battery_low`;
-  - 3,35 → 3,65 → 3,66 → 3,35 menghasilkan **dua** episode;
+- [x] **Langkah 1: tulis tes yang gagal:**
+  - malam rendah (3,35 V), 12 jam cerah 3,95 V, sore 3,5 V, lalu rendah lagi: `care_alert_signals` tidak memberi `good_at` (belum pulih, jadi tetap satu episode);
+  - rendah dua hari lalu, lalu sehari penuh 3,95 V: `good_at` ada (pulih, penurunan berikutnya boleh mengirim email lagi);
   - isi email peringatan memuat waktu bertanda `WIB` dan tidak memuat cap ISO berakhiran `Z`;
   - isi email memuat tautan `<APP_ORIGIN>/#pengaturan-peringatan`.
-- [ ] **Langkah 2:** jalankan → FAIL.
-- [ ] **Langkah 3:** implementasi. Waktu memakai zona `Asia/Jakarta` dengan format `23 Nov 14.30 WIB`. Halaman `#pengaturan-peringatan` dibuat di Tugas 16; sampai itu ada, rute tak dikenal tetap jatuh ke Ringkasan.
-- [ ] **Langkah 4:** reset DB lokal, lalu `npm run test:backend` → PASS.
+- [x] **Langkah 2:** jalankan → FAIL.
+- [x] **Langkah 3:** implementasi. Waktu memakai zona `Asia/Jakarta` dengan format `23 Nov 14.30 WIB`. Halaman `#pengaturan-peringatan` dibuat di Tugas 16; sampai itu ada, rute tak dikenal tetap jatuh ke Ringkasan.
+- [x] **Langkah 4:** reset DB lokal, lalu `npm run test:backend` → PASS. (204/207: dua kegagalan = subtes pH Tugas 13 yang sengaja merah sebelum migrasinya; satu = device-lifecycle *flaky*, lulus 11/11 sendirian.)
 
 Catatan: unsubscribe satu klik (RFC 8058) ditunda sampai pindah ke penyedia email transaksional.
 
@@ -304,9 +306,10 @@ FCM ditunda: butuh proyek Firebase milik pengguna; worker per jam cukup untuk ta
 
 **Files:** `firmware/smart_agro/smart_agro.ino`, `firmware/README.md`
 
-- [ ] **Langkah 1:** konstanta `kPhIntervalHours = 24`. pH hanya diukur bila sejak pengukuran pH terakhir (disimpan di `Preferences`) sudah 24 jam; selain itu kirim `ph: {status:"not_measured", value:null}` (sudah diterima server, `docs/telemetry-v2.md:34`).
-- [ ] **Langkah 2:** kompilasi arduino-cli tanpa peringatan baru.
-- [ ] **Langkah 3:** web dan Android menampilkan pH terakhir yang `ok`, dengan waktu ukurnya.
+- [x] **Langkah 1:** konstanta `kPhIntervalSeconds = 24 * 60 * 60`. pH hanya diukur bila sejak pH `ok` terakhir (`RTC_DATA_ATTR lastPhAt`, bukan `Preferences`, agar tidak menulis flash; putus daya berarti mengukur lagi di sampel berikutnya) sudah 24 jam; selain itu kirim `ph: {status:"not_measured", value:null}` (sudah diterima server, `docs/telemetry-v2.md:34`).
+- [x] **Langkah 2:** kompilasi arduino-cli tanpa peringatan baru.
+- [x] **Langkah 3:** web dan Android menampilkan pH terakhir yang `ok`, dengan waktu ukurnya: migrasi `20261123040000_daily_ph_overview.sql` (`my_unit_overview`, hanya `soil_ph` yang mengutamakan baris terukur), tes `unit-overview` merah (`not_measured`) lalu hijau 6/6.
+- [x] **Langkah 4:** `src/lib/deviceExplanation.ts:47` kini hampir selalu menulis "pH terakhir tidak tersedia…" karena paket terbaru `not_measured`. Ganti menjadi kalimat yang menyebut pH diukur harian, tanpa memakai nilai lama untuk keputusan.
 
 ### Tugas 14: widget layar utama
 
@@ -407,9 +410,13 @@ Laporan crash tidak ditambahkan (ponytail: tambahkan saat rilis lewat Play Store
 
 ---
 
+## Temuan saat eksekusi
+
+- `tests/device-lifecycle.integration.mjs` *flaky*: dalam suite 23 Nov 12:2x macet 587 detik tanpa subtes (helper `waitForLock` baris 26 adalah *busy loop* `execFileSync` sampai tenggat), tetapi lulus 11/11 dalam 32 detik saat dijalankan sendiri dan lulus di suite 12:0x. Selidiki: tenggat helper, dan kunci yang tak pernah muncul bila sesi lain belum memegang baris.
+
 ## Keputusan yang menunggu pengguna
 
-- Tugas 3: pilihan pH (A/B/C), harga dan tautan INA228.
+- Tugas 3: harga dan tautan INA228; apakah menambah sakelar daya MOSFET untuk modul pH (agar pH harian benar-benar menghemat baterai).
 - Tugas 4: izin commit, push, PR, merge, rilis cloud; PAT baru; nasib `android/design-preview/konsep-kebun/`.
 - Tugas 8: angka acuan spesies beserta sumbernya.
 - Tugas 18: sidik SHA-256 kunci rilis.
@@ -426,11 +433,14 @@ Laporan crash tidak ditambahkan (ponytail: tambahkan saat rilis lewat Play Store
 
 | Tugas | Status | Catatan / commit |
 | --- | --- | --- |
-| 1 | langkah 1–4 selesai, 5 berjalan | Pot 17 (cabai) di `sensor-care` merah (`band_source` undefined) lalu hijau 15/15, p95 Ringkasan 136,6 ms. Migrasi diubah di tempat (belum dikomit/cloud). |
+| 1 | selesai (`698f978`) | Pot 17 (cabai) merah (`band_source` undefined) lalu hijau; backend 215/215 pada DB baru; p95 Ringkasan 136,6 ms. Belum di cloud. |
 | 2 | langkah 1–2 selesai, 3 menunggu ESP32 | `firmware/UJI-BANGKU.md`, ditautkan dari README firmware. |
 | 3 | pilihan B (pH sekali sehari) | Langkah 2–3 menunggu harga dan tautan INA228 dari pengguna. |
-| 4 | langkah 1 selesai; izin commit lokal | Berkas GoTrue dipindah ke `.tmp/gotrue-ref/`, `tsconfig.tsbuildinfo` diabaikan. `android/design-preview/konsep-kebun/` menunggu keputusan. |
-| 5–7 | belum | |
+| 4 | langkah 1–3 selesai (`698f978`, `e69ebea`, `574f67a`, `3134246`, lokal) | Langkah 4–5 (push, PR, merge, cloud) menunggu izin. `android/design-preview/konsep-kebun/` menunggu keputusan. |
+| 5 | selesai | `tests/parity.test.ts` 2/2; mutasi tag Kotlin `PN`→`PX` membuatnya merah, lalu dipulihkan. |
+| 6 | selesai | README "Feature status"; `docs/backend-operations.md` "Single points of failure"; semua jalur dicek ada. |
+| 7 | selesai | Merah: siang cerah <24 jam dianggap pulih, email bercap UTC. Hijau: `sensor-care` 16/16. Env baru `ALERT_APP_URL`. |
 | 8 | menunggu data | |
+| 13 | selesai | Firmware 60% flash tanpa peringatan sketsa (`DeviceConfig.example.h`; salinan `.cache/firmware/compile` memakai config lama dan gagal). Migrasi `20261123040000` (lokal saja). Penjelasan aturan menyebut pH harian. **pH harian tidak menghemat baterai tanpa sakelar MOSFET** (keputusan pengguna). |
 | 9–14 | belum | |
 | 15–20 | belum | |
