@@ -151,6 +151,8 @@ function Simulator() {
   const [gardenState, setGardenState] = useState(() => ({ scope: gardenScope, book: readGarden(browserStorage(), gardenScope).book }))
   if (gardenState.scope !== gardenScope) setGardenState({ scope: gardenScope, book: readGarden(browserStorage(), gardenScope).book })
   const garden = gardenState.scope === gardenScope ? gardenState.book : emptyGarden()
+  // A new plant or cycle changes this, so the account's care view reloads at once (not at its next minute poll).
+  const plantedOn = useMemo(() => Object.fromEntries(garden.slots.map(s => [s.id, s.cycles.find(c => !c.endedOn)?.plantedOn])), [garden])
   const setGarden = (change: (old: GardenBook) => GardenBook) => setGardenState(old => { const next = change(old.book); saveGarden(browserStorage(), old.scope, next); return { scope: old.scope, book: next } })
   // An account waiting to be deleted may only cancel; every other call would be refused (and read as a lost session).
   // `loaded`: a first sign-in has no account row until ensure_my_account answers, and my_garden would sign it out.
@@ -701,7 +703,7 @@ function Simulator() {
       </div>}
 
       {!realCare && page === 'statistics' && <Overview plants={overviewPlants} products={account.signedIn ? account.products.length : null} onOpen={openPlant} onAdd={() => setGardenDialog('add')} />}
-      {realCare && (page === 'statistics' || page === 'plant') && (server ? <LiveCare key={gardenScope} client={server} detail={page === 'plant'} selected={livePlant} changed={garden.slots.map(s => `${s.id}:${s.cycles.length}`).join()} onSelect={setLivePlant} onAdd={() => setGardenDialog('add')} /> : <p aria-live="polite">Menunggu data akun. Data simulasi tidak digunakan untuk tanaman Anda.</p>)}
+      {realCare && (page === 'statistics' || page === 'plant') && (server ? <LiveCare key={gardenScope} client={server} detail={page === 'plant'} selected={livePlant} plantedOn={plantedOn} onSelect={setLivePlant} onAdd={() => setGardenDialog('add')} /> : <p aria-live="polite">Menunggu data akun. Data simulasi tidak digunakan untuk tanaman Anda.</p>)}
       {!realCare && page === 'plant' && <div className="statistics-page">
         <div className="dash">
           <PlantStage crop={data.profile.crop} sub={`${data.profile.media} · ${awaitingPlant ? 'Belum ditanam' : phaseAt(developmentDay, species)}`} status={{ ok: dataGood, text: dataGood ? `Pembacaan valid · ${ageMinutes} menit lalu` : 'Periksa pembacaan' }}
@@ -750,7 +752,7 @@ function Simulator() {
         <TerminalSimulator clock={session.clock} data={data} decision={result} logs={logs} />
         <details className="panel disclosure evidence-detail"><summary><span>Bukti pendukung<small>Respons siram, status pH, dan fase</small></span><CaretRight aria-hidden="true" /></summary><div className="disclosure-body"><p>{result.evidence.watering_response}</p><p>{result.evidence.ph_status}</p><p>Fase ilustrasi: {phase}. Fase profil: {data.profile.phase}. HST tidak mengubah acuan lokal.</p></div></details>
       </section>}
-      <footer className="page-footer"><span>{realCare && !['simulation', 'comparison', 'terminal', 'devices'].includes(page) ? 'Data akun dan perangkat' : 'Simulasi lokal - data sintetis - tanpa perangkat terhubung'}</span><a href="/privasi.html">Kebijakan privasi</a></footer>
+      <footer className="page-footer"><span><i aria-hidden="true" />{realCare && !['simulation', 'comparison', 'terminal', 'devices'].includes(page) ? 'Data akun dan perangkat' : 'Simulasi lokal · data sintetis · tanpa perangkat terhubung'}</span><a href="/privasi.html">Kebijakan privasi</a></footer>
     </main>
     </div></div>
     <div className={`toast ${notice ? 'visible' : ''}`} role="status">{notice && <><Check weight="bold" aria-hidden="true" />{notice}</>}</div>

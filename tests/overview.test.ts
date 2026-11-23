@@ -82,6 +82,11 @@ test('server care labels keep per-pot provenance and missing readings explicit',
   // The species comes from the shared catalog; an unknown id is a contract error, not a chili.
   assert.equal(parseCarePlants({ ok: true, plants: [{ ...row, species_id: 2 }] })[0].species, 'bawang')
   assert.throws(() => parseCarePlants({ ok: true, plants: [{ ...row, species_id: 99 }] }))
+  // The stage draws the plant's real age and the WIB hour, not a day-0 seedling at 10:00.
+  const at = Date.parse('2026-11-23T13:00:00Z') // 20.00 WIB
+  const [aged] = parseCarePlants({ ok: true, plants: [row] }, { slot: '2026-11-13' }, at)
+  assert.equal(aged.day, 10); assert.equal(aged.hour, 20)
+  assert.equal(parseCarePlants({ ok: true, plants: [row] }, {}, at)[0].day, 0)
 })
 test('alert preferences validate every kind before presenting a saved result', () => {
   assert.deepEqual(parseAlertPreferences({ ok: true, email_enabled: false, kinds: ['soil_dry'] }), { email_enabled: false, kinds: ['soil_dry'] })

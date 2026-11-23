@@ -84,6 +84,17 @@ try {
       }), `Navigation targets do not overlap at ${width} ${theme} ${text ? '200%' : '100%'}`)
       const overflow = await page.evaluate(() => [...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > innerWidth + 1).slice(0, 8).map(e => `${e.tagName}.${e.className}`))
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${hash} fits ${width} ${theme} ${text ? '200%' : '100%'} ${overflow.join(',')}`)
+      // overflow-wrap:anywhere keeps the page inside the screen, but a heading split inside a word ("peringata|n") is a defect.
+      const split = await page.evaluate(() => [...document.querySelectorAll('h1.page-heading, .care-panel h2')].flatMap(h => {
+        const node = h.firstChild
+        if (!node || node.nodeType !== Node.TEXT_NODE) return []
+        let at = 0
+        return node.data.split(' ').filter(word => {
+          const range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + word.length); at += word.length + 1
+          return new Set([...range.getClientRects()].map(r => Math.round(r.top))).size > 1
+        })
+      }))
+      check(split.length === 0, `${hash} headings keep whole words at ${width} ${theme} ${text ? '200%' : '100%'}: ${split.join(', ')}`)
       await page.screenshot({ path: path.join(output, `${hash.slice(1)}-${width}-${theme}-${text ? '200' : '100'}.png`), fullPage: true })
     }
   }

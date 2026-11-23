@@ -96,7 +96,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
    `anywhere`, unlike `break-word`, also shrinks min-content, so flex/grid items can narrow. */
 .app-content { min-width: 0; width: min(80rem, 100%); margin: 0 auto; padding: 1.5rem 2rem 2.5rem; overflow-wrap: anywhere; }
 /* Pages without a scene of their own open with their name, in the display face. */
-.page-heading { margin: .25rem 0 1.25rem; font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: clamp(1.875rem, 3vw, 2.5rem); line-height: 1.08; letter-spacing: -.02em; }
+.page-heading { margin: .25rem 0 1.25rem; font-family: var(--font-display); font-weight: 420; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: clamp(min(1.875rem, 12vw), 3vw, 2.5rem); line-height: 1.08; letter-spacing: -.02em; }  /* 12vw: at 320 px and 200 % text "peringatan" stays whole */
 .page-sub { margin: -.75rem 0 1.5rem; max-width: 40rem; color: var(--muted); font-size: 1.0625rem; }
 .plant-more { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: .625rem; margin-top: 1.5rem; }
 .plant-more-link { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .875rem; min-height: 4rem; padding: .75rem 1rem; border-radius: var(--r-tile); border: 1px solid var(--line); background: var(--raised); color: inherit; text-decoration: none; transition: border-color .2s var(--ease-ui); }

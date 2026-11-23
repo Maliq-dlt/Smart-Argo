@@ -110,18 +110,23 @@ const SERVER_STATUS: Record<string, PlantStatus> = {
   above: { tone: 'wet', word: 'Di atas pita', attention: true }, learning: { tone: 'learn', word: 'Sedang belajar', attention: false },
   no_device: { tone: 'idle', word: 'Belum ada perangkat', attention: false }, no_reading: { tone: 'check', word: 'Bacaan belum tersedia', attention: true },
 }
-export function parseCarePlants(value: unknown): OverviewPlant[] {
+const WIB_HOUR = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Asia/Jakarta' })
+/** `plantedOn` (slot id → YYYY-MM-DD, from the garden) gives the stage the plant's real age; the sky follows the WIB hour. */
+export function parseCarePlants(value: unknown, plantedOn: Record<string, string | undefined> = {}, now = Date.now()): OverviewPlant[] {
   const answer = careAnswer(value)
+  const hour = Number(WIB_HOUR.format(now))
   if (!Array.isArray(answer.plants)) throw new Error('Daftar tanaman tidak valid.')
   return answer.plants.map(value => {
     const p = careRecord(value), status = Object.hasOwn(SERVER_STATUS, String(p.state)) ? SERVER_STATUS[String(p.state)] : null
     const species = typeof p.species_id === 'number' ? speciesByCode(p.species_id)?.id : undefined
     if (typeof p.slot_id !== 'string' || typeof p.name !== 'string' || !status || !species || (p.unit_id !== null && typeof p.unit_id !== 'string') || (p.moisture !== null && (typeof p.moisture !== 'number' || !Number.isFinite(p.moisture)))) throw new Error('Data tanaman tidak valid.')
     const outlook = parseOutlook(p.outlook), from = outlook?.from && Date.parse(outlook.from), to = outlook?.to && Date.parse(outlook.to)
+    const planted = Date.parse(`${plantedOn[p.slot_id]}T00:00:00+07:00`)
+    const day = Number.isFinite(planted) ? Math.min(speciesByCode(p.species_id as number)!.maxDay, Math.max(0, Math.floor((now - planted) / 86400000))) : 0
     return { id: p.slot_id, slotId: p.slot_id, unitId: p.unit_id as string | null, name: p.name, tag: typeof p.tag === 'string' ? p.tag : null, place: typeof p.place === 'string' ? p.place : null,
       species,
       moisture: p.moisture as number | null, status, bandSource: sourceOf(p.band_source), outlook, live: true,
-      etaH: from && to ? Math.max(0, ((from + to) / 2 - Date.now()) / 3600000) : null, day: 0, planted: true, hour: 10, sessionId: null }
+      etaH: from && to ? Math.max(0, ((from + to) / 2 - now) / 3600000) : null, day, planted: true, hour, sessionId: null }
   })
 }
 export const ALERT_KINDS = { soil_dry: 'Media kering', battery_low: 'Baterai rendah', device_silent: 'Perangkat tidak mengirim', soil_hot: 'Media terlalu panas' } as const

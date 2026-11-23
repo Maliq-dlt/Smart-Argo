@@ -12,4 +12,4 @@
 .care-rise { border-top: 1px solid var(--line-strong); padding-top: 1rem; }
 
 .live-care .button, .care-panel .button { white-space: normal; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
-.care-panel h2 { font-family: var(--font-display); font-size: 1.5rem; line-height: 1.2; }
+.care-panel h2 { font-family: var(--font-display); font-size: min(1.5rem, 10vw); line-height: 1.2; }  /* whole words at 320 px, 200 % text */
