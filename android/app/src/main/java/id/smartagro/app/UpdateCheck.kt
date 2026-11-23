@@ -1,6 +1,7 @@
 package id.smartagro.app
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
@@ -34,10 +35,10 @@ internal suspend fun checkApkUpdate(context: Context, now: Long = System.current
                 val release = json.optString("html_url")
                 val supported = tag.startsWith("android-v") && !json.optBoolean("draft") && !json.optBoolean("prerelease") &&
                     isNewer(tag, BuildConfig.VERSION_NAME) && release == "https://github.com/Maliq-dlt/Smart-Argo/releases/tag/$tag"
-                cache.edit().putString("release", if (supported) release else "").apply()
+                cache.edit { putString("release", if (supported) release else "") }
             }
         } catch (_: Exception) { /* Keep the last successful result on network failure. */ }
-        finally { connection.disconnect(); cache.edit().putLong("checked-at", now).apply() }
+        finally { connection.disconnect(); cache.edit { putLong("checked-at", now) } }
     }
     cache.getString("release", "")?.takeIf { it.isNotEmpty() && isNewer(it.substringAfterLast('/'), BuildConfig.VERSION_NAME) }
 }

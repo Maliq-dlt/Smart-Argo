@@ -55,7 +55,7 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
 
     var alertsRequested by remember(state.email) { mutableStateOf(false) }
     LaunchedEffect(state.demo, state.email, state.busy) {
-        if (!state.demo && !state.busy && state.email.isNotBlank() && !alertsRequested && state.alertPreferences == null) {
+        if (!state.demo && !state.busy && state.email.isNotBlank() && !alertsRequested && state.alertPreferences == null && !state.alertsUnavailable) {
             alertsRequested = true
             model.loadAlertPreferences()
         }
@@ -139,7 +139,8 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                 val alerts = state.alertPreferences
                 Group(footer = "Jenis berlaku untuk email dan notifikasi di HP. Email hanya dikirim ke alamat terkonfirmasi.") {
                     if (alerts == null) {
-                        Cell("Muat pengaturan peringatan", enabled = !state.busy, onClick = model::loadAlertPreferences)
+                        Cell("Muat pengaturan peringatan", subtitle = if (state.alertsUnavailable) "Belum tersedia di server ini" else null,
+                            enabled = !state.busy, onClick = model::loadAlertPreferences)
                     } else {
                         ToggleCell("Peringatan email", alerts.emailEnabled, { on -> model.setAlertPreferences(on, alerts.kinds) }, enabled = !state.busy)
                         careKinds.forEach { (kind, label) ->

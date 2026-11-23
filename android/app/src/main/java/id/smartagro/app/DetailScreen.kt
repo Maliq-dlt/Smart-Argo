@@ -402,7 +402,7 @@ internal fun careMarks(entries: List<CareEntry>, from: LocalDate, to: LocalDate,
     AgroSheet("Catat siram", onDismiss) {
         Text("Takaran untuk $unitName", Modifier.padding(horizontal = 20.dp), style = T.subhead, color = p.secondary)
         Box(Modifier.padding(16.dp)) { Segmented(options.map { "${it.toInt()} mL" }, pick, { pick = it; amount = options[it].toInt().toString() }) }
-        Group { FieldRow("Volume aktual (mL)", amount, { amount = it.take(12) }, "250", keyboard = androidx.compose.ui.text.input.KeyboardType.Decimal) }
+        Group { FieldRow("Volume (mL)", amount, { amount = it.take(12) }, "250", keyboard = androidx.compose.ui.text.input.KeyboardType.Decimal) }
         Footnote("Catatan dikirim lima detik setelah disimpan. Sebelum itu masih bisa diurungkan.")
         PrimaryButton("Simpan", { actual?.let(onSave) }, Modifier.padding(16.dp).fillMaxWidth(), path = PhosphorPaths.Drop, enabled = actual != null)
     }

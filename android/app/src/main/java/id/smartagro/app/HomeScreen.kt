@@ -66,7 +66,7 @@ private class PlantCard(val unit: PlantUnit, val species: SpeciesSpec, val day: 
         RefreshAction(state, model)
     }) {
         notices(state)
-        state.cachedAt?.let { at -> item(key = "offline-time") { Footnote("Offline - Terakhir diperbarui ${time(at)}") } }
+        state.cachedAt?.let { at -> item(key = "offline-time") { Footnote("Offline · Terakhir diperbarui ${time(at)}") } }
         if (!state.demo && state.carePlants.isNotEmpty()) item(key = "care-overview") {
             SectionTitle("Perawatan tanaman")
             Group {

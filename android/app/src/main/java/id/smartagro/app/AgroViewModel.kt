@@ -55,7 +55,7 @@ data class AppState(
     val carePlants: List<CarePlant> = emptyList(), val cachedAt: Instant? = null,
     val wateringOutlook: WateringOutlook? = null, val wateringRises: List<WateringRise> = emptyList(),
     val unitHealth: UnitHealth? = null, val careDetailsUnit: String? = null,
-    val alertPreferences: AlertPreferences? = null,
+    val alertPreferences: AlertPreferences? = null, val alertsUnavailable: Boolean = false,
 ) {
     val historyHasMore: Boolean get() = historyWindow != null
     fun plantCode(unit: PlantUnit): String = garden?.plants?.firstOrNull { it.unitId==unit.id && it.endedOn==null }?.tag ?: unitCode(unit,units)
@@ -908,7 +908,9 @@ class AgroViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun loadAlertPreferences() = run {
         val saved = missingRpcAsNull { parseAlertPreferences(api.rpc("my_alert_preferences")) }
-        state = if (saved != null) state.copy(alertPreferences = saved) else state.copy(message = "Pengaturan peringatan belum tersedia di server ini.")
+        // Remembered for the session, so the Akun screen does not ask (and announce it) again on every visit.
+        state = if (saved != null) state.copy(alertPreferences = saved, alertsUnavailable = false)
+            else state.copy(alertsUnavailable = true, message = "Pengaturan peringatan belum tersedia di server ini.")
     }
     fun setAlertPreferences(email: Boolean, kinds: Set<String>) = run {
         require(kinds.all { it in careKinds })

@@ -4,7 +4,7 @@ Aplikasi Android native Kotlin + Jetpack Compose, terpisah dari website React. S
 
 ## Status UI Apple-native & Konsep Kebun — 19 November 2026
 
-Porting desain `konsep-kebun` ke aplikasi Android native Kotlin + Jetpack Compose telah selesai tanpa dependency baru dan tanpa `bounce`/`blink`:
+Porting desain `konsep-kebun` (mock HTML 18 November, tidak dilacak git; salinan lokal di `android/.tmp/`) ke aplikasi Android native Kotlin + Jetpack Compose telah selesai tanpa dependency baru dan tanpa `bounce`/`blink`:
 - **Adaptive Launcher Icon (`res/mipmap-anydpi-v26/ic_agro.xml`, `res/drawable/ic_agro_bg.xml`, `ic_agro_fg.xml`, `ic_agro_mono.xml`, `ic_agro.xml`):** Emblem daun tunggal bergaris terasering (`ikon.svg`) terpisah menjadi layer background gradien zamrud, foreground terpusat di safe zone 66dp, dan monochrome untuk Android 13+ Themed Icons.
 - **Welcome Cover & Akses Terpisah (`AuthScreens.kt`, `Delight.kt`, `GoogleSignIn.kt`):** Layar `AuthStep.Welcome` menampilkan langit 4 fase waktu lokal (`Pagi`, `Siang`, `Sore`, `Malam` tanpa matahari + bintang statis) + bukit terasering berlapis + emblem & wordmark `Smart Agro` (**tanpa maskot**) + tombol terpisah (`Lanjutkan dengan Google`, `Masuk dengan email`, `Buat akun`, `Jelajahi mode latihan`). Penanganan `NoCredentialException` dan `GoogleIdTokenParsingException` dipisahkan dari kegagalan umum.
 - **Liquid Glass Logo Reveal (`Delight.kt`, `MainActivity.kt`, `AccountScreens.kt`):** Transisi masuk kebun memakai AGSL `RuntimeShader` refraksi kaca cair pada Android 13+ (API 33+) dan fallback Canvas kaca pada API 26–32, dengan tipografi kinetik `Smart Agro`, tap-to-skip, penghormatan `ANIMATOR_DURATION_SCALE == 0f`, serta tombol **Akun → Putar animasi masuk**.
