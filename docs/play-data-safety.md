@@ -14,7 +14,7 @@ Draf 23 November 2026 untuk paket `id.smartagro.app`. Pengelola perlu memeriksa 
 | SSID dan sandi Wi-Fi | Konfigurasi lokal atas tindakan pengguna | Permintaan HTTP ke ESP32 di jaringan setup; periksa pengecualian aliran lokal saat menjawab tentang enkripsi transit |
 | Cache kebun, widget, ekspor CSV | Baca offline, widget pilihan pengguna dan berbagi berkas | Penyimpanan privat HP, layar utama, tujuan berbagi yang dipilih |
 
-Tidak ada SDK iklan atau analitik di web maupun Android (diperiksa 23 November 2026). Koordinat ke Open-Meteo dibulatkan dua desimal (`round2` di `weather-forecast/handler.ts`). Purge menghapus `community_contribution`, `care_journal`, `explanation_attempt`, siklus, slot, situs, foto, `activation_nonce` dan `security_event`. Kontak privasi di halaman kebijakan sementara mengarah ke GitHub Issues (publik); sediakan email kontak sebelum mengajukan ke Play.
+Tidak ada SDK iklan atau analitik di web maupun Android (diperiksa 23 November 2026). Koordinat ke Open-Meteo dibulatkan dua desimal (`round2` di `weather-forecast/handler.ts`). Purge menghapus `community_contribution`, `care_journal`, `explanation_attempt`, siklus, slot, situs, foto, `activation_nonce` dan `security_event`. Kontak privasi di halaman kebijakan dan formulir Play: email pengembang yang diberikan pemilik (23 November 2026).
 
 Pengiriman ke backend produksi memakai HTTPS. Portal ESP32 memakai HTTP lokal pada jaringan setup. Status "dikumpulkan", "dibagikan", pengecualian pemroses layanan dan perlakuan SDK Google perlu disesuaikan dengan perjanjian layanan dan build yang diajukan. Formulir publik dan kontak dukungan diisi oleh pemilik akun Play.
 
