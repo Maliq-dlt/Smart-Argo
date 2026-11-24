@@ -4,6 +4,17 @@ Notable changes to Smart Agro. Dates are UTC+7.
 
 ## [Unreleased]
 
+### Fixed
+- Android release build: R8 removed the constructor WorkManager uses to open its database, so the release APK crashed at start (debug builds are not minified, so tests and the emulator tour passed), and it removed the Play services provider Google sign-in needs. `app/proguard-rules.pro` keeps both, and CI fails if R8's report lists them again.
+- Account recovery waits for the other sessions to be signed out before it reports success; a failure answers 503 and the same code works again within ten minutes.
+
+### Added
+- The web app can be added to a phone's home screen: a manifest, icons (192, 512, maskable, Apple touch) and its content type in `_headers`. No service worker, so data always comes fresh from the server.
+- Page changes ease in without a blink, charts read a value under the pointer or finger and return to the newest point, and Ringkasan offers the example garden to a guest with an empty garden.
+
+### Changed
+- The plant stage draws at 30 fps when only the breeze moves; the growth-phase bar and pH pin move in 0.45 s instead of 1 s.
+
 ## [1.12.0] - 2026-11-24
 
 Sensor care, the second dashboard and the native Android app reach `main`; the hosted project runs every migration up to `20261123050000` and the new `alert-dispatch` function.
