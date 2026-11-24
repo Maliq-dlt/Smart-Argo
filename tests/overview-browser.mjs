@@ -42,6 +42,7 @@ try {
   const single = await open({ demo: false, hash: '#statistik' })
   ok(await single.locator('.ov-title').count() === 1 && /\.$/.test(await single.locator('.ov-title').innerText()), 'Ringkasan opens with one sentence')
   ok(await single.locator('.ov-featured.single .ov-card').count() === 1 && await single.locator('.ov-tile').count() === 0, 'One plant is one wide card')
+  ok(await single.getByRole('button', { name: 'Muat contoh kebun' }).isVisible(), 'A guest without a garden finds the example garden on Ringkasan')
   await single.locator('.ov-card').click()
   await single.waitForFunction(() => location.hash === '#tanaman')
   ok(await single.locator('.plant-rail').count() === 0, 'A single plant has no rail')
@@ -50,6 +51,7 @@ try {
   // Three plants (the demo): status words, cards open their plant with a morph into the stage.
   const page = await open({ hash: '#statistik' })
   ok(await page.locator('.ov-card, .ov-tile').count() === 3, 'Three plants on Ringkasan')
+  ok(await page.getByRole('button', { name: 'Muat contoh kebun' }).count() === 0, 'Once the garden exists the example is not offered again')
   ok(/\d+ baik|sedang dipelajari/.test(await page.locator('.ov-sub').innerText()), 'The calm plants are counted under the sentence')
   const target = page.locator('.ov-card, .ov-tile').filter({ hasText: 'Cabai' }).first()
   const morph = page.evaluate(() => new Promise(resolve => {

@@ -33,9 +33,11 @@ function MiniPot({ plant }: { plant: OverviewPlant }) {
 
 /** Ringkasan: the state of every plant in one sentence, the ones that need you as large cards, the rest as tiles,
  *  what is due within a day, and the products. Server and simulator supply their own data. */
-export default function Overview({ plants, products, onOpen, onAdd }: {
+export default function Overview({ plants, products, onOpen, onAdd, onDemo }: {
   plants: OverviewPlant[]; products: number | null
   onOpen: (plant: OverviewPlant, art: HTMLElement | null) => void; onAdd?: () => void
+  /** A guest with an empty garden can load the example here too, not only from the pot picker's small menu. */
+  onDemo?: () => void
 }) {
   const places = useMemo(() => [...new Set(plants.map(p => p.place).filter((p): p is string => !!p))], [plants])
   const [place, setPlace] = useState<string | null>(null), [query, setQuery] = useState('')
@@ -60,6 +62,7 @@ export default function Overview({ plants, products, onOpen, onAdd }: {
         <h2 id="ov-plants-title">Tanaman <span className="ov-count">{plants.length}</span></h2>
         <div className="ov-tools">
           {plants.length > 8 && <label className="ov-search"><MagnifyingGlass aria-hidden="true" /><span className="sr-only">Cari tanaman</span><input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari tanaman" /></label>}
+          {onDemo && <button type="button" className="button" onClick={onDemo}>Muat contoh kebun</button>}
           {onAdd && <button type="button" className="button" onClick={onAdd}><Plus aria-hidden="true" />Tambah</button>}
         </div>
       </div>
