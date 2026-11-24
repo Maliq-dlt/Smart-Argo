@@ -50,6 +50,15 @@ jobs:
           printf 'storeFile=.private/ci-release.p12\nstorePassword=%s\nkeyAlias=smartagro-ci\nkeyPassword=%s\n' \
             "$password" "$password" > .private/release.properties
       - run: ./gradlew testDebugUnitTest lintDebug assembleDebug lintRelease assembleRelease --no-daemon
+      # R8 lists what it removed from the release build. These classes are created by reflection: without them the
+      # release app crashed at start (WorkManager's database) or could not sign in with Google (2026-11-24).
+      - name: Release keeps the classes created by reflection
+        shell: bash
+        run: |
+          usage=app/build/outputs/mapping/release/usage.txt
+          test -s "$usage"
+          if grep -A3 '^androidx.work.impl.WorkDatabase_Impl:$' "$usage" | grep -q '<init>()'; then echo "R8 removed WorkDatabase_Impl()"; exit 1; fi
+          if grep -q '^androidx.credentials.playservices.CredentialProviderPlayServicesImpl:$' "$usage"; then echo "R8 removed the Google sign-in provider"; exit 1; fi
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
