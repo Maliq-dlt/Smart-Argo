@@ -17,7 +17,7 @@ const port = 4178, base = `http://127.0.0.1:${port}/`
 const headers = Object.fromEntries((await readFile('dist/_headers', 'utf8')).split(/\r?\n/).filter(l => /^\s+\S+:/.test(l)).map(l => l.trim().split(/:\s(.*)/s).slice(0, 2)))
 headers['Content-Security-Policy'] = headers['Content-Security-Policy'].replace('connect-src ', 'connect-src http://127.0.0.1:54321 ').replace(/; upgrade-insecure-requests/, '')
 assert.match(headers['Content-Security-Policy'], /script-src 'self' 'wasm-unsafe-eval';/)
-const TYPES = { '.html': 'text/html', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.avif': 'image/avif', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp4': 'video/mp4', '.webm': 'video/webm' }
+const TYPES = { '.html': 'text/html', '.webmanifest': 'application/manifest+json', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.avif': 'image/avif', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp4': 'video/mp4', '.webm': 'video/webm' }
 const server = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(new URL(req.url, base).pathname)).replace(/^([/\\])+/, '')
   const file = path.startsWith('..') || !path ? 'index.html' : path
