@@ -722,7 +722,8 @@ function Simulator() {
         <a href="#tanaman" className="button statistics-link"><ChartLine aria-hidden="true" />Lihat rincian tanaman<ArrowUpRight aria-hidden="true" /></a>
       </div>}
 
-      {!realCare && page === 'statistics' && <Overview plants={overviewPlants} products={account.signedIn ? account.products.length : null} onOpen={openPlant} onAdd={() => setGardenDialog('add')} />}
+      {!realCare && page === 'statistics' && <Overview plants={overviewPlants} products={account.signedIn ? account.products.length : null} onOpen={openPlant} onAdd={() => setGardenDialog('add')}
+        onDemo={garden.sites.length === 0 && features.demoGarden && !server ? loadDemo : undefined} />}
       {realCare && (page === 'statistics' || page === 'plant') && (server ? <LiveCare key={gardenScope} client={server} detail={page === 'plant'} selected={livePlant} plantedOn={plantedOn} onSelect={setLivePlant} onAdd={() => setGardenDialog('add')} /> : <p aria-live="polite">Menunggu data akun. Data simulasi tidak digunakan untuk tanaman Anda.</p>)}
       {!realCare && page === 'plant' && <div className="statistics-page">
         <div className="dash">

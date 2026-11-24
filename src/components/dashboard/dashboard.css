@@ -115,7 +115,7 @@
 
 .phase-steps { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: auto 0 0; padding: 0; list-style: none; }
 .phase-steps::before { content: ''; position: absolute; left: 12.5%; right: 12.5%; top: .9375rem; height: 2px; border-radius: 2px; background: var(--line-strong); }
-.phase-fill { position: absolute; left: 12.5%; top: .9375rem; height: 2px; border-radius: 2px; background: var(--primary-2); width: calc(75% * var(--progress, 0)); transition: width 1s var(--ease); }
+.phase-fill { position: absolute; left: 12.5%; top: .9375rem; height: 2px; border-radius: 2px; background: var(--primary-2); width: calc(75% * var(--progress, 0)); transition: width .45s var(--ease); }
 .phase-steps li { position: relative; display: grid; justify-items: center; gap: .5rem; color: var(--muted); font-size: .78rem; text-align: center; }
 .phase-node { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; background: var(--surface); box-shadow: inset 0 0 0 2px var(--line-strong); transition: background-color .4s, box-shadow .4s, color .4s; }
 .phase-node svg { width: 1rem; height: 1rem; }
@@ -135,7 +135,7 @@
 .ph-bar { position: relative; height: .75rem; border-radius: 999px; background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 55%, transparent) 0%, color-mix(in srgb, var(--accent) 38%, transparent) 26%, color-mix(in srgb, var(--accent) 38%, transparent) 58%, color-mix(in srgb, #5f9a96 55%, transparent) 100%); box-shadow: inset 0 0 0 1px var(--line); }
 .ph-ideal { position: absolute; top: -4px; bottom: -4px; border-radius: 999px; box-shadow: 0 0 0 1.5px var(--primary-2); }
 .ph-dot { position: absolute; top: 1px; width: .625rem; height: .625rem; margin-left: -.3125rem; border-radius: 50%; background: var(--ink); opacity: .32; }
-.ph-pin { position: absolute; top: -.5625rem; width: 1.375rem; height: 1.375rem; margin-left: -.6875rem; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 3px var(--ink); transition: left 1s var(--ease); }
+.ph-pin { position: absolute; top: -.5625rem; width: 1.375rem; height: 1.375rem; margin-left: -.6875rem; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 3px var(--ink); transition: left .45s var(--ease); }
 .ph-pin[data-alert] { box-shadow: 0 0 0 3px var(--warn); }
 .ph-ticks { position: relative; height: 1rem; margin-top: .875rem; color: var(--muted); font-size: .72rem; }
 /* nowrap: the end tick sits at left:100% (zero room to its right) and .app-content's overflow-wrap:anywhere would split "8,0" into "8," and "0". */

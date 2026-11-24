@@ -49,8 +49,10 @@ export function createMfaRecoveryHandler(config: Config) {
         const removed = await fetch(`${base.origin}/auth/v1/admin/users/${user.id}/factors/${factor}`, { method: 'DELETE', headers: service, signal: AbortSignal.timeout(10000) })
         if (!removed.ok && removed.status !== 404) throw new Error('Factor removal failed')
       }
-      // Whoever else holds a session (possibly the reason for this recovery) is signed out; this session stays.
-      await fetch(`${base.origin}/auth/v1/logout?scope=others`, { method: 'POST', headers: { 'x-request-id': requestId, Authorization: authorization, apikey: config.serviceKey }, signal: AbortSignal.timeout(10000) })
+      // Whoever else holds a session (possibly the reason for this recovery) is signed out; this session stays. A failed
+      // sign-out is not a finished recovery: the 503 below sends the user back with the same code (retry window).
+      const out = await fetch(`${base.origin}/auth/v1/logout?scope=others`, { method: 'POST', headers: { 'x-request-id': requestId, Authorization: authorization, apikey: config.serviceKey }, signal: AbortSignal.timeout(10000) })
+      if (!out.ok) throw new Error('Sign-out of other sessions failed')
       return reply(200, { ok: true, removed: factors.length })
     } catch { return reply(503, { ok: false, code: 'service_unavailable', message: 'Recovery temporarily unavailable. Retry with the same code within ten minutes.' }) }
   }
