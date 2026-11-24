@@ -28,5 +28,5 @@ test('every icon exists at the size it claims, and the page links them', () => {
   const html = readFileSync('index.html', 'utf8')
   assert.match(html, /<link rel="manifest" href="%BASE_URL%manifest\.webmanifest" \/>/)
   assert.match(html, /<link rel="apple-touch-icon" href="%BASE_URL%icons\/apple-touch-icon\.png" \/>/)
-  assert.match(readFileSync('public/_headers', 'utf8'), /\/manifest\.webmanifest\n {2}Content-Type: application\/manifest\+json/)
+  assert.match(readFileSync('public/_headers', 'utf8'), /\/manifest\.webmanifest\r?\n {2}Content-Type: application\/manifest\+json/) // CRLF in a Windows checkout
 })
