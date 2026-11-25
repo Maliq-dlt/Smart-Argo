@@ -54,7 +54,13 @@ function UnitCare({ client, unit, revision }: { client: ProductAccountClient; un
         client.rpc('my_unlogged_rises', { p_unit_id: unit }).then(value => {
           const valueRises = careAnswer(value).rises
           if (!Array.isArray(valueRises)) throw new Error('Usulan siram tidak valid.')
-          const next = valueRises.map(value => { const r = careRecord(value); if (typeof r.from !== 'string' || !Number.isFinite(Date.parse(r.from)) || typeof r.to !== 'string' || !Number.isFinite(Date.parse(r.to)) || typeof r.delta !== 'number' || !Number.isFinite(r.delta)) throw new Error('Usulan siram tidak valid.'); return { from: r.from, to: r.to, delta: r.delta } })
+          const next = valueRises.map(value => {
+            const r = careRecord(value)
+            if (typeof r.from !== 'string' || typeof r.to !== 'string' ||
+              !Number.isFinite(Date.parse(r.from)) || !Number.isFinite(Date.parse(r.to)) || Date.parse(r.to) < Date.parse(r.from) ||
+              typeof r.delta !== 'number' || !Number.isFinite(r.delta) || r.delta < 5) throw new Error('Usulan siram tidak valid.')
+            return { from: r.from, to: r.to, delta: r.delta }
+          })
           if (current) setRises(next)
         }),
       ])
@@ -63,6 +69,17 @@ function UnitCare({ client, unit, revision }: { client: ProductAccountClient; un
     void read()
     return () => { current = false }
   }, [client, unit, revision, retry])
+  const shareRise = async (text: string) => {
+    try {
+      if (navigator.share) await navigator.share({ text })
+      else {
+        await navigator.clipboard.writeText(text)
+        setNotice('Jejak air disalin.')
+      }
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) setError('Jejak air belum dibagikan. Anda bisa menyalin teksnya langsung.')
+    }
+  }
   const dismiss = async (rise: Rise) => {
     setBusy(true); setError('')
     try { careAnswer(await client.rpc('dismiss_my_rise', { p_unit_id: unit, p_at: rise.to })); setRises(old => old.filter(r => r.to !== rise.to)); setNotice('Usulan diabaikan tanpa membuat catatan siram.') } catch (err) { setError(message(err)) } finally { setBusy(false) }
@@ -86,7 +103,14 @@ function UnitCare({ client, unit, revision }: { client: ProductAccountClient; un
     <section className="panel care-panel"><h2>Perkiraan siram</h2><p>{outlookLabel(outlook)}</p>{outlook && <p>{bandSourceLabel(outlook.band_source)}</p>}</section>
     <section className="panel care-panel device-health"><h2>Perangkat</h2>{health ? <><dl className="care-facts"><div><dt>Kiriman terakhir diterima</dt><dd>{date(packets.at(-1))}</dd></div><div><dt>Baterai terakhir</dt><dd>{number(battery?.volts)}{battery ? ' V' : ''}</dd></div><div><dt>Waktu baterai</dt><dd>{date(battery?.at)}</dd></div><div><dt>Perkiraan menuju 3,4 V</dt><dd>{typeof health.battery_days_left === 'number' ? `${number(health.battery_days_left)} hari` : 'Data tren belum cukup'}</dd></div><div><dt>Kalibrasi kelembapan</dt><dd>{date(calibration?.moisture_at)}</dd></div><div><dt>Kalibrasi pH</dt><dd>{date(calibration?.ph_at)}</dd></div></dl><h3>Jeda kiriman</h3>{gaps.length ? <ul>{gaps.map((gap, i) => <li key={i}>{date(gap.from)} sampai {gap.ongoing ? 'Masih menunggu kiriman' : date(gap.to)}</li>)}</ul> : <p>Tidak ada jeda lebih dari 90 menit pada riwayat yang tersedia.</p>}<h3>Energi harian</h3>{energy.length ? <ul>{energy.map((day, i) => <li key={i}>{String(day.day)}: surya {number(day.solar_wh)} Wh, beban {number(day.load_wh)} Wh ({number(day.windows)} dari 96 jendela 15 menit).</li>)}</ul> : <p>Belum ada data energi terverifikasi.</p>}<p>Diperiksa: {date(health.checked_at)}</p></> : <p>Kesehatan perangkat belum tersedia.</p>}</section>
     {rises.length > 0 && <section className="panel care-panel"><h2>Kenaikan tanpa catatan</h2><p>Kenaikan sensor belum membuktikan penyiraman. Konfirmasi hanya bila Anda benar-benar menyiram.</p><label className="care-picker">Volume aktual (mL)<input type="number" min="1" max="100000" step="any" value={volume} onChange={e => setVolume(e.target.value)} /></label>{!volumeOk && <p>Isi volume air yang Anda siramkan untuk mengaktifkan Catat.</p>}
-      {rises.map(rise => <div className="care-rise" key={rise.to}><p>Sepertinya Anda menyiram pukul {careTime(rise.to)} WIB ({date(rise.to)}). Catat?</p><div className="care-actions"><button className="button" type="button" disabled={busy || !!pending || !!request.current || !volumeOk} onClick={() => { request.current = { rise, amount: Number(volume), id: crypto.randomUUID() }; setPending(rise); setNotice('Siram akan dicatat dalam 5 detik. Meninggalkan halaman membatalkan pengiriman.'); timer.current = setTimeout(() => void send(), 5000) }}>Catat</button><button className="button" type="button" disabled={busy || !!pending || !!request.current} onClick={() => void dismiss(rise)}>Bukan</button></div></div>)}
+      {rises.map(rise => {
+        const text = `Jejak air di pot saya. Indeks kelembapan naik ${number(rise.delta)} poin, dari ${date(rise.from)} hingga ${date(rise.to)}.`
+        return <div className="care-rise" key={rise.to}><p>{text}</p>
+          <button className="button" type="button" onClick={() => void shareRise(text)}>Bagikan jejak air</button>
+          <p>Anda menyiram sekitar pukul {careTime(rise.to)} WIB?</p>
+          <div className="care-actions"><button className="button" type="button" disabled={busy || !!pending || !!request.current || !volumeOk} onClick={() => { request.current = { rise, amount: Number(volume), id: crypto.randomUUID() }; setPending(rise); setNotice('Siram akan dicatat dalam 5 detik. Meninggalkan halaman membatalkan pengiriman.'); timer.current = setTimeout(() => void send(), 5000) }}>Catat</button><button className="button" type="button" disabled={busy || !!pending || !!request.current} onClick={() => void dismiss(rise)}>Bukan</button></div>
+        </div>
+      })}
     </section>}
     {pending && <button className="button" type="button" onClick={() => { if (timer.current) clearTimeout(timer.current); request.current = null; setPending(null); setNotice('Pencatatan dibatalkan.') }}>Urungkan</button>}
     {error && <div role="alert"><p>{error}</p>{request.current && !pending && <button className="button" type="button" disabled={busy} onClick={() => void send()}>Kirim ulang catatan</button>}<button className="button" type="button" onClick={() => setRetry(n => n + 1)}>Muat ulang perawatan</button></div>}

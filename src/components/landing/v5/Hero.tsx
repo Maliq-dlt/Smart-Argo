@@ -1,3 +1,4 @@
+import { simulatorHref } from '../../../lib/appMode'
 import { ArrowDown, ArrowRight } from '@phosphor-icons/react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
@@ -74,7 +75,7 @@ export default function Hero({ onExplore }: { onExplore: () => void }) {
         <p>Sensor zona akar yang menjelaskan sarannya.</p>
       </div>
       <div className="v5-hero-corner v5-hero-actions">
-        <a className="sa-btn sa-btn-dark ag-simulator-link" href="#simulasi">Coba simulator<ArrowRight aria-hidden="true" /></a>
+        <a className="sa-btn sa-btn-dark ag-simulator-link" href={simulatorHref}>Coba simulator<ArrowRight aria-hidden="true" /></a>
         <button type="button" className="sa-btn sa-btn-ghost" onClick={onExplore}>Lihat ceritanya<ArrowDown aria-hidden="true" /></button>
       </div>
       <div className="v5-stairs" style={{ '--cols': grid.cols, '--rows': grid.rows } as React.CSSProperties} aria-hidden="true">

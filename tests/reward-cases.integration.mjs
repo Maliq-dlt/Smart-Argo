@@ -81,6 +81,7 @@ await test('RW-04: held claims, appeals and operator decisions',async t=>{
  })
  await t.test('upholding credits once through its own reward event; rejection credits nothing',async()=>{
   const before=credits(alice),decide=randomUUID(),body={p_case_id:heldCase,p_request_id:decide,p_decision:'upheld',p_points:null,p_reason:'Cuaca cerah tercatat; nilai wajar.'}
+  assert.equal((await rpc('operator_decide_reward_case',operator.token,{...body,p_request_id:randomUUID(),p_points:901})).data.code,'state_conflict')
   const upheld=(await rpc('operator_decide_reward_case',operator.token,body)).data
   assert.equal(upheld.status,'upheld');assert.equal(upheld.credited_points,900)
   assert.equal((await rpc('operator_decide_reward_case',operator.token,body)).data.idempotent,true)
@@ -104,6 +105,7 @@ await test('RW-04: held claims, appeals and operator decisions',async t=>{
   const decide=(caseId,points)=>rpc('operator_decide_reward_case',second.token,{p_case_id:caseId,p_request_id:randomUUID(),p_decision:'upheld',p_points:points,p_reason:'Barang tidak sampai.'})
   const compensate=redemption=>rpc('operator_compensate_redemption',second.token,{p_id:redemption,p_reason:'Barang tidak sampai; poin dikembalikan.'})
   const first=await redeem(),firstCase=await appeal(first)
+  assert.equal((await decide(firstCase,11)).data.code,'state_conflict')
   assert.equal((await decide(firstCase,10)).data.credited_points,10)
   assert.equal((await compensate(first)).data.code,'state_conflict','a credited case already refunded it')
   assert.equal(sql(`SELECT status FROM redemption WHERE id=${q(first)}`),'fulfilled')

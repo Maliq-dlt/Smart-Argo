@@ -1,3 +1,4 @@
+import { productLink, serialFromSearch } from '../lib/productQr'
 import { ArrowLeft } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import AccountSignIn, { type GuardMood } from './AccountSignIn'
@@ -6,7 +7,10 @@ import ThemeToggle from './ThemeToggle'
 import { useAccount } from './accountContext'
 import { behindCurtain } from '../lib/curtainSignal'
 
-const back = () => `${location.origin}${location.pathname}#statistik`
+const back = () => {
+  const serial = serialFromSearch(location.search)
+  return location.hash === '#ekosistem' && serial ? productLink(serial, location.origin) : `${location.origin}${location.pathname}#statistik`
+}
 /** Auth answers in English; the common ones get a sentence that says what to do next. Others pass through. */
 const plain: [RegExp, string][] = [
   [/invalid login credentials/i, 'Email atau kata sandi salah. Belum punya akun? Pilih Daftar.'],

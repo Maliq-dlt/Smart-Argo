@@ -16,10 +16,9 @@ const bootStart = performance.now()
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 const frames = (n: number) => new Promise<void>(resolve => { const step = (left: number) => (left ? requestAnimationFrame(() => step(left - 1)) : resolve()); step(n) })
 
-/** The first lift waits for fonts and the hero video (or the simulator), at least 1.2 s on the landing
- * (0.6 s for a direct link into the simulator) and at most 5 s. */
+/** Reveal as soon as the first screen is ready, including when the visitor prefers reduced motion. */
 function bootReady(simulator: boolean) {
-  const ready = Promise.all([document.fonts?.ready ?? Promise.resolve(), simulator ? Promise.resolve() : heroReady, wait(Math.max(0, (simulator ? 600 : 1200) - (performance.now() - bootStart)))])
+  const ready = Promise.all([document.fonts?.ready, simulator ? undefined : heroReady])
   return Promise.race([ready, wait(Math.max(0, 5000 - (performance.now() - bootStart)))])
 }
 

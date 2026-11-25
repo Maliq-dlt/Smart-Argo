@@ -23,3 +23,5 @@ export const featuresOf = (mode: AppMode): Features => mode === 'live'
 const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
 export const appMode: AppMode = parseAppMode(env?.VITE_APP_MODE)
 export const features: Features = featuresOf(appMode)
+
+export const simulatorHref = features.playground ? '#simulasi' : 'https://smart-agro-demo.pages.dev/#simulasi'

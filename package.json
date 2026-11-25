@@ -10,7 +10,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "build:cloud": "tsc --noEmit && vite build --mode cloud",
-    "build:live": "tsc --noEmit && vite build --mode live",
+    "build:live": "tsc --noEmit && node --env-file=.env.cloud --env-file=.env.live --env-file-if-exists=.env.live.local node_modules/vite/bin/vite.js build --mode live",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",

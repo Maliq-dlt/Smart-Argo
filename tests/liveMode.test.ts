@@ -20,7 +20,8 @@ test('a build with no mode set is the demo', () => {
 
 test('the live build is its own script and takes its mode from a file in the repository, not from a visitor', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-  assert.match(pkg.scripts['build:live'], /vite build --mode live/)
+  assert.match(pkg.scripts['build:live'], /build --mode live(?: |$)/)
+  assert.match(pkg.scripts['build:live'], /--env-file=\.env\.cloud --env-file=\.env\.live(?: |$)/)
   assert.match(pkg.scripts['build:live'], /tsc --noEmit/)
   const file = readFileSync(new URL('../.env.live', import.meta.url), 'utf8')
   assert.match(file, /^VITE_APP_MODE=live$/m)

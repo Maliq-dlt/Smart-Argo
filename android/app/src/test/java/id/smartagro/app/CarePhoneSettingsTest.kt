@@ -13,6 +13,34 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class CarePhoneSettingsTest {
+    @Test fun blockedChannelKeepsAnOngoingAlertEligibleForDelivery() {
+        val context = ApplicationProvider.getApplicationContext<android.app.Application>()
+        shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val manager = context.getSystemService(android.app.NotificationManager::class.java)
+        manager.createNotificationChannel(android.app.NotificationChannel(CareNotifications.CHANNEL, "Perawatan", android.app.NotificationManager.IMPORTANCE_NONE))
+        val overview = org.json.JSONObject("""{"plants":[{"unit_id":"u1","name":"Cabai","state":"below"}]}""")
+        assertFalse(CareNotifications.allowed(context))
+        assertEquals(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS, CareNotifications.settingsIntent(context).action)
+        CareNotifications.notifyChanges(context, overview, setOf("soil_dry"))
+        assertTrue(CareNotifications.seen(context).isEmpty())
+        assertEquals(0, manager.activeNotifications.size)
+        // Robolectric models an OS-wide block separately from runtime permission.
+        shadowOf(manager).setNotificationsEnabled(false)
+        assertEquals(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS, CareNotifications.settingsIntent(context).action)
+    }
+
+    @Test fun aSuccessfulCheckRecordsTheTimeAndTheDeliveredEpisode() {
+        val context = ApplicationProvider.getApplicationContext<android.app.Application>()
+        shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val overview = org.json.JSONObject("""{"plants":[{"unit_id":"u1","name":"Cabai","state":"below"}]}""")
+        CareNotifications.notifyChanges(context, overview, setOf("soil_dry"))
+        assertEquals(setOf("u1:below"), CareNotifications.seen(context))
+        CareNotifications.markChecked(context)
+        assertNotNull(CareNotifications.lastCheck(context))
+        CareNotifications.setEnabled(context, false)
+        assertNull(CareNotifications.lastCheck(context))
+    }
+
     @Test fun permissionAnswerAndSavedSwitchControlPhoneNotifications() {
         val context=ApplicationProvider.getApplicationContext<android.app.Application>()
         runCatching { androidx.work.WorkManager.initialize(context, androidx.work.Configuration.Builder().build()) }

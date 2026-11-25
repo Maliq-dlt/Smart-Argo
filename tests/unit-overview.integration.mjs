@@ -86,7 +86,9 @@ await test('APP-03: unit overview and alerts',async t=>{
   assert.deepEqual((await overview(bob))['Bekas Bob'].alerts,[])
   sql(`UPDATE ownership SET end_at=clock_timestamp() WHERE product_id=${q(handed.id)} AND end_at IS NULL; INSERT INTO ownership(product_id,account_id,start_at) VALUES(${q(handed.id)},${q(alice.id)},clock_timestamp())`)
   const mine=await overview(alice)
-  assert.deepEqual(mine['Bekas Bob'].sensors,[]);assert.deepEqual(mine['Bekas Bob'].alerts,['no_data'])
+  assert.equal(mine['Bekas Bob'],undefined,'the old location label stays private')
+  const transferred=mine['Unit '+bobUnit.slice(0,8)]
+  assert.deepEqual(transferred.sensors,[]);assert.deepEqual(transferred.alerts,['no_data'])
   assert.deepEqual(await overview(bob),{})
   assert.equal((await rpc('my_unit_overview',null)).status>=400||(await rpc('my_unit_overview',null)).data.ok===false,true)
  })

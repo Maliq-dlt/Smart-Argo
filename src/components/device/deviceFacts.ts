@@ -15,7 +15,7 @@ export const LABELS: Record<LabelId, { title: string; note: string; side: 1 | -1
   led: { title: 'LED baca', note: `tiap ${READING_INTERVAL_MIN} menit`, side: -1 },
   probe: { title: 'Probe zona akar', note: 'kelembapan · suhu · pH', side: 1 },
   esp32: { title: 'ESP32', note: 'mengirim data', side: -1 },
-  baterai: { title: 'Baterai', note: `cadangan ${solarInput.autonomyDays} hari`, side: -1 },
+  baterai: { title: 'Baterai', note: `target desain ${solarInput.autonomyDays} hari`, side: -1 },
 }
 
 /** Parts are named once, in the product section. The soil and numbers scenes show what the parts do instead, with

@@ -47,6 +47,28 @@ Saat pengguna memilih **Catat**, minta volume aktual (lebih dari 0 sampai 100.00
 
 Penjadwal memanggil `POST /functions/v1/alert-dispatch` dengan `Authorization: Bearer <ALERT_DISPATCH_SECRET>` (minimal 32 karakter). Edge Function menjalankan `purge_due_account_deletions`, mengevaluasi episode, lalu mengirim email melalui SMTP. Respons memuat `purged,sent,failed,uncertain,deferred`. Penghapusan yang jatuh tempo tetap diproses saat relay bermasalah.
 
+Untuk jadwal produksi, gunakan Supabase Cron bersama pg_net dan Vault. Aktifkan ekstensi `pg_cron` dan `pg_net` di proyek Supabase. Simpan URL HTTPS proyek sebagai `smart_agro_project_url` dan nilai yang sama dengan secret Edge Function `ALERT_DISPATCH_SECRET` sebagai `smart_agro_alert_dispatch_secret` melalui Vault. Jalankan SQL berikut sebagai administrator proyek. Nama job tetap sehingga menjalankannya kembali memperbarui jadwal yang sama.
+
+```sql
+select cron.schedule('smart-agro-care-dispatch', '7,37 * * * *', $job$
+  select net.http_post(
+    url := rtrim(project.decrypted_secret, '/') || '/functions/v1/alert-dispatch',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+                                  'Authorization', 'Bearer ' || token.decrypted_secret),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 100000
+  )
+  from vault.decrypted_secrets project
+  cross join vault.decrypted_secrets token
+  where project.name = 'smart_agro_project_url'
+    and project.decrypted_secret ~ '^https://[a-z0-9-]+[.]supabase[.]co/?$'
+    and token.name = 'smart_agro_alert_dispatch_secret'
+    and length(token.decrypted_secret) >= 32;
+$job$);
+```
+
+Sesudah jadwal pertama, periksa riwayat job dan HTTP di log Edge Function. Job SQL yang sukses hanya menunjukkan langkah database selesai. Pastikan fungsi menerima permintaan dan mengembalikan HTTP 200. Setelah itu nonaktifkan `SMART_AGRO_MAINTENANCE_ENABLED` di GitHub agar hanya satu penjadwal aktif. Untuk kembali ke GitHub, aktifkan workflow lalu jalankan `select cron.unschedule('smart-agro-care-dispatch');`. Durasi kirim hingga inbox tetap bergantung pada relay.
+
 Fungsi memakai `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ALERT_DISPATCH_SECRET`, `SMTP_HOST`, dan `SMTP_FROM`. `ALERT_APP_URL` (opsional, URL https app live) menambahkan tautan `/#pengaturan-peringatan` agar penerima bisa mematikan peringatan; tanpa nilai yang sah, baris itu dihilangkan. Waktu di email ditulis dalam WIB (`23 Nov 14.30 WIB`). `battery_low` baru dianggap pulih setelah 24 jam tanpa bacaan di bawah 3,4 V dengan tegangan 3,6 V atau lebih, sehingga baterai surya yang turun tiap malam tidak mengirim email tiap malam. Sesuaikan `SMTP_PORT`, `SMTP_USER` serta `SMTP_PASSWORD` dengan relay. Bawaannya `SMTP_MODE=tls` pada port 465. Untuk relay STARTTLS pakai `SMTP_MODE=starttls` dengan port yang didukung relay (bawaan 2587). Supabase Edge terkelola memblokir koneksi keluar ke port 25 dan 587. Mode `local` hanya menerima loopback tanpa autentikasi. [Batas Edge Functions](https://supabase.com/docs/guides/functions/limits) Kredensial SMTP dan service key berada di lingkungan fungsi.
 
 Workflow `.github/workflows/care-alerts.yml` berjalan pada menit 07 dan 37 UTC di branch default ketika variabel GitHub `SMART_AGRO_MAINTENANCE_ENABLED=true`. Workflow memerlukan variabel `SUPABASE_URL` dan secret `ALERT_DISPATCH_SECRET` yang sama dengan milik fungsi. Aktivasi produksi dilakukan sesudah migrasi, deployment fungsi, dan persetujuan pemilik.

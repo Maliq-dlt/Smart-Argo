@@ -54,7 +54,7 @@ import { settledMood } from './lib/mascot'
 // (which suspends at least once and showed "Memuat…" for a frame: a blink, 2026-11-24). Both are fetched once the
 // browser is idle, and a page change waits for a missing chunk before its transition starts.
 const chunks: { ecosystem?: typeof import('./components/MiroEcosystemWorkspace').default; profile?: typeof import('./components/ProfilePage').default } = {}
-const loadEcosystem = () => import('./components/MiroEcosystemWorkspace').then(m => { chunks.ecosystem = m.default; return m })
+const loadEcosystem = () => (features.playground ? import('./components/MiroEcosystemWorkspace') : import('./components/LiveEcosystem')).then(m => { chunks.ecosystem = m.default; return m })
 const loadProfile = () => import('./components/ProfilePage').then(m => { chunks.profile = m.default; return m })
 const LazyEcosystem = lazy(loadEcosystem), LazyProfile = lazy(loadProfile)
 const chunkMissing = (page: string) => page === 'ecosystem' && !chunks.ecosystem ? loadEcosystem : page === 'profile' && !chunks.profile ? loadProfile : null
@@ -99,7 +99,7 @@ const pages = [
 const TAB_OF: Partial<Record<string, string>> = { comparison: 'plant', terminal: 'plant', devices: 'plant', ecosystem: 'profile', delete: 'profile', alerts: 'profile' }
 const GUEST_KEY = 'smart-agro.guest'
 // The live app has no Ruang tanam: its address and the default page lead to the dashboard.
-const pageFromHash = () => { const found = pages.find(p => p.hash === location.hash)?.id; return features.playground ? found ?? 'simulation' : found === undefined || found === 'simulation' ? 'statistics' : found }
+const pageFromHash = () => { const found = pages.find(p => p.hash === location.hash)?.id; return features.playground ? found ?? 'simulation' : found === undefined || ['simulation', 'devices', 'terminal', 'comparison'].includes(found) ? 'statistics' : found }
 const one = (value: number) => value.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
 function restoreSessions() {
@@ -630,7 +630,7 @@ function Simulator() {
   })} />
   if (account.signedIn && account.deletion) return <DeletionPending />
   // Signed in for the first time (Google or email): set up the first pot, which opens its journey.
-  if (account.signedIn && account.identity && !account.identity.pot && page !== 'alerts') return <PotSetup onSaved={pot => {
+  if (account.signedIn && account.identity && !account.identity.pot && page !== 'alerts' && (features.playground || page !== 'ecosystem')) return <PotSetup onSaved={pot => {
     const fresh = { ...createJourney(loadScenario(curated(pot.crop).scenario).data), name: pot.name }
     openNew(fresh)
     // The first pot of an account is also its first slot, on the server; if that cannot be made the pot still opens.

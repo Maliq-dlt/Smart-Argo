@@ -4,7 +4,7 @@ import { ariaFor, LABELS, labelsFor, READING_INTERVAL_MIN, type DeviceMode } fro
 import { solarInput } from '../src/lib/landingNarrative.ts'
 
 test('Label perangkat memakai angka dari kode, bukan tulisan tangan', () => {
-  assert.equal(LABELS.baterai.note, `cadangan ${solarInput.autonomyDays} hari`)
+  assert.equal(LABELS.baterai.note, `target desain ${solarInput.autonomyDays} hari`)
   assert.equal(LABELS.led.note, `tiap ${READING_INTERVAL_MIN} menit`)
   assert.equal(LABELS.probe.note, 'kelembapan · suhu · pH')
   assert.equal(LABELS.panel.title, 'Panel surya')

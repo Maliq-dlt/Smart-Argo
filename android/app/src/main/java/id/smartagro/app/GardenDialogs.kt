@@ -305,5 +305,5 @@ internal fun ModeBelajarCard(
 }
 
 internal fun logLearningCheck(model: AgroViewModel, unitId: String, state: InspectionState) {
-    model.recordCare(unitId, "inspection", Instant.now(), null, "[${state.key}] Kondisi ${state.label.lowercase(Locale.ROOT)}")
+    model.recordCare(unitId, "inspection", Instant.now(), null, state.key)
 }

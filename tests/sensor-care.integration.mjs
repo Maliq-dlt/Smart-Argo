@@ -474,7 +474,7 @@ test('garden overview and sensor trends from seven days of half-hourly readings'
     assert.deepEqual((await overview()).plants.find(p=>p.unit_id===rows[10].unit).band,learned)
     assert.equal((await water(11)).outlook.band_source,'own_pattern')
     // Pot 17 (cabai) gets the same visits over the same readings: the same pattern, labelled as the pot's own.
-    for(const [kind,minutes,notes,ml] of [['inspection',901,'sehat',null],['inspection',1500,'biasa',null],['inspection',2500,'bermasalah',null],['watering',2000,'',150],['watering',3000,'',150]])
+    for(const [kind,minutes,notes,ml] of [['inspection',901,'[sehat] Kondisi sehat',null],['inspection',1500,'biasa',null],['inspection',2500,'bermasalah',null],['watering',2000,'',150],['watering',3000,'',150]])
       assert.equal((await rpc('append_my_care_journal',token,{...check,p_unit_id:rows[16].unit,p_request_id:randomUUID(),p_kind:kind,p_observed_at:ago(minutes),p_notes:notes,p_amount_ml:ml})).ok,true)
     addReading(rows[16],ago(7*24*60+60),60)  // SINTETIS. Seven days, as for pot 11.
     const cabai=(await water(17)).outlook

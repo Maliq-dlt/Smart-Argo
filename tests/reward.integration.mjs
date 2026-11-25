@@ -50,6 +50,29 @@ await test('Phase 4: explicit policy and atomic marketplace (synthetic DB eviden
   assert.equal((await rpc('operator_set_reward_policy',alice.token,{p_version:'illegal',p_wh_per_point:1,p_daily_cap:100,p_enabled:true})).data.code,'forbidden')
   assert.equal((await setPolicy('synthetic-'+run,2,100)).data.code,'policy_conflict')
  })
+ await t.test('a scheduled policy halves issuance at the UTC boundary without halving existing balances',async()=>{
+  const policy='halving-'+run
+  const params={p_version:policy,p_wh_per_point:2,p_daily_cap:100,p_enabled:true,p_halving_days:30}
+  assert.equal((await rpc('operator_set_reward_policy',operator.token,params)).data.ok,true)
+  assert.equal((await rpc('operator_set_reward_policy',operator.token,{...params,p_halving_days:60})).data.code,'policy_conflict')
+  const schedule=(await rpc('reward_workspace',alice.token)).data.policy
+  assert.equal(schedule.halving_days,30);assert.equal(schedule.effective_wh_per_point,2)
+  const bounds=sql(`SELECT string_agg(public.reward_era(p,t)::text,',' ORDER BY t) FROM reward_policy p CROSS JOIN (VALUES
+    (${q(schedule.next_halving_at)}::timestamptz-interval '1 second'),(${q(schedule.next_halving_at)}::timestamptz),
+    (${q(schedule.next_halving_at)}::timestamptz+interval '720 hours')) times(t) WHERE version=${q(policy)}`)
+  assert.equal(bounds,'0,1,2')
+  // Date a separate fixture policy so three real settlement calls straddle its first halving.
+  const owner=await account('halving'), fixture=await evidenceOwner(owner,operator)
+  const windows=Array.from({length:4},()=>window(fixture,3,3))
+  const past=policy+'-past'
+  sql(`INSERT INTO reward_policy(version,wh_per_point,daily_point_cap,halving_days,created_at) SELECT ${q(past)},2,100,30,start_at-interval '720 hours' FROM energy_window WHERE id=${q(windows[2])}`)
+  assert.equal((await setPolicy(past,2,100)).data.ok,true)
+  const values=[]
+  for(const i of [0,3,1,2]) values.push((await credit(windows[i],owner)).data.credited)
+  assert.deepEqual(values,[1,1,1,1])
+  assert.equal((await rpc('reward_workspace',owner.token)).data.balance.available_points,4)
+  assert.equal((await setPolicy('synthetic-'+run,1,100)).data.ok,true)
+ })
  await t.test('eligible minimum, floor, daily cap, concurrent dedup and service-only helper',async()=>{
   const a=window(af,150,100),b=window(bf,100,100)
   const duplicate=await Promise.all([credit(a,alice),credit(a,alice),credit(b,bob)])
@@ -57,7 +80,7 @@ await test('Phase 4: explicit policy and atomic marketplace (synthetic DB eviden
   assert.equal(sql(`SELECT count(*) FROM reward_event WHERE energy_window_id=${q(a)}`),'1')
   assert.equal((await credit(window(af,50,50),alice)).data.reason,'daily_cap')
   assert.equal((await credit(window(cf,3.9,2.9),capOwner)).data.credited,2)
-  assert.equal((await credit(window(cf,0.5,0.5),capOwner)).data.reason,'below_threshold')
+  assert.equal((await credit(window(cf,0.5,0.5),capOwner)).data.credited,1,'unused 0.9 Wh combines with the next 0.5 Wh')
   assert.equal((await credit(window(cf,10,10,'simulated'),capOwner)).data.reason,'untrusted_window')
   assert.ok((await rpc('credit_energy_reward',alice.token,{p_window_id:a,p_account_id:alice.id})).status>=400)
   assert.equal((await credit(window(cf,10,10),alice)).data.reason,'untrusted_window')

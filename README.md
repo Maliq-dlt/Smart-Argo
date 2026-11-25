@@ -96,7 +96,7 @@ flowchart LR
     Fn --> DB
     Fn -->|weather| Meteo[Open-Meteo]
     Fn -.->|optional rewording| AI[OpenAI-compatible model]
-    Cron[GitHub Actions<br/>every 30 min] -->|alert-dispatch| Fn
+    Cron[Care scheduler<br/>every 30 min] -->|alert-dispatch| Fn
     Fn -->|email alerts| SMTP[SMTP]
     Web -.->|own wallet| Chain[Public testnet]
 ```
@@ -167,7 +167,7 @@ For Docker, pass the same variables to `docker compose up` with `AI_BASE_URL=htt
 | --- | --- | --- |
 | `npm run build` | `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` at build time (`.env.local` locally) | Accounts and guests |
 | `npm run build:cloud` | The hosted project in `.env.cloud` (public URL and publishable key only) | Accounts and guests (the demo) |
-| `npm run build:live` | `.env.live.local`, written by the deploy workflow from `.env.cloud` | Accounts only; no guest visit, simulator, simulated weather or demo garden |
+| `npm run build:live` | public settings from `.env.cloud`, live flags from `.env.live`, optional overrides in `.env.live.local` | Accounts only; no guest visit, simulator, simulated weather or demo garden |
 
 Never put a service-role or AI key in a `VITE_` variable, and never publish a local `npm run build` as the hosted app.
 
@@ -224,7 +224,7 @@ npx supabase functions deploy <name> --use-api --remote=<project-ref>
 
 The hosted functions accept the origins listed in the `APP_ORIGIN` secret (the demo and the live app), and Supabase Auth allows redirects to the same origins. Update both before changing a domain.
 
-[Care alerts](.github/workflows/care-alerts.yml) run every 30 minutes on GitHub Actions. They call the `alert-dispatch` function, which also removes accounts whose deletion grace period has ended. The job is enabled by the repository variable `SMART_AGRO_MAINTENANCE_ENABLED=true` and needs the variable `SUPABASE_URL` and the secret `ALERT_DISPATCH_SECRET`, which must match the function secret of the same name.
+The [care alerts workflow](.github/workflows/care-alerts.yml) requests a check every 30 minutes. GitHub can delay scheduled runs. For production, the [Supabase Cron setup](docs/sensor-care-api.md) runs the schedule in the project database. Both schedulers call the `alert-dispatch` function, which also removes accounts whose deletion grace period has ended. The GitHub job is enabled by the repository variable `SMART_AGRO_MAINTENANCE_ENABLED=true` and needs the variable `SUPABASE_URL` and the secret `ALERT_DISPATCH_SECRET`, which must match the function secret of the same name.
 
 ## Project status
 

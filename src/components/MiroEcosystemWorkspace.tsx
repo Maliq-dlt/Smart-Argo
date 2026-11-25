@@ -674,7 +674,7 @@ export default function MiroEcosystemWorkspace({
         </div>
       )}
 
-      {online && tab === 'energy' && <div className="online-panel">{locked('operator')}<ProductEnergy {...online} /><ProductRewards {...online} /><ProductRewardCases {...online} /></div>}
+      {online && tab === 'energy' && <div className="online-panel">{locked('operator')}<ProductRewards {...online} /><ProductEnergy {...online} /><ProductRewardCases {...online} /></div>}
       {tab === 'energy' && (
         <div className="miro-grid">
           <section className="panel miro-card" aria-labelledby="solar-sizing-heading">

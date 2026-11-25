@@ -1,3 +1,4 @@
+import { simulatorHref } from '../../../lib/appMode'
 import { ArrowRight } from '@phosphor-icons/react'
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { gsap } from 'gsap'
@@ -91,7 +92,7 @@ export default function Ask() {
         </div>
       </div>
       <div className="v5-ask-actions">
-        <a className="sa-btn sa-btn-dark" href="#simulasi">Buka simulator<ArrowRight aria-hidden="true" /></a>
+        <a className="sa-btn sa-btn-dark" href={simulatorHref}>Buka simulator<ArrowRight aria-hidden="true" /></a>
         <a className="sa-btn sa-btn-ghost" href="#statistik">Lihat dashboard</a>
       </div>
     </div>

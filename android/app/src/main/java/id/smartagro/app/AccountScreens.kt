@@ -43,16 +43,59 @@ internal fun copySensitiveText(context: Context, label: String, text: String) {
 }
 
 @Composable
+private fun PhoneAlerts() {
+    val context = LocalContext.current
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var enabled by remember { mutableStateOf(CareNotifications.enabled(context)) }
+    var allowed by remember { mutableStateOf(CareNotifications.allowed(context)) }
+    var checked by remember { mutableStateOf(CareNotifications.lastCheck(context)) }
+    DisposableEffect(context, owner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) allowed = CareNotifications.allowed(context)
+        }
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            enabled = CareNotifications.enabled(context)
+            checked = CareNotifications.lastCheck(context)
+        }
+        owner.lifecycle.addObserver(observer)
+        val prefs = CareNotifications.prefs(context)
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { owner.lifecycle.removeObserver(observer); prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        CareNotifications.setEnabled(context, granted)
+        allowed = CareNotifications.allowed(context)
+    }
+    ToggleCell("Notifikasi di HP", enabled && allowed, { on ->
+        if (on && Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context,
+            android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        else if (on && !allowed) {
+            CareNotifications.setEnabled(context, true)
+            context.startActivity(CareNotifications.settingsIntent(context))
+        } else CareNotifications.setEnabled(context, on)
+    }, subtitle = if (!allowed) "Pengiriman diblokir oleh Android" else "Diperiksa berkala saat HP terhubung ke internet", glyph = PhosphorPaths.Bell, glyphColor = palette.tint)
+    if (!allowed) Cell("Pengaturan notifikasi Android", onClick = { context.startActivity(CareNotifications.settingsIntent(context)) })
+    if (enabled && !allowed) Cell("Matikan pemeriksaan berkala", onClick = { CareNotifications.setEnabled(context, false) })
+    if (enabled) {
+        val work = remember(context) { androidx.work.WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(CareNotifications.MANUAL) }.collectAsState(emptyList()).value
+        val pending = work.any { !it.state.isFinished }
+        val last = checked?.let { "Pemeriksaan terakhir berhasil pada ${time(it)}." } ?: "Belum ada pemeriksaan yang berhasil."
+        val status = when {
+            work.any { it.state == androidx.work.WorkInfo.State.RUNNING } -> "Sedang memeriksa."
+            pending -> "Menunggu jaringan atau giliran Android."
+            work.any { it.state == androidx.work.WorkInfo.State.FAILED } -> "Pemeriksaan manual gagal. Coba lagi."
+            else -> ""
+        }
+        Cell("Periksa pot sekarang", subtitle = listOf(last, status).filter(String::isNotBlank).joinToString(" "),
+            enabled = !pending, onClick = { CareNotifications.checkNow(context) })
+    }
+}
+
+@Composable
 internal fun AccountScreen(state: AppState, model: AgroViewModel) {
     val p = palette
     val uri = rememberSafeUriHandler()
     var confirmingLogout by rememberSaveable { mutableStateOf(false) }
-    val context = LocalContext.current
-    var notify by remember { mutableStateOf(CareNotifications.enabled(context) && CareNotifications.allowed(context)) }
-    val askToNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        CareNotifications.setEnabled(context, granted); notify = granted
-    }
-
     var alertsRequested by remember(state.email) { mutableStateOf(false) }
     LaunchedEffect(state.demo, state.email, state.busy) {
         if (!state.demo && !state.busy && state.email.isNotBlank() && !alertsRequested && state.alertPreferences == null && !state.alertsUnavailable) {
@@ -160,18 +203,7 @@ internal fun AccountScreen(state: AppState, model: AgroViewModel) {
                         glyphColor = p.tint,
                         onClick = { model.navigate(Screen.Security) },
                     )
-                    if (!state.demo) ToggleCell(
-                        "Notifikasi di HP",
-                        notify,
-                        { on ->
-                            // Android 13+ asks once; the switch follows the answer, never ahead of it.
-                            if (on && !CareNotifications.allowed(context)) askToNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                            else { CareNotifications.setEnabled(context, on); notify = on }
-                        },
-                        subtitle = "Tanah kering dan perangkat bermasalah, dicek tiap jam",
-                        glyph = PhosphorPaths.Bell,
-                        glyphColor = p.tint,
-                    )
+                    if (!state.demo) PhoneAlerts()
                     Cell(
                         "Putar animasi masuk",
                         subtitle = "Pratinjau layar kaca cair Smart Agro",
