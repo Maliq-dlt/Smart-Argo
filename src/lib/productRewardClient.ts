@@ -1,4 +1,4 @@
-export interface RewardPolicy { id:string;version:string;wh_per_point:number;daily_point_cap:number }
+export interface RewardPolicy { id:string;version:string;wh_per_point:number;daily_point_cap:number;effective_wh_per_point?:number;halving_days?:number|null;next_halving_at?:string|null }
 export interface RewardCatalogItem { id:string;title:string;point_cost:number;stock_total:number;stock_reserved:number;availability:'available'|'out_of_stock'|'disabled' }
 export interface RewardRedemption { id:string;catalog_item_id:string;title:string;reserved_points:number;status:'reserved'|'fulfilled'|'cancelled'|'compensated';created_at:string;fulfillment_reference:string|null;compensation_reason:string|null;account_id?:string }
 export interface RewardLedger { id:string;signed_points:number;note:string;created_at:string;reversal_of:string|null;redemption_id:string|null;reward_event_id:string|null }
@@ -15,7 +15,9 @@ function redemption(input:unknown,operator=false):RewardRedemption{const r=obj(i
 export function parseRewardWorkspace(input:unknown):RewardWorkspace{
  const w=obj(input);if(w.ok!==true)throw new Error('Respons reward gagal.');const roles=list(w.roles,4);if(!roles.every(r=>['owner','contributor','curator','operator'].includes(String(r))))throw new Error('Peran akun tidak valid.')
  let policy:RewardPolicy|null=null
- if(w.policy!==null){const p=obj(w.policy);if(!id(p.id)||!text(p.version,120)||typeof p.wh_per_point!=='number'||!Number.isFinite(p.wh_per_point)||p.wh_per_point<0.001||p.wh_per_point>1000000||!integer(p.daily_point_cap,1,100000))throw new Error('Kebijakan reward tidak valid.');policy=p as unknown as RewardPolicy}
+ if(w.policy!==null){const p=obj(w.policy);if(!id(p.id)||!text(p.version,120)||typeof p.wh_per_point!=='number'||!Number.isFinite(p.wh_per_point)||p.wh_per_point<0.001||p.wh_per_point>1000000||!integer(p.daily_point_cap,1,100000))throw new Error('Kebijakan reward tidak valid.');if (p.effective_wh_per_point !== undefined && (typeof p.effective_wh_per_point !== 'number' || !Number.isFinite(p.effective_wh_per_point) || p.effective_wh_per_point < p.wh_per_point)) throw new Error('Rasio token tidak valid.')
+ if (p.halving_days != null && (!integer(p.halving_days,30,3650) || !date(p.next_halving_at))) throw new Error('Jadwal halving tidak valid.')
+ policy=p as unknown as RewardPolicy}
  const balance=obj(w.balance);for(const key of ['confirmed_points','reserved_points','available_points'])if(!integer(balance[key],0,Number.MAX_SAFE_INTEGER))throw new Error('Saldo reward tidak valid.')
  if(Number(balance.confirmed_points)-Number(balance.reserved_points)!==balance.available_points)throw new Error('Ringkasan saldo tidak konsisten. Muat ulang.')
  const catalog=list(w.catalog,100).map(item=>{const c=obj(item);if(!id(c.id)||!text(c.title,120)||!integer(c.point_cost,1,100000)||!integer(c.stock_total,0,1000000)||!integer(c.stock_reserved,0,Number(c.stock_total))||!['available','out_of_stock','disabled'].includes(String(c.availability)))throw new Error('Katalog tidak valid.');return c as unknown as RewardCatalogItem})

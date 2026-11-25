@@ -218,9 +218,17 @@ data class RewardWorkspace(val balance: RewardBalance, val policy: String?, val 
 fun parseRewards(json: JSONObject): RewardWorkspace {
     val balance = parseRewardBalance(json)
     val policy = json.optJSONObject("policy")?.let { p ->
-        p.id("id"); p.whole("daily_point_cap", 1, 100000)
-        if ((p.nullableNumber("wh_per_point") ?: invalid()) !in 0.001..1000000.0) invalid()
-        p.text("version", 120)
+        p.id("id")
+        val cap = p.whole("daily_point_cap", 1, 100000)
+        val baseRate = p.nullableNumber("wh_per_point") ?: invalid()
+        if (baseRate !in 0.001..1000000.0) invalid()
+        val rate = if (p.has("effective_wh_per_point")) p.nullableNumber("effective_wh_per_point") ?: invalid() else baseRate
+        if (!rate.isFinite() || rate < baseRate) invalid()
+        val schedule = if (p.isNull("halving_days")) "Kebijakan ini memakai rasio tetap." else {
+            val days = p.whole("halving_days", 30, 3650)
+            "Halving setiap $days hari. Berikutnya ${time(p.instant("next_halving_at"))} (waktu HP). Saldo yang sudah diperoleh tetap utuh."
+        }
+        "${p.text("version", 120)}. ${java.math.BigDecimal.valueOf(rate).stripTrailingZeros().toPlainString()} Wh per token. Batas $cap token per hari (UTC). $schedule"
     }
     val catalog = json.array("catalog").objects(100).map { row ->
         val stock = row.whole("stock_total", 0, 1000000)

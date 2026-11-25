@@ -142,6 +142,8 @@ class AppFlowTest {
                 }
             }
         }
+        compose.onNodeWithText("80 token = 1 Bibit tomat").assertExists()
+        compose.onNodeWithText("Saldo dan stok cukup untuk 2 unit. Sisa setelah reservasi 1 unit: 160 token.").assertExists()
         compose.onNodeWithText("Tukar Bibit tomat").performScrollTo().performClick()
         compose.onNodeWithText("Konfirmasi reservasi").performScrollTo().assertIsDisplayed()
         assertEquals(0,reservations)

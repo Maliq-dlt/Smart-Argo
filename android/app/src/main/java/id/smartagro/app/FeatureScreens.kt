@@ -149,7 +149,16 @@ internal fun RewardsScreen(
                         items(data.catalog, key = { "item-${it.id}" }) { item ->
                             Panel(Modifier.padding(bottom = 10.dp).animateContentSize(Springs.smooth())) {
                                 Text(item.title, style = T.headline, color = p.ink)
-                                Text("${item.cost} poin · Stok tersedia ${item.stock - item.reserved}", style = T.subhead, color = p.secondary, modifier = Modifier.padding(top = 2.dp))
+                                val freeStock = item.stock - item.reserved
+                                val units = minOf(freeStock, data.balance.available / item.cost)
+                                Text("${item.cost} token = 1 ${item.title}", style = T.subhead, color = p.ink)
+                                Text("Stok tersedia $freeStock", style = T.subhead, color = p.secondary)
+                                val quote = when {
+                                    item.availability != "available" || freeStock == 0L -> "Belum dapat dipesan."
+                                    units == 0L -> "Perlu ${item.cost-data.balance.available} token lagi untuk 1 unit."
+                                    else -> "Saldo dan stok cukup untuk $units unit. Sisa setelah reservasi 1 unit: ${data.balance.available-item.cost} token."
+                                }
+                                Text(quote, style = T.subhead, color = p.secondary, modifier = Modifier.padding(top = 2.dp))
                                 if (item.availability != "available") {
                                     Text(if (item.availability == "out_of_stock") "Stok habis" else "Belum tersedia", style = T.footnote, color = p.warn, modifier = Modifier.padding(top = 4.dp))
                                 }

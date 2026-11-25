@@ -1,3 +1,4 @@
+import { simulatorHref } from '../lib/appMode'
 import { ArrowRight, Plant } from '@phosphor-icons/react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 
@@ -79,7 +80,7 @@ export default function LandingPage() {
       <nav aria-label="Bagian halaman">
         <a href="#masalah" onClick={jump('masalah')}>Masalah</a><a href="#kenalan" onClick={jump('kenalan')}>Cara kerja</a><a href="#rawat" onClick={jump('rawat')}>Coba rawat</a><a href="#tanya" onClick={jump('tanya')}>Tanya mesin</a>
       </nav>
-      <div className="sa-nav-end"><ThemeToggle /><a className="sa-btn sa-btn-dark sa-nav-cta ag-simulator-link" href="#simulasi" aria-label="Coba simulator"><span className="sa-xs-hide">Coba simulator</span><span className="sa-xs-show" aria-hidden="true">Simulator</span><ArrowRight aria-hidden="true" /></a></div>
+      <div className="sa-nav-end"><ThemeToggle /><a className="sa-btn sa-btn-dark sa-nav-cta ag-simulator-link" href={simulatorHref} aria-label="Coba simulator"><span className="sa-xs-hide">Coba simulator</span><span className="sa-xs-show" aria-hidden="true">Simulator</span><ArrowRight aria-hidden="true" /></a></div>
     </header>
 
     <main id="landing-main" tabIndex={-1}>
@@ -101,11 +102,11 @@ export default function LandingPage() {
       logo={<Plant aria-hidden="true" />}
       heading={'Rawat pot dengan *lebih tenang.*'}
       subheading="Semuanya berjalan di browsermu."
-      cta={{ label: 'Coba simulator', href: '#simulasi' }}
+      cta={{ label: 'Coba simulator', href: simulatorHref }}
       tagline="Prototipe sensor tanah dan simulator perawatan."
       newsletter={false}
       columns={[
-        { title: 'Produk', links: [{ label: 'Simulator', href: '#simulasi' }, { label: 'Dashboard', href: '#statistik' }, { label: 'Perangkat', href: '#perangkat' }, { label: 'Ekosistem', href: '#ekosistem' }] },
+        { title: 'Produk', links: [{ label: 'Simulator', href: simulatorHref }, { label: 'Dashboard', href: '#statistik' }, { label: 'Perangkat', href: '#perangkat' }, { label: 'Ekosistem', href: '#ekosistem' }] },
         { title: 'Halaman ini', links: [{ label: 'Masalah', href: '#masalah' }, { label: 'Cara kerja', href: '#kenalan' }, { label: 'Coba rawat', href: '#rawat' }, { label: 'Tanya mesin', href: '#tanya' }] },
         { title: 'Proyek', links: [{ label: 'Kode sumber', href: 'https://github.com/Maliq-dlt/Smart-Argo' }, { label: 'Kredit gambar', href: 'https://github.com/Maliq-dlt/Smart-Argo/blob/main/public/landing/CREDITS.md' }] },
       ]}

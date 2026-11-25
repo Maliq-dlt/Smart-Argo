@@ -85,17 +85,16 @@ class CareCheckWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 val previous = cache.load(key)?.let { JSONObject(it.json) } ?: JSONObject()
                 cache.save(key, previous.put("care", overview).toString(), cache.load(key)?.at ?: java.time.Instant.now())
                 CareWidget.refresh(context)
-                val (notices, keys) = noticesFor(CareNotifications.seen(context), overview, kinds)
                 if (CareNotifications.enabled(context)) {
-                    notices.forEach { CareNotifications.post(context, it) }
-                    CareNotifications.remember(context, keys)
+                    CareNotifications.notifyChanges(context, overview, kinds)
+                    CareNotifications.markChecked(context)
                 }
             }
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
-            // ponytail: an expired session, no network or a backend without my_overview yet just waits for the next hour.
-            // The worker never clears the stored session; the app asks the owner to sign in again.
+        } catch (error: Exception) {
+            val transient = error is java.io.IOException || error is ApiFailure && (error.status in setOf(408, 429) || error.status in 500..599)
+            return if (transient && runAttemptCount < 3) Result.retry() else Result.failure()
         }
         return Result.success()
     }
@@ -104,23 +103,56 @@ class CareCheckWorker(context: Context, params: WorkerParameters) : CoroutineWor
 internal object CareNotifications {
     private const val PREFS = "care-notifications"
     private const val WORK = "care-check"
-    private const val CHANNEL = "perawatan"
-    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    const val MANUAL = "care-check-now"
+    internal const val CHANNEL = "perawatan"
+    fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun enabled(context: Context) = prefs(context).getBoolean("enabled", false)
     fun seen(context: Context): Set<String> = prefs(context).getStringSet("seen", null).orEmpty().toSet()
     fun remember(context: Context, keys: Set<String>) = prefs(context).edit { putStringSet("seen", keys) }
 
-    /** True when the system lets the app post (Android 13+ asks for a runtime permission). */
-    fun allowed(context: Context) = Build.VERSION.SDK_INT < 33 ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    fun lastCheck(context: Context): java.time.Instant? = prefs(context).getLong("checked_at", 0L)
+        .takeIf { it > 0 }?.let(java.time.Instant::ofEpochMilli)
+    fun markChecked(context: Context) = prefs(context).edit { putLong("checked_at", System.currentTimeMillis()) }
+
+    fun allowed(context: Context): Boolean {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        return (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+            manager.areNotificationsEnabled() && manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
+    fun settingsIntent(context: Context): Intent {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val channelBlocked = manager.areNotificationsEnabled() && manager.getNotificationChannel(CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE
+        return Intent(if (channelBlocked) android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS else android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+            .putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, CHANNEL)
+    }
+
+    fun checkNow(context: Context) {
+        val request = androidx.work.OneTimeWorkRequestBuilder<CareCheckWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+        WorkManager.getInstance(context).enqueueUniqueWork(MANUAL, androidx.work.ExistingWorkPolicy.KEEP, request)
+    }
+
+    fun notifyChanges(context: Context, overview: JSONObject, kinds: Set<String>) {
+        val previous = seen(context)
+        val (notices, current) = noticesFor(previous, overview, kinds)
+        val delivered = previous.intersect(current).toMutableSet()
+        notices.forEach { if (post(context, it)) delivered.add(it.key) }
+        remember(context, delivered)
+    }
 
     fun setEnabled(context: Context, on: Boolean) = synchronized(SessionStore.lock) {
         val wasEnabled = enabled(context)
-        prefs(context).edit { putBoolean("enabled", on); remove("seen") }
+        prefs(context).edit { putBoolean("enabled", on); if (!on) { remove("seen"); remove("checked_at") } }
         if (!on) {
             context.getSystemService(NotificationManager::class.java).cancelAll()
-            if (wasEnabled) WorkManager.getInstance(context).cancelUniqueWork(WORK)
+            if (wasEnabled) {
+                val work = WorkManager.getInstance(context)
+                work.cancelUniqueWork(WORK)
+                work.cancelUniqueWork(MANUAL)
+            }
             return@synchronized
         }
         val work = WorkManager.getInstance(context)
@@ -129,16 +161,22 @@ internal object CareNotifications {
         work.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.KEEP, request)
     }
 
-    fun post(context: Context, notice: Notice) {
+    private fun post(context: Context, notice: Notice): Boolean {
+        if (!allowed(context)) return false
         if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
         context.getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(CHANNEL, "Perawatan tanaman", NotificationManager.IMPORTANCE_DEFAULT))
         val open = PendingIntent.getActivity(context, 0,
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        NotificationManagerCompat.from(context).notify(notice.key.hashCode(), NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_agro_mono).setContentTitle(notice.title).setContentText(notice.body)
-            .setContentIntent(open).setAutoCancel(true).build())
+        return try {
+            NotificationManagerCompat.from(context).notify(notice.key.hashCode(), NotificationCompat.Builder(context, CHANNEL)
+                .setSmallIcon(R.drawable.ic_agro_mono).setContentTitle(notice.title).setContentText(notice.body)
+                .setContentIntent(open).setAutoCancel(true).build())
+            true
+        } catch (_: SecurityException) {
+            false
+        }
     }
 }

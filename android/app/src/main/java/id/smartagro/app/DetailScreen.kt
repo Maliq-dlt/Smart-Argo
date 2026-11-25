@@ -162,7 +162,15 @@ internal fun careMarks(entries: List<CareEntry>, from: LocalDate, to: LocalDate,
                     if (state.careDetailsUnit == unit.id) {
                         state.wateringRises.forEach { rise ->
                             Panel {
-                                Text("Sepertinya Anda menyiram pukul ${hhmm(rise.to)}. Catat?", style = T.headline, color = p.ink)
+                                val trace = "Jejak air di pot saya. Indeks kelembapan naik ${number(rise.delta)} poin, dari ${time(rise.from)} hingga ${time(rise.to)}."
+                                Text(trace, style = T.headline, color = p.ink)
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                PlainButton("Bagikan jejak air", {
+                                    val share = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                                        .putExtra(android.content.Intent.EXTRA_TEXT, trace)
+                                    context.startActivity(android.content.Intent.createChooser(share, "Bagikan jejak air"))
+                                })
+                                Text("Anda menyiram sekitar pukul ${hhmm(rise.to)}?", style = T.subhead, color = p.secondary)
                                 PlainButton("Catat", { confirmingRise = rise }, enabled = !state.busy && state.pendingCare == null)
                                 PlainButton("Bukan", { model.dismissRise(unit.id, rise) }, enabled = !state.busy)
                             }
