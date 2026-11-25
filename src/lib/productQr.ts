@@ -2,6 +2,11 @@
  * device keys never belong in it (docs/diagram/v2/SPESIFIKASI.md §3), so a scan yields a serial and nothing else. */
 export const SERIAL = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/
 
+export function serialFromSearch(search: string) {
+  const value = new URLSearchParams(search).get('serial') ?? ''
+  return SERIAL.test(value) ? value.toUpperCase() : ''
+}
+
 export type ScanResult = { ok: true; serial: string; warning?: string } | { ok: false; reason: string }
 
 /** The link printed on the package: opens the ecosystem page with the serial pre-filled. */

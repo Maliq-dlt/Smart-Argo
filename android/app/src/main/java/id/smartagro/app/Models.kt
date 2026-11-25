@@ -101,7 +101,7 @@ internal fun probeErrorHint(error: String?): String? = when {
 internal const val READING_FRESH_SECONDS = 75L * 60
 // The future margin matches telemetry ingest (measured_at up to +5 minutes), so a phone clock slightly behind the server
 // does not mark a packet that just arrived as old.
-internal fun fresh(at: Instant, now: Instant) = !at.isBefore(now.minusSeconds(READING_FRESH_SECONDS)) && !at.isAfter(now.plusSeconds(300))
+internal fun fresh(at: Instant, now: Instant, maxAgeSeconds: Long = READING_FRESH_SECONDS) = !at.isBefore(now.minusSeconds(maxAgeSeconds)) && !at.isAfter(now.plusSeconds(300))
 /** Cell voltage from the latest packet (firmware battery object, my_unit_overview since 20261121010000). */
 data class Battery(val volts: Double, val at: Instant)
 data class Overview(val id: String, val at: Instant?, val alerts: List<String>, val readings: List<Reading>, val state: String?,

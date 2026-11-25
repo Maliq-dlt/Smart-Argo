@@ -1,3 +1,4 @@
+import { serialFromSearch } from '../lib/productQr'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AccountContext, type AccountState, type Identity } from './accountContext'
 import { identityFromClaims } from '../lib/identity'
@@ -15,7 +16,9 @@ function googleHandoff(client: ProductAccountClient) {
     const fragmentError = location.hash.includes('error=') ? oauthReturn(location.hash.slice(1)) : null
     const back = oauthReturn(location.search) ?? oauthReturn(location.hash.split('?')[1] ?? '') ?? fragmentError
     if (!back) return null
-    history.replaceState(null, '', location.pathname + (fragmentError ? '#masuk' : location.hash.split('?')[0]))
+    const serial = serialFromSearch(location.search)
+    const hash = location.hash.split('?')[0]
+    history.replaceState(null, '', location.pathname + (serial && hash === '#ekosistem' ? '?serial=' + serial : '') + (fragmentError ? '#masuk' : hash))
     if ('error' in back) throw new Error(fragmentError ? `Tautan email tidak berlaku: ${back.error}` : `Masuk dengan Google tidak selesai: ${back.error}`)
     return client.completeReturn(back.code)
   })() }

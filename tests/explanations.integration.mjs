@@ -67,8 +67,16 @@ await test('Phase 3: owner evidence and immutable rule explanations',async t=>{
  })
  await t.test('transfer hides previous owner snapshots; revoked session cannot read or save',async()=>{
   sql(`UPDATE ownership SET end_at=clock_timestamp() WHERE product_id=${q(product)} AND end_at IS NULL; INSERT INTO ownership(product_id,account_id) VALUES(${q(product)},${q(other.id)});`)
+  const units=(await rpc('my_units',other.token)).data.units
+  assert.equal(units.find(u=>u.unit_id===unit).location_label,'Unit '+unit.slice(0,8))
   assert.equal((await explain()).status,403)
   assert.deepEqual((await rpc('unit_explanations',other.token,{p_unit_id:unit,p_device_id:device})).data.snapshots,[])
+  assert.equal((await rpc('request_account_deletion',owner.token)).data.ok,true)
+  const countSnapshots=()=>Number(sql(`SELECT count(*) FROM ai_snapshot s JOIN ownership o ON o.id=s.ownership_id WHERE o.account_id=${q(owner.id)}`))
+  assert.ok(countSnapshots()>0,'snapshots remain during the grace period')
+  sql(`UPDATE account_deletion SET requested_at=requested_at-interval '15 days',purge_after=purge_after-interval '15 days' WHERE account_id=${q(owner.id)}`)
+  assert.equal((await rpc('purge_due_account_deletions',config.service)).data.ok,true)
+  assert.equal(countSnapshots(),0,'purge covers ended ownerships')
   assert.equal((await api('/auth/v1/logout?scope=local',other.token,{})).status,204)
   assert.equal((await explain(other.token)).status,401)
  })

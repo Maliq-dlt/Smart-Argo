@@ -167,7 +167,7 @@ For Docker, pass the same variables to `docker compose up` with `AI_BASE_URL=htt
 | --- | --- | --- |
 | `npm run build` | `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` at build time (`.env.local` locally) | Accounts and guests |
 | `npm run build:cloud` | The hosted project in `.env.cloud` (public URL and publishable key only) | Accounts and guests (the demo) |
-| `npm run build:live` | `.env.live.local`, written by the deploy workflow from `.env.cloud` | Accounts only; no guest visit, simulator, simulated weather or demo garden |
+| `npm run build:live` | public settings from `.env.cloud`, live flags from `.env.live`, optional overrides in `.env.live.local` | Accounts only; no guest visit, simulator, simulated weather or demo garden |
 
 Never put a service-role or AI key in a `VITE_` variable, and never publish a local `npm run build` as the hosted app.
 

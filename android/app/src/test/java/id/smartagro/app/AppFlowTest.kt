@@ -75,7 +75,10 @@ class AppFlowTest {
         assertEquals(SensorStatus.Unmeasured, sensorStatus(ph, at, stale = false, revoked = false))
         assertEquals(SensorStatus.Error, sensorStatus(ph.copy(quality = "error"), at, stale = false, revoked = false))
         assertEquals(SensorStatus.Ready, sensorStatus(good, at, stale = false, revoked = false))
-        assertEquals(SensorStatus.Stale, sensorStatus(good, at.plusSeconds(4_501), stale = false, revoked = false))
+        assertEquals(SensorStatus.Ready, sensorStatus(good, at.plusSeconds(86_400), stale = false, revoked = false))
+        assertEquals(SensorStatus.Stale, sensorStatus(good, at.plusSeconds(90_901), stale = false, revoked = false))
+        assertEquals(SensorStatus.Stale, sensorStatus(good.copy(sensor = Sensor.Moisture), at.plusSeconds(4_501), stale = false, revoked = false))
+        assertEquals(SensorStatus.Stale, sensorStatus(good, at, stale = true, revoked = false))
         assertEquals(SensorStatus.UntrustedClock, sensorStatus(good.copy(synced = false), at, stale = false, revoked = false))
         assertEquals(SensorStatus.Revoked, sensorStatus(good, at, stale = false, revoked = true))
         assertEquals(listOf(listOf(good), listOf(good.copy(at = at.plusSeconds(3600)))),

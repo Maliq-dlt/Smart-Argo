@@ -1,3 +1,4 @@
+import { serialFromSearch } from '../lib/productQr'
 import QrScanner from './QrScanner'
 import ProductTransfer from './ProductTransfer'
 import { useState } from 'react'
@@ -7,11 +8,6 @@ import { parseProductChallenge, parsePublicStatus, verifyIssuerManifest, type Pr
 // A04: only a signature checked here counts as "sah"; a server flag alone is reported as such, and no manifest is never "asli".
 const ISSUER_TEXT = { valid: 'Tanda tangan penerbit sah, diperiksa di browser ini.', invalid: 'Tanda tangan penerbit tidak cocok. Jangan aktifkan produk ini.' }
 
-function initialSerial() {
-  const value = new URLSearchParams(window.location.search).get('serial') ?? ''
-  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(value) ? value.toUpperCase() : ''
-}
-
 export default function ProductAccount() {
   const account = useAccount()
   const client = account.client!
@@ -19,7 +15,7 @@ export default function ProductAccount() {
   const [pending, setPending] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState(false)
-  const [serial, setSerial] = useState(initialSerial)
+  const [serial, setSerial] = useState(() => serialFromSearch(window.location.search))
   const [challenge, setChallenge] = useState<ProductChallenge | null>(null)
   const [sealedCode, setSealedCode] = useState('')
   const [signature, setSignature] = useState('')

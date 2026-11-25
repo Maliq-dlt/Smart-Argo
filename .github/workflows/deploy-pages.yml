@@ -46,9 +46,7 @@ jobs:
       # The live app: same backend, a real sign-in, none of the demo's stand-ins. A branch deployment of the same Pages
       # project, so it has its own address (live.smart-agro-demo.pages.dev) and needs no other project or token.
       - name: Build live app
-        run: |
-          grep -E '^VITE_(SUPABASE_URL|SUPABASE_ANON_KEY|ISSUER_PUBLIC_KEYS)=' .env.cloud > .env.live.local
-          npx vite build --mode live --outDir dist-live
+        run: npm run build:live -- --outDir dist-live
       - name: Publish live app
         env:
           CLOUDFLARE_ACCOUNT_ID: ea31880cad9f6306dc15a017d97a881e

@@ -106,7 +106,7 @@ internal fun sensorStatus(sample: Reading?, now: Instant, stale: Boolean, revoke
     revoked -> SensorStatus.Revoked
     sample == null -> SensorStatus.Waiting
     !sample.synced -> SensorStatus.UntrustedClock
-    stale || !fresh(sample.at, now) -> SensorStatus.Stale
+    stale || !fresh(sample.at, now, if (sample.sensor == Sensor.Ph) 24 * 3600L + READING_FRESH_SECONDS else READING_FRESH_SECONDS) -> SensorStatus.Stale
     sample.quality == "not_measured" -> SensorStatus.Unmeasured
     sample.quality == "error" -> SensorStatus.Error
     sample.quality == "ok" && sample.value != null -> SensorStatus.Ready

@@ -38,7 +38,7 @@ try {
   await gate(page).getByLabel('Kata sandi', { exact: true }).fill('cukup-panjang-12')
   await gate(page).getByRole('button', { name: 'Masuk', exact: true }).click()
   await page.locator('.app-shell').waitFor({ timeout: 20000 })
-  await page.locator('.plant-scene svg').waitFor()
+  await page.locator('.ov-title').waitFor()
 
   const tabs = await page.locator('.nav-tab').evaluateAll(links => links.map(a => a.textContent.trim()))
   ok(tabs.includes('Ringkasan') && tabs.includes('Tanaman') && tabs.includes('Akun'), `The rest of the app is there: ${tabs}`)
@@ -63,6 +63,29 @@ try {
   ok(await page.getByRole('button', { name: 'Catat', exact: true }).count() === 0, 'No simulated watering is offered as real care')
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal overflow')
 
+  await page.goto(new URL('?serial=QR-REGRESSION#ekosistem', base).href)
+  const serial = page.getByLabel('Nomor seri produk / QR')
+  await serial.waitFor()
+  assert.equal(await serial.inputValue(), 'QR-REGRESSION')
+  ok(await page.getByText(/Peran dan akun demo|Reset demo|Saldo demo/).count() === 0, 'Product onboarding uses the live registry')
+  await page.getByRole('button', { name: 'Energi & penukaran' }).click()
+  await page.locator('.online-panel').getByRole('heading').first().waitFor()
+  const firstVisit = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' })
+  const requests = await mockAuth(firstVisit, {
+    'POST /auth/v1/token?grant_type=password': () => mockSession(),
+  })
+  await firstVisit.goto(new URL('?serial=NEW-KIT#ekosistem', base).href)
+  await gate(firstVisit).getByLabel('Email', { exact: true }).fill('pot@contoh.test')
+  await gate(firstVisit).getByLabel('Kata sandi', { exact: true }).fill('cukup-panjang-12')
+  await gate(firstVisit).getByRole('button', { name: 'Masuk', exact: true }).click()
+  const newSerial = firstVisit.getByLabel('Nomor seri produk / QR')
+  await newSerial.waitFor()
+  ok(await newSerial.inputValue() === 'NEW-KIT', 'A first sign-in keeps the package serial before pot setup')
+  await Promise.all([
+    firstVisit.waitForResponse(r => r.url().includes('/rpc/product_public_status')),
+    firstVisit.getByRole('button', { name: 'Periksa status' }).click(),
+  ])
+  ok(requests.bodies('POST /rest/v1/rpc/product_public_status')[0]?.p_serial === 'NEW-KIT', 'Registry receives the scanned serial')
   assert.deepEqual(errors, [], `Console errors: ${errors.join(' | ')}`)
   console.log(`live-mode-browser: ${checks} checks passed`)
 } finally {
